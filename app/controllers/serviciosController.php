@@ -1,0 +1,1152 @@
+<?php
+namespace app\controllers;
+require_once APP_R_PROY . 'app/models/mainModel.php';
+
+use app\models\mainModel;
+
+use \Exception;
+class serviciosController extends mainModel
+{
+	private $log_path;
+	private $logFile;
+	private $errorLogFile;
+
+	private $id_status_cancelado;
+	private $id_status_activo;
+	private $id_status_historico;
+
+	private $o_f;
+
+	public function __construct()
+	{
+		// Nombre del controlador actual abreviado para reconocer el archivo
+		$nom_controlador = "serviciosController";
+		// ____________________________________________________________________
+
+		$this->log_path = __DIR__ . '/../logs/controlador/';
+
+		if (!file_exists($this->log_path)) {
+			mkdir($this->log_path, 0775, true);
+			chgrp($this->log_path, 'www-data');
+			chmod($this->log_path, 0775); // Asegurarse de que el directorio sea legible y escribible
+		}
+
+		$this->logFile = $this->log_path . $nom_controlador . '_' . date('Y-m-d') . '.log';
+		$this->errorLogFile = $this->log_path . $nom_controlador . '_error_' . date('Y-m-d') . '.log';
+
+		$this->initializeLogFile($this->logFile);
+		$this->initializeLogFile($this->errorLogFile);
+
+		$this->verificarPermisos();
+
+		// rotación automatica de log (Elimina logs > XX dias)
+		$this->rotarLogs(15);
+
+		$this->id_status_cancelado = 47;
+		$this->id_status_historico = 39;
+		$this->id_status_activo = 37;
+
+		// if (isset($_COOKIE['clang'])) {
+		// 	$this->idioma_act = $_COOKIE['clang'];
+		// } else {
+		//	$this->idioma_act = "en";
+		// }
+		// $this->o_f = new otras_fun();
+		// $this->idioma_ctrol = $this->o_f->cargar_idioma($this->idioma_act);
+	}
+
+	private function initializeLogFile($file)
+	{
+		if (!file_exists($file)) {
+			$initialContent = "[" . date('Y-m-d H:i:s') . "] Archivo de log iniciado" . PHP_EOL;
+			$created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
+			if ($created === false) {
+				error_log("No se pudo crear el archivo de log: " . $file);
+			} else {
+				chmod($file, 0644); // Asegurarse de que el archivo sea legible y escribible
+			}
+			if (!is_writable($file)) {
+				throw new \Exception("El archivo de log no es escribible: " . $file);
+			}
+		}
+	}
+
+	private function verificarPermisos()
+	{
+		if (!is_writable($this->log_path)) {
+			error_log("No hay permiso de escritura en: " . $this->log_path);
+		}
+	}
+
+	private function rotarLogs($dias)
+	{
+		$archivos = glob($this->log_path . '*.log');
+		$fechaLimite = time() - ($dias * 24 * 60 * 60);
+
+		foreach ($archivos as $archivo) {
+			if (filemtime($archivo) < $fechaLimite) {
+				unlink($archivo);
+			}
+		}
+	}
+
+	private function log($message, $isError = false)
+	{
+		$file = $isError ? $this->errorLogFile : $this->logFile;
+		if (!file_exists($file)) {
+			$initialContent = "[" . date('Y-m-d H:i:s') . "] Archivo de log iniciado" . PHP_EOL;
+			$created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
+			if ($created === false) {
+				error_log("No se pudo crear el archivo de log: " . $file);
+				return;
+			}
+			chmod($file, 0644); // Asegurarse de que el archivo sea legible y escribible
+		}
+		$logEntry = "[" . date('Y-m-d H:i:s') . "] " . $message . PHP_EOL;
+		file_put_contents($file, $logEntry, FILE_APPEND | LOCK_EX);
+	}
+
+	private function logWithBacktrace($message, $isError = true)
+	{
+		$backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+		$caller = $backtrace[1] ?? $backtrace[0];
+		$logMessage = sprintf("[%s] %s - Called from %s::%s (Line %d)%s%s", date('Y-m-d H:i:s'), $message, $caller['class'] ?? '', $caller['function'], $caller['line'], PHP_EOL, "Stack trace:" . PHP_EOL . json_encode($backtrace, JSON_PRETTY_PRINT));
+		file_put_contents($this->errorLogFile, $logMessage . PHP_EOL, FILE_APPEND | LOCK_EX);
+	}
+
+	/**
+	 * Listar todos los servicios desde la base de datos
+	 */
+	public function listarServicios()
+	{
+		$this->log("Inicio de actividad: listarServicios");
+		try {
+			$query = "SELECT
+						s.id_servicio, 
+						s.id_cliente,
+						s.id_direccion,
+						s.id_truck,
+						s.id_crew_1,
+						s.id_crew_2,
+						s.id_crew_3,
+						s.id_crew_4,
+						s.crew_color_principal,
+						s.dia_servicio,
+						s.finalizado,
+						s.estado_servicio,			
+						s.estado_visita,
+						c.nombre as cliente, 
+						d.direccion, 
+						d.geofence_id, 
+						d.lat, 
+						d.lng, 
+						t.nombre as truck, 
+						ct.day_work AS dia_servicio 
+					FROM servicios AS s
+					LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
+					LEFT JOIN direcciones AS d ON s.id_direccion = d.id_direccion
+					LEFT JOIN contratos AS ct ON s.id_cliente = ct.id_cliente
+					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
+					WHERE s.id_status = 37  -- 'Activo'
+					ORDER BY 
+						FIELD(t.id_truck, 1,2,3,4,5,6,11,15), 
+						c.nombre";
+
+			$servicios = $this->ejecutarConsulta($query, '', [], 'fetchAll');
+
+			$this->log("Resultado de la consulta: " . print_r($servicios, true));
+
+			$resultado = [];
+			foreach ($servicios as $s) {
+				// === Obtener integrantes del crew ===
+				$crew_integrantes = [];
+
+				$ids_crew = [
+					$s['id_crew_1'],
+					$s['id_crew_2'],
+					$s['id_crew_3'],
+					$s['id_crew_4']
+				];
+
+				foreach ($ids_crew as $id) {
+					if ($id) {
+						$query_crew = "SELECT id_crew, nombre_completo, nombre, apellido, color, crew FROM crew WHERE id_crew = :id AND id_status = 32";
+						$params_crew = [':id' => $id];
+						$result = $this->ejecutarConsulta($query_crew, '', $params_crew);
+						if ($result) {
+							$crew_integrantes[] = $result;
+						}
+					}
+				}
+
+				$registro = [
+					'id_servicio' => $s['id_servicio'],
+					'cliente' => $s['cliente'],
+					'direccion' => $s['direccion'],
+					'geofence_id' => $s['geofence_id'],
+					'truck' => $s['truck'],
+					'crew_color_principal' => $s['crew_color_principal'] ?? '#666666',
+					'lat' => $s['lat'],
+					'lng' => $s['lng'],
+					'finalizado' => (bool) $s['finalizado'],
+					'dia_servicio' => $s['dia_servicio'],
+					'estado_visita' => $s['estado_visita'] ?? 'programado',
+					'crew_integrantes' => $crew_integrantes,
+					'evidencias' => []
+				];
+
+				// Si está finalizado, obtener evidencias (por ahora, por lógica de tiempo)
+				if ($s['finalizado']) {
+					$registro['evidencias'] = ['gps', 'tiempo']; // Ej: evidencias por parada larga
+				}
+
+				$resultado[] = $registro;
+			}
+
+			http_response_code(200);
+			echo json_encode($resultado, JSON_PRETTY_PRINT);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en listarServicios: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'Error al cargar servicios']);
+		}
+	}
+
+	private function obtenerColorPorTruck($id_truck)
+	{
+		$colores = [
+			1 => '#2196F3',
+			2 => '#FF9800',
+			3 => '#F44336',
+			4 => '#00BCD4',
+			5 => '#9C27B0',
+			6 => '#4CAF50',
+			11 => '#FFC107',
+			15 => '#3F51B5'
+		];
+		return $colores[$id_truck] ?? '#666666';
+	}
+
+	/**
+	 * Finalizar un servicio manualmente (opcional)
+	 */
+	public function finalizarServicio($id)
+	{
+		try {
+			$datos = [
+				['campo_nombre' => 'finalizado', 'campo_marcador' => ':finalizado', 'campo_valor' => 1]
+			];
+			$condicion = [
+				'condicion_campo' => 'id',
+				'condicion_marcador' => ':id',
+				'condicion_valor' => $id
+			];
+
+			$this->actualizarDatos('servicios', $datos, $condicion);
+
+			http_response_code(200);
+			echo json_encode(['status' => 'ok', 'message' => 'Servicio finalizado']);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en finalizarServicio: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'No se pudo finalizar']);
+		}
+	}
+
+	public function listarServiciosConEstado()
+	{
+		$this->log("Inicio: listarServiciosConEstado");
+
+		try {
+			// Obtener el día actual en formato inglés (como en la BD)
+			$diasMap = [
+				'sunday' => 'SUNDAY',
+				'monday' => 'MONDAY',
+				'tuesday' => 'TUESDAY',
+				'wednesday' => 'WEDNESDAY',
+				'thursday' => 'THURSDAY',
+				'friday' => 'FRIDAY',
+				'saturday' => 'SATURDAY'
+			];
+
+			$dia_actual = $diasMap[strtolower(date('l'))]; // Ej: 'TUESDAY'
+
+			$this->log("Día actual: " . $dia_actual);
+
+			$query = "SELECT
+						s.id_servicio, 
+						s.id_cliente,
+						s.id_direccion,
+						s.id_truck,
+						s.id_crew_1,
+						s.id_crew_2,
+						s.id_crew_3,
+						s.id_crew_4,
+						s.crew_color_principal,
+						s.dia_servicio,
+						s.finalizado,
+						s.estado_servicio,	
+						s.estado_visita,
+			            s.hora_aviso_usuario,
+						s.hora_finalizado,
+						s.tipo_dia,
+						c.nombre as cliente, 
+						d.direccion, 
+						d.geofence_id, 
+						d.lat, 
+						d.lng, 
+						t.nombre as truck, 
+						ct.day_work AS dia_servicio_ct 
+					FROM servicios AS s
+					LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
+					LEFT JOIN direcciones AS d ON c.id_cliente = d.id_cliente
+					LEFT JOIN contratos AS ct ON s.id_cliente = ct.id_cliente
+					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
+					WHERE DATE(s.fecha_programada) = :v_fecha_programada AND s.id_status != 39
+					ORDER BY 
+						FIELD(t.id_truck, 1,2,3,4,5,6,11,15), 
+						c.nombre";
+			$params = [
+				':v_fecha_programada' => date('Y-m-d')
+			];
+
+			$this->log("Consulta: " . $query);
+
+			$servicios = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
+
+			$this->log("Resultado de la consulta: " . print_r($servicios, true));
+
+			$resultado = [];
+			foreach ($servicios as $s) {
+				// === Obtener integrantes del crew ===
+				$crew_integrantes = [];
+
+				$ids_crew = [
+					$s['id_crew_1'],
+					$s['id_crew_2'],
+					$s['id_crew_3'],
+					$s['id_crew_4']
+				];
+
+				foreach ($ids_crew as $id) {
+					if ($id) {
+						$query_crew = "
+							SELECT id_crew, nombre_completo, nombre, apellido, color, crew 
+							FROM crew 
+							WHERE id_crew = :id AND id_status = 32";
+						$params_crew = [':id' => $id];
+						$result = $this->ejecutarConsulta($query_crew, '', $params_crew);
+						if ($result) {
+							$crew_integrantes[] = $result;
+						}
+					}
+				}
+
+				$registro = [
+					'id_servicio' => $s['id_servicio'],
+					'id_cliente' => $s['id_cliente'],
+					'cliente' => $s['cliente'],
+					'direccion' => $s['direccion'],
+					'geofence_id' => $s['geofence_id'],
+					'truck' => $s['truck'],
+					'crew_color_principal' => $s['crew_color_principal'] ?? '#666666',
+					'lat' => $s['lat'],
+					'lng' => $s['lng'],
+					'finalizado' => (bool) $s['finalizado'],
+					'dia_servicio' => $s['dia_servicio'],
+					'dia_servicio_ct' => $s['dia_servicio_ct'],
+					'crew_integrantes' => $crew_integrantes,
+					'estado_visita' => $s['estado_visita'] ?? 'programado',
+					'estado_servicio' => $s['estado_servicio'],
+					'tipo_dia' => $s['tipo_dia'],
+					'hora_aviso_usuario' => $s['hora_aviso_usuario'],
+					'hora_finalizado' => $s['hora_finalizado'],
+					'evidencias' => []
+				];
+
+				// Solo aplica la validación de día si es tipo "semanal"
+//				if ($s['tipo_dia'] === 'semanal' && $s['dia_servicio']) {
+//					if ($s['dia_servicio'] !== $dia_actual) {
+//						$registro['estado_visita'] = 'replanificado';
+//					}
+//				}
+
+				// Si no tiene día asignado
+				if (!$s['dia_servicio']) {
+					$registro['estado_visita'] = 'sin_programar';
+				}
+
+				$resultado[] = $registro;
+			}
+
+			http_response_code(200);
+			echo json_encode($resultado, JSON_PRETTY_PRINT);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en listarServiciosConEstado: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'Error al cargar servicios']);
+		}
+	}
+
+	public function listarServiciosParaModal(){
+		$this->log("Inicio: listarServiciosParaModal");
+
+		try {
+			// Obtener el día actual en formato inglés (como en la BD)
+			$diasMap = [
+				'sunday' => 'SUNDAY',
+				'monday' => 'MONDAY',
+				'tuesday' => 'TUESDAY',
+				'wednesday' => 'WEDNESDAY',
+				'thursday' => 'THURSDAY',
+				'friday' => 'FRIDAY',
+				'saturday' => 'SATURDAY'
+			];
+
+			$dia_actual = $diasMap[strtolower(date('l'))]; // Ej: 'TUESDAY'
+
+			$this->log("Día actual: " . $dia_actual);
+
+			$query = "SELECT
+						s.id_servicio, 
+						s.id_cliente,
+						s.id_direccion,
+						s.id_truck,
+						s.id_crew_1,
+						s.id_crew_2,
+						s.id_crew_3,
+						s.id_crew_4,
+						s.crew_color_principal,
+						s.dia_servicio,
+						s.finalizado,
+						s.estado_servicio,	
+						s.estado_visita,
+			            s.hora_aviso_usuario,
+						s.hora_finalizado,
+						s.tipo_dia,
+						c.nombre as cliente, 
+						d.direccion, 
+						d.geofence_id, 
+						d.lat, 
+						d.lng, 
+						t.nombre as truck, 
+						ct.day_work AS dia_servicio_ct 
+					FROM servicios AS s
+					LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
+					LEFT JOIN direcciones AS d ON c.id_cliente = d.id_cliente
+					LEFT JOIN contratos AS ct ON s.id_cliente = ct.id_cliente
+					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
+					WHERE DATE(s.fecha_programada) = :v_fecha_programada AND s.id_status != 39
+					ORDER BY c.nombre ASC";
+
+			$params = [
+				':v_fecha_programada' => date('Y-m-d')
+			];
+
+			$this->log("Consulta: " . $query);
+
+			$servicios = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
+
+			$this->log("Resultado de la consulta: " . print_r($servicios, true));
+
+			$resultado = [];
+			foreach ($servicios as $s) {
+				// === Obtener integrantes del crew ===
+				$crew_integrantes = [];
+
+				$ids_crew = [
+					$s['id_crew_1'],
+					$s['id_crew_2'],
+					$s['id_crew_3'],
+					$s['id_crew_4']
+				];
+
+				foreach ($ids_crew as $id) {
+					if ($id) {
+						$query_crew = "
+							SELECT id_crew, nombre_completo, nombre, apellido, color, crew 
+							FROM crew 
+							WHERE id_crew = :id AND id_status = 32";
+						$params_crew = [':id' => $id];
+						$result = $this->ejecutarConsulta($query_crew, '', $params_crew);
+						if ($result) {
+							$crew_integrantes[] = $result;
+						}
+					}
+				}
+
+				$registro = [
+					'id_servicio' => $s['id_servicio'],
+					'id_cliente' => $s['id_cliente'],
+					'cliente' => $s['cliente'],
+					'direccion' => $s['direccion'],
+					'geofence_id' => $s['geofence_id'],
+					'truck' => $s['truck'],
+					'crew_color_principal' => $s['crew_color_principal'] ?? '#666666',
+					'lat' => $s['lat'],
+					'lng' => $s['lng'],
+					'finalizado' => (bool) $s['finalizado'],
+					'dia_servicio' => $s['dia_servicio'],
+					'dia_servicio_ct' => $s['dia_servicio_ct'],
+					'crew_integrantes' => $crew_integrantes,
+					'estado_visita' => $s['estado_visita'] ?? 'programado',
+					'estado_servicio' => $s['estado_servicio'],
+					'hora_aviso_usuario' => $s['hora_aviso_usuario'],
+					'hora_finalizado' => $s['hora_finalizado'],
+					'tipo_dia' => $s['tipo_dia'],
+					'evidencias' => []
+				];
+
+				// === Determinar estado_visita ===
+				$registro['estado_visita'] = 'programado';
+
+				// Solo aplica la validación de día si es tipo "semanal"
+				if ($s['tipo_dia'] === 'semanal' && $s['dia_servicio']) {
+					if ($s['dia_servicio'] !== $dia_actual) {
+						$registro['estado_visita'] = 'replanificado';
+					}
+				}
+				// Si es tipo "fijo", no se marca como replanificado por día
+				// (puede tener otro estado, pero no por desfase de día)
+
+				// Si no tiene día asignado
+				if (!$s['dia_servicio']) {
+					$registro['estado_visita'] = 'sin_programar';
+				}
+
+				$resultado[] = $registro;
+			}
+
+			http_response_code(200);
+			echo json_encode($resultado, JSON_PRETTY_PRINT);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en listarServiciosParaModal: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'Error al cargar servicios para Modal']);
+		}
+
+	}
+
+	public function procesarServiciosDesdeMotor1($fecha_servicio, $servicios_array)
+	{
+		try {
+			$this->log("=== INICIO MOTOR 1 - Fecha: $fecha_servicio ==="); 
+
+			// === Verificar si hay actualizaciones recientes ===
+			$query = "SELECT COUNT(*) as total 
+						FROM historial_servicios 
+						WHERE fecha_registro > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR)";
+			$result = $this->ejecutarConsulta($query, '', []);
+			if ($result && $result['total'] > 0) {
+				return [
+					'error' => 'Negado el proceso. Existen actualizaciones',
+					'actualizaciones_recientes' => $result['total']
+				];
+			}
+
+			// === 1. Cancelar servicios existentes para esta fecha ===
+			$this->marcarServiciosComoHistorias($fecha_servicio);
+
+			$insertados = 0;
+			$errores = [];
+			foreach ($servicios_array as $index => $s) {
+				try {
+					$resultado = $this->insertarServicioDesdeMotor1($s, $index, $fecha_servicio);
+					if ($resultado['success']) {
+						$insertados++;
+					} else {
+						$errores[] = $resultado['error'];
+					}
+				} catch (Exception $e) {
+					$errores[] = "Fila $index: " . $e->getMessage();
+					$this->logWithBacktrace("Error fila $index: " . $e->getMessage(), true);
+				}
+			}
+
+			$this->log("Motor1 - Procesados: $insertados, Errores: " . count($errores));
+			return [
+				'status' => 'ok',
+				'insertados' => $insertados,
+				'errores' => $errores,
+				'detalles' => $errores,
+				'fecha_servicio' => $fecha_servicio
+			];
+
+		} catch (Exception $e) {
+			$this->log("Error crítico en Motor1: " . $e->getMessage(), true);
+			return ['error' => 'Internal server error'];
+		}
+	}
+
+	private function insertarServicioDesdeMotor1($s, $index, $fecha_servicio)
+	{
+		// Validar campos obligatorios
+		$campos_requeridos = ['Nombre_del_cliente', 'truck', 'dia_servicio', 'Crew'];
+		foreach ($campos_requeridos as $campo) {
+			if (empty($s[$campo])) {
+				return ['success' => false, 'error' => "Fila $index: $campo es obligatorio"];
+			}
+		}
+
+		// === 1. Validar CLIENTE ===
+		$id_cliente = $this->validarCliente($s['Nombre_del_cliente']);
+		if (!$id_cliente) {
+			return ['success' => false, 'error' => "Fila $index: Cliente '{$s['Nombre_del_cliente']}' no encontrado"];
+		}
+
+		$direccion = $this->obtenerDireccionPrincipal($id_cliente);
+		if (!$direccion) {
+			return ['success' => false, 'error' => "Fila $index: Cliente sin dirección activa"];
+		}
+
+		// === 2. Validar TRUCK ===
+		$truck = 'Truck' . trim($s['truck']);
+
+		$id_truck = $this->validarTruck($truck);
+		if (!$id_truck) {
+			return ['success' => false, 'error' => "Fila $index: Truck '{$s['truck']}' no válido"];
+		}
+
+		// === 3. Procesar CREW: Lista de nombres completos ===
+		$nombres_crew = array_map('trim', explode(',', $s['Crew']));
+		if (count($nombres_crew) < 1 || count($nombres_crew) > 4) {
+			return ['success' => false, 'error' => "Fila $index: Crew debe tener entre 1 y 4 integrantes"];
+		}
+
+		// Buscar cada integrante en la tabla `crew` por `nombre_completo`
+		$ids_crew = [];
+		for ($i = 1; $i <= 4; $i++) {
+			$campo = "id_crew_$i";
+			$ids_crew[$campo] = null;
+		}
+
+		for ($i = 0; $i < count($nombres_crew); $i++) {
+			$nombre = $nombres_crew[$i];
+			$query = "SELECT id_crew, color FROM crew WHERE nombre_completo = :nombre AND id_status = 32";
+			$params = [':nombre' => $nombre];
+			$result = $this->ejecutarConsulta($query, '', $params);
+
+			if (!$result) {
+				http_response_code(404);
+				echo json_encode(['error' => 'Servicio no encontrado']);
+				return;
+			}
+
+			$ids_crew["id_crew_" . ($i + 1)] = $result['id_crew'];
+		}
+
+		// === 4. Obtener crew_color (del primer integrante o del truck) ===
+		$crew_color_principal = $result['color'] ?? $this->obtenerColorPorTruck($id_truck);
+
+		// === 5. Preparar datos para INSERT ===
+		$dia_servicio = strtoupper(trim($s['dia_servicio']));
+		$diasSemanales = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+		$tipo_dia = in_array($dia_servicio, $diasSemanales) ? 'semanal' : 'fijo';
+
+		$datos = [
+			['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $id_cliente],
+			['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $direccion['id_direccion']],
+			['campo_nombre' => 'id_truck', 'campo_marcador' => ':id_truck', 'campo_valor' => $id_truck],
+			['campo_nombre' => 'id_crew_grupo', 'campo_marcador' => ':id_crew_grupo', 'campo_valor' => 1], // Por ahora fijo
+			['campo_nombre' => 'id_crew_1', 'campo_marcador' => ':id_crew_1', 'campo_valor' => $ids_crew['id_crew_1']],
+			['campo_nombre' => 'id_crew_2', 'campo_marcador' => ':id_crew_2', 'campo_valor' => $ids_crew['id_crew_2']],
+			['campo_nombre' => 'id_crew_3', 'campo_marcador' => ':id_crew_3', 'campo_valor' => $ids_crew['id_crew_3']],
+			['campo_nombre' => 'id_crew_4', 'campo_marcador' => ':id_crew_4', 'campo_valor' => $ids_crew['id_crew_4']],
+			['campo_nombre' => 'ruta_mapa', 'campo_marcador' => ':ruta_mapa', 'campo_valor' => (int) $s['ruta']],
+			['campo_nombre' => 'dia_servicio', 'campo_marcador' => ':dia_servicio', 'campo_valor' => $dia_servicio],
+			['campo_nombre' => 'crew_color_principal', 'campo_marcador' => ':crew_color_principal', 'campo_valor' => $crew_color_principal],
+			['campo_nombre' => 'fecha_programada', 'campo_marcador' => ':fecha_programada', 'campo_valor' => $fecha_servicio],
+			['campo_nombre' => 'estado_servicio', 'campo_marcador' => ':estado_servicio', 'campo_valor' => 'pendiente'],
+			['campo_nombre' => 'id_status', 'campo_marcador' => ':id_status', 'campo_valor' => 37],
+			['campo_nombre' => 'tipo_dia', 'campo_marcador' => ':tipo_dia', 'campo_valor' => $tipo_dia],
+			['campo_nombre' => 'fecha_creacion', 'campo_marcador' => ':fecha_creacion', 'campo_valor' => date('Y-m-d H:i:s')]
+		];
+
+		try {
+			$this->guardarDatos('servicios', $datos);
+			$this->log("Servicio insertado: Cliente={$s['Nombre_del_cliente']}, Crew=" . $s['Crew']);
+			return ['success' => true];
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en Servicio: " . print_r($datos, true));
+			return ['success' => false, 'error' => "Fila $index: Error al insertar: " . $e->getMessage()];
+		}
+	}
+
+
+	private function marcarServiciosComoHistorias($fecha)
+	{
+		$query = "UPDATE servicios SET id_status = :id_status WHERE DATE(fecha_programada) = :fecha AND id_status = :status_activo";
+		$params = [
+			':id_status' => $this->id_status_historico,
+			':fecha' => $fecha,
+			':status_activo' => $this->id_status_activo
+		];
+		$cant_reg = $this->ejecutarConsulta($query, 'servicios', $params);
+		$this->log("$cant_reg Servicios del $fecha marcados como Cancelados");
+	}
+
+	private function obtenerDireccionPrincipal($id_cliente)
+	{
+		$query = "SELECT id_direccion, lat, lng FROM direcciones WHERE id_cliente = :id_cliente AND id_status = 10 ORDER BY id_direccion LIMIT 1";
+		$params = [':id_cliente' => $id_cliente];
+		return $this->ejecutarConsulta($query, '', $params);
+	}
+
+	private function validarTruck($truck)
+	{
+		$query = "SELECT id_truck FROM truck WHERE nombre = :nombre AND id_status = 26";
+		$params = [':nombre' => $truck];
+		$result = $this->ejecutarConsulta($query, '', $params);
+		return $result ? $result['id_truck'] : false;
+	}
+
+	private function validarCliente($nombre_cliente)
+	{
+		$query = "SELECT id_cliente FROM clientes WHERE nombre = :nombre AND id_status = 1";
+		$params = [':nombre' => trim($nombre_cliente)];
+		$result = $this->ejecutarConsulta($query, '', $params);
+		return $result ? $result['id_cliente'] : false;
+	}
+
+	private function clienteTrabajaEsteDia($id_cliente, $dia_servicio)
+	{
+		// Asumimos que la tabla 'contratos' tiene el campo 'day_work'
+		$query = "SELECT id_contrato FROM contratos WHERE id_cliente = :id_cliente AND day_work = :day_work AND id_status = 18";
+		$params = [
+			':id_cliente' => $id_cliente,
+			':day_work' => $dia_servicio
+		];
+		$result = $this->ejecutarConsulta($query, '', $params);
+		return $result !== false;
+	}
+
+	/**
+	 * Obtiene el historial de servicios de un cliente
+	 * @param int $id_cliente
+	 * @return void (echo JSON)
+	 */
+	public function obtenerHistorialCliente($id_cliente)
+	{
+		try {
+			$this->log("=== OBTENIENDO HISTORIAL PARA CLIENTE: $id_cliente ===");
+
+			$query = "SELECT 
+						s.fecha_programada,
+						t.nombre as truck,
+						s.estado_servicio,
+						s.finalizado
+					FROM servicios AS s
+					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
+					WHERE s.id_cliente = :id_cliente
+						AND s.id_status = 37
+					ORDER BY s.fecha_programada DESC
+					LIMIT 10";
+
+			$params = [':id_cliente' => $id_cliente];
+			$result = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
+
+			$historial = [];
+			foreach ($result as $row) {
+				$estado = 'programado';
+				if ($row['finalizado']) {
+					$estado = 'finalizado';
+				} else {
+					switch ($row['estado_servicio']) {
+						case 'usuario_alerto':
+						case 'gps_detectado':
+							$estado = 'en_proceso';
+							break;
+						case 'replanificado':
+							$estado = 'replanificado';
+							break;
+						case 'cancelado':
+							$estado = 'cancelado';
+							break;
+						default:
+							$estado = 'pendiente';
+							break;
+					}
+				}
+
+				$historial[] = [
+					'fecha_programada' => $row['fecha_programada'],
+					'truck' => $row['truck'],
+					'estado_visita' => $estado
+				];
+			}
+
+			http_response_code(200);
+			echo json_encode(['historial' => $historial]);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en obtenerHistorialCliente: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'Error al cargar historial']);
+		}
+	}
+
+	public function actualizarEstadoConHistorial($data)
+	{
+		$id_servicio = $data['id_servicio'] ?? null;
+		$estado = $data['estado'] ?? null;
+		$notas = $data['notas'] ?? '';
+		$estado_actual = $data['estado_actual'] ?? '';
+		$cliente = $data['cliente'] ?? null;
+		$truck = $data['truck'] ?? null;
+
+		try {
+			$this->log("=== ACTUALIZANDO CON HISTORIAL: Servicio $id_servicio a $estado ===");
+
+			// Validar estado operativo
+			$estados_validos = ['finalizado', 'replanificado', 'cancelado', 'inicio_actividades'];
+			if (!in_array($estado, $estados_validos)) {
+				http_response_code(400);
+				echo json_encode(['error' => 'Estado no válido']);
+				return;
+			}
+
+			// === 1. Determinar estado interno y id_status ===
+			$estado_servicio = $estado;
+			$estado_visita = NULL;
+			$id_status = 37; // Activo
+			$finalizado = 0;
+
+			if ($estado === 'finalizado') {
+				$estado_servicio = 'finalizado';
+				$estado_visita = 'finalizado';
+				$id_status = 39;
+				$finalizado = 1;
+			} elseif ($estado === 'replanificado') {
+				$estado_servicio = 'usuario_alerto';
+				$estado_visita = 'replanificado';
+				$id_status = 38;
+			} elseif ($estado === 'cancelado') {
+				$estado_servicio = 'cancelado';
+				$estado_visita = 'cancelado';
+				$id_status = 47;
+			} elseif ($estado === 'inicio_actividades') {
+				$estado_servicio = 'usuario_alerto';
+				$id_status = 37;
+			}
+
+			// Si es "Inicio de actividades", registrar la hora
+			$hora_aviso = null;
+			if ($estado === 'inicio_actividades' || $estado === 'cancelado' || $estado === 'replanificado') {
+				$hora_aviso = date('Y-m-d H:i:s');
+			}
+
+			// Si el estado es 'finalizado', registrar la hora actual
+			$hora_finalizado = null;
+			if ($estado === 'finalizado') {
+				$hora_finalizado = date('Y-m-d H:i:s');
+			}
+
+			// === 2. Validar cliente y truck ===
+			$id_cliente = $this->validarCliente($cliente);
+			$id_truck = $this->validarTruck($truck);
+
+			if (!$id_cliente || !$id_truck) {
+				http_response_code(400);
+				echo json_encode(['error' => 'Cliente o Truck no válido']);
+				return;
+			}
+
+			// === 3. Actualizar servicio con estado_servicio ===
+			$sql = "UPDATE servicios 
+					SET estado_servicio = :v_estado_servicio, 
+						estado_visita = :v_estado_visita;
+						id_status = :v_id_status, 
+						finalizado = :v_finalizado,
+						hora_aviso_usuario = COALESCE(hora_aviso_usuario, :v_hora_aviso_usuario),
+			            hora_finalizado = COALESCE(hora_finalizado, :v_hora_finalizado)
+					WHERE id_servicio = :v_id_servicio";
+
+			$param = [
+				':v_estado_servicio' => $estado_servicio,
+				':v_estado_visita;' => $estado_visita,
+				':v_id_status' => $id_status,
+				':v_finalizado' => $finalizado,
+				':v_hora_aviso_usuario' => $hora_aviso,
+				':v_hora_finalizado' => $hora_finalizado,
+				':v_id_servicio' => $id_servicio
+			];
+
+			$this->log("Actualización SQL: $sql con params " . json_encode($param));
+
+			$resultados = $this->ejecutarConsulta($sql, "", $param);
+
+			if ($resultados === false) {
+				http_response_code(500);
+				echo json_encode(['error' => 'No se pudo actualizar el servicio']);
+				return;
+			}
+
+			// === 4. Registrar en historial_servicios ===
+			$logEstado = [
+				['campo_nombre' => 'id_servicio', 'campo_marcador' => ':id_servicio', 'campo_valor' => $id_servicio],
+				['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $id_cliente],
+				['campo_nombre' => 'id_truck', 'campo_marcador' => ':id_truck', 'campo_valor' => $id_truck],
+				['campo_nombre' => 'campo_afectado', 'campo_marcador' => ':campo_afectado', 'campo_valor' => 'estado_servicio'],
+				['campo_nombre' => 'valor_anterior', 'campo_marcador' => ':valor_anterior', 'campo_valor' => $estado_actual],
+				['campo_nombre' => 'valor_nuevo', 'campo_marcador' => ':valor_nuevo', 'campo_valor' => $estado],
+				['campo_nombre' => 'origen', 'campo_marcador' => ':origen', 'campo_valor' => 'manual'],
+				['campo_nombre' => 'usuario_nombre', 'campo_marcador' => ':usuario_nombre', 'campo_valor' => $_SESSION['nombre'] ?? 'Usuario Web'],
+				['campo_nombre' => 'ip_origen', 'campo_marcador' => ':ip_origen', 'campo_valor' => $_SERVER['REMOTE_ADDR']],
+				['campo_nombre' => 'fecha_servicio', 'campo_marcador' => ':fecha_servicio', 'campo_valor' => date('Y-m-d')]
+			];
+
+			$this->log("Arreglo para crear Historico " . print_r($logEstado, true));
+
+			$this->guardarDatos('historial_servicios', $logEstado);
+
+			// === 5. Registrar nota si existe ===
+			if (!empty($notas)) {
+				$logNota = [
+					['campo_nombre' => 'id_servicio', 'campo_marcador' => ':id_servicio_n', 'campo_valor' => $id_servicio],
+					['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente_n', 'campo_valor' => $id_cliente],
+					['campo_nombre' => 'id_truck', 'campo_marcador' => ':id_truck_n', 'campo_valor' => $id_truck],
+					['campo_nombre' => 'campo_afectado', 'campo_marcador' => ':campo_afectado_n', 'campo_valor' => 'notas'],
+					['campo_nombre' => 'valor_anterior', 'campo_marcador' => ':valor_anterior_n', 'campo_valor' => ''],
+					['campo_nombre' => 'valor_nuevo', 'campo_marcador' => ':valor_nuevo_n', 'campo_valor' => $notas],
+					['campo_nombre' => 'origen', 'campo_marcador' => ':origen_n', 'campo_valor' => 'manual'],
+					['campo_nombre' => 'usuario_nombre', 'campo_marcador' => ':usuario_nombre_n', 'campo_valor' => $_SESSION['nombre'] ?? 'Usuario Web'],
+					['campo_nombre' => 'ip_origen', 'campo_marcador' => ':ip_origen_n', 'campo_valor' => $_SERVER['REMOTE_ADDR']],
+					['campo_nombre' => 'fecha_servicio', 'campo_marcador' => ':fecha_servicio_n', 'campo_valor' => date('Y-m-d')]
+				];
+				$this->guardarDatos('historial_servicios', $logNota);
+			}
+
+			http_response_code(200);
+			echo json_encode(['success' => true, 'message' => 'Estado y historial actualizados']);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en actualizarEstadoConHistorial: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'No se pudo actualizar']);
+		}
+	}
+
+	/**
+	 * Actualiza el estado de un servicio desde el modal
+	 * @param int $id_servicio
+	 * @param string $estado (finalizado, replanificado, cancelado)
+	 * @param int $id_cliente (para actualizar el servicio)
+	 * @return void (echo JSON)
+	 */
+
+	public function actualizarEstadoServicio($id_servicio, $estado, $id_cliente)
+	{
+		try {
+			$this->log("=== ACTUALIZANDO ESTADO: Servicio $id_servicio a $estado ===");
+
+			// Validar estado permitido
+			$estados_validos = ['finalizado', 'replanificado', 'cancelado'];
+			if (!in_array($estado, $estados_validos)) {
+				http_response_code(400);
+				echo json_encode(['error' => 'Estado no válido']);
+				return;
+			}
+
+			// Determinar id_status
+			$id_status = 37; // Activo por defecto
+			if ($estado === 'finalizado') {
+				$id_status = 37;
+			} elseif ($estado === 'replanificado') {
+				$id_status = 38; // Asumiendo que existe
+			} elseif ($estado === 'cancelado') {
+				$id_status = 47;
+			}
+
+			// Actualizar servicio
+			$sql = "UPDATE servicios 
+				SET estado_visita = :v_estado_visita, id_status = :v_id_status, finalizado = CASE WHEN :v_estado_visita = 'finalizado' THEN 1 ELSE 0 END 
+				WHERE id_servicio = :v_id_servicio";
+
+			$param = [
+				':v_estado_visita' => $estado,
+				':v_id_status' => $id_status,
+				':v_id_servicio' => $id_servicio
+			];
+
+			$this->log("Actualización SQL: $sql con params " . json_encode($param));
+
+			// Ejecución y post-procesamiento
+			$resultados = $this->ejecutarConsulta($sql, "", $param);
+
+			$this->log("Estado actualizado: Servicio $id_servicio -> $estado");
+
+			http_response_code(200);
+			echo json_encode(['success' => true, 'message' => 'Estado actualizado']);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en actualizarEstadoServicio: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'No se pudo actualizar el estado']);
+		}
+	}
+
+	public function obtenerServicioDetalle($id_servicio)
+	{
+		try {
+			$query = "SELECT 
+						s.id_servicio,
+						s.id_cliente,
+						c.nombre as cliente,
+						s.id_truck,
+						t.nombre as truck,
+						s.estado_servicio,
+						s.estado_visita,
+						s.finalizado,
+						s.dia_servicio,
+						d.lat,
+						d.lng,
+						d.direccion,
+						s.crew_color_principal,
+						s.fecha_programada,
+						s.hora_aviso_usuario,
+						s.hora_finalizado
+					FROM servicios AS s
+					LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
+					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
+					LEFT JOIN direcciones AS d ON s.id_direccion = d.id_direccion
+					WHERE s.id_servicio = :id_servicio";
+
+			$params = [':id_servicio' => $id_servicio];
+			$result = $this->ejecutarConsulta($query, '', $params);
+
+			if (!$result) {
+				http_response_code(404);
+				echo json_encode(['error' => 'Servicio no encontrado']);
+				return;
+			}
+
+			// Añadir crew_integrantes
+			$result['crew_integrantes'] = $this->obtenerCrewIntegrantes($id_servicio);
+
+			// === Asegurar que los campos temporales estén presentes ===
+			$result['hora_aviso_usuario'] = $result['hora_aviso_usuario'] ?? null;
+			$result['hora_finalizado'] = $result['hora_finalizado'] ?? null;
+
+			http_response_code(200);
+			echo json_encode($result);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en obtenerServicioDetalle: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'Error al cargar servicio']);
+		}
+	}
+
+	private function obtenerCrewIntegrantes($id_servicio)
+	{
+		try {
+			$query = "SELECT 
+						s.id_crew_1, s.id_crew_2, s.id_crew_3, s.id_crew_4
+					FROM servicios AS s
+					WHERE s.id_servicio = :id_servicio";
+
+			$params = [':id_servicio' => $id_servicio];
+			$result = $this->ejecutarConsulta($query, '', $params);
+
+			if (!$result) {
+				return [];
+			}
+
+			$ids = [
+				$result['id_crew_1'],
+				$result['id_crew_2'],
+				$result['id_crew_3'],
+				$result['id_crew_4']
+			];
+
+			$integrantes = [];
+			foreach ($ids as $id) {
+				if ($id) {
+					$query_crew = "SELECT id_crew, nombre, apellido, nombre_completo, color FROM crew WHERE id_crew = :id AND id_status = 32";
+					$params_crew = [':id' => $id];
+					$crew_data = $this->ejecutarConsulta($query_crew, '', $params_crew);
+					if ($crew_data) {
+						$integrantes[] = $crew_data;
+					}
+				}
+			}
+
+			return $integrantes;
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en obtenerCrewIntegrantes: " . $e->getMessage(), true);
+			return [];
+		}
+	}
+
+	public function obtenerHistorialServicio($id_cliente)
+	{
+		try {
+			$query = '
+				SELECT 
+					s.id_servicio,
+					s.id_cliente,
+					s.id_truck,
+					s.fecha_programada,
+					t.nombre AS truck,
+					s.estado_visita,
+					s.estado_servicio,
+					s.finalizado,
+					CASE 
+						WHEN inicio.fecha_registro IS NOT NULL 
+							AND fin.fecha_registro IS NOT NULL 
+						THEN TIMEDIFF(fin.fecha_registro, inicio.fecha_registro)
+						ELSE NULL 
+					END AS tiempo_duracion
+				FROM servicios AS s
+				LEFT JOIN truck AS t ON s.id_truck = t.id_truck
+				LEFT JOIN (
+					SELECT id_servicio, MIN(fecha_registro) AS fecha_registro 
+					FROM historial_servicios 
+					WHERE campo_afectado = "estado_servicio" 
+					AND valor_nuevo = "usuario_alerto"
+					AND origen = "manual"
+					GROUP BY id_servicio
+				) AS inicio ON s.id_servicio = inicio.id_servicio
+				LEFT JOIN (
+					SELECT id_servicio, MIN(fecha_registro) AS fecha_registro 
+					FROM historial_servicios 
+					WHERE campo_afectado = "estado_servicio" 
+					AND valor_nuevo = "finalizado"
+					AND origen = "manual"
+					GROUP BY id_servicio
+				) AS fin ON s.id_servicio = fin.id_servicio
+				WHERE s.id_status != 47
+					AND s.id_cliente = :v_id_cliente
+					AND DATE(s.fecha_programada) < :v_fecha_programada
+					ORDER BY s.fecha_programada DESC';
+
+			$params = [
+				':v_fecha_programada' => date('Y-m-d'),
+				':v_id_cliente' => $id_cliente
+			];
+			$result = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
+
+			$this->log("Resultado de la consulta de historial: " . print_r($result, true));
+
+			if (!$result) {
+				http_response_code(404);
+				echo json_encode(['error' => 'Historial no encontrado']);
+				return;
+			}
+
+			http_response_code(200);
+			echo json_encode($result);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en obtenerHistorialServicio: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'Error al cargar historial']);
+		}
+	}
+}
+?>

@@ -1,0 +1,23 @@
+# === Ignorar logs ===
+/app/logs/
+
+# === Opcional: Otros archivos que no deben subirse ===
+.env
+config.php
+*.log
+*.txt
+*anterior*.*
+*.sql
+logs/
+temp/
+error_log
+cache/
+tmp/
+
+# === Archivos del sistema ===
+Thumbs.db
+.DS_Store
+
+# === Carpetas de desarrollo ===
+node_modules/
+vendor/
