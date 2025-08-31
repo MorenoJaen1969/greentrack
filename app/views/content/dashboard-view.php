@@ -66,7 +66,7 @@
 <div id="modal-select-client" class="modal-overlay" style="display: none;">
     <div class="modal-contenedor" style="width: 50%;">
         <div class="modal-header">
-            <button class="modal-cerrar">&times;</button>
+            <button id="close-select-client" class="modal-cerrar">&times;</button>
             <h3 class="titulo_modal">Select Client</h3>
         </div>
         <div id="lista-clientes" style="max-height: 50vh; overflow-y: auto;">

@@ -1,12 +1,18 @@
-#!/usr/bin/php
 <?php
 // Este script se ejecuta a las 00:00:00 desde CRON
+
+ob_start();
+
+require_once '/var/www/greentrack/config/app.php';
+if (!defined('APP_R_PROY')) {
+    die('ERROR: APP_R_PROY no está definido');
+}
 
 // Cambia al directorio del proyecto
 chdir('/var/www/greentrack'); // ← Ajusta a tu ruta
 
 // Incluir el controlador
-require_once '../controllers/medianocheController.php';
+require_once APP_R_PROY . 'app/controllers/medianocheController.php';
 
 use app\controllers\medianocheController;
 

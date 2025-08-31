@@ -14,6 +14,8 @@ class serviciosController extends mainModel
 	private $id_status_cancelado;
 	private $id_status_activo;
 	private $id_status_historico;
+	private $id_status_finalizado;
+	private $id_status_replanificado;
 
 	private $o_f;
 
@@ -43,8 +45,10 @@ class serviciosController extends mainModel
 		$this->rotarLogs(15);
 
 		$this->id_status_cancelado = 47;
+		$this->id_status_finalizado = 38;
 		$this->id_status_historico = 39;
 		$this->id_status_activo = 37;
+		$this->id_status_replanificado = 40;
 
 		// if (isset($_COOKIE['clang'])) {
 		// 	$this->idioma_act = $_COOKIE['clang'];
@@ -304,7 +308,7 @@ class serviciosController extends mainModel
 					LEFT JOIN direcciones AS d ON c.id_cliente = d.id_cliente
 					LEFT JOIN contratos AS ct ON s.id_cliente = ct.id_cliente
 					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
-					WHERE DATE(s.fecha_programada) = :v_fecha_programada AND s.id_status != 39
+					WHERE DATE(s.fecha_programada) = :v_fecha_programada AND s.id_status != $this->id_status_historico
 					ORDER BY 
 						FIELD(t.id_truck, 1,2,3,4,5,6,11,15), 
 						c.nombre";
@@ -439,7 +443,7 @@ class serviciosController extends mainModel
 					LEFT JOIN direcciones AS d ON c.id_cliente = d.id_cliente
 					LEFT JOIN contratos AS ct ON s.id_cliente = ct.id_cliente
 					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
-					WHERE DATE(s.fecha_programada) = :v_fecha_programada AND s.id_status != 39
+					WHERE DATE(s.fecha_programada) = :v_fecha_programada AND s.id_status != $this->id_status_historico
 					ORDER BY c.nombre ASC";
 
 			$params = [
@@ -552,11 +556,13 @@ class serviciosController extends mainModel
 			$this->marcarServiciosComoHistorias($fecha_servicio);
 
 			$insertados = 0;
+			$registros = [];
 			$errores = [];
 			foreach ($servicios_array as $index => $s) {
 				try {
 					$resultado = $this->insertarServicioDesdeMotor1($s, $index, $fecha_servicio);
 					if ($resultado['success']) {
+						$registros[] = "Registro $index: Id_Servicio->" . $resultado['id_servicio'];
 						$insertados++;
 					} else {
 						$errores[] = $resultado['error'];
@@ -571,6 +577,7 @@ class serviciosController extends mainModel
 			return [
 				'status' => 'ok',
 				'insertados' => $insertados,
+				'validos' => $registros,
 				'errores' => $errores,
 				'detalles' => $errores,
 				'fecha_servicio' => $fecha_servicio
@@ -667,9 +674,9 @@ class serviciosController extends mainModel
 		];
 
 		try {
-			$this->guardarDatos('servicios', $datos);
+			$id_servicio = $this->guardarDatos('servicios', $datos);
 			$this->log("Servicio insertado: Cliente={$s['Nombre_del_cliente']}, Crew=" . $s['Crew']);
-			return ['success' => true];
+			return ['success' => true, 'id_servicio'  => $id_servicio];
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en Servicio: " . print_r($datos, true));
 			return ['success' => false, 'error' => "Fila $index: Error al insertar: " . $e->getMessage()];
@@ -801,7 +808,18 @@ class serviciosController extends mainModel
 		try {
 			$this->log("=== ACTUALIZANDO CON HISTORIAL: Servicio $id_servicio a $estado ===");
 
+			if ($estado === 'FINALIZO SERVICIO') {
+				$estado = 'finalizado';
+			} elseif ($estado === 'REPLANIFICAR SERVICIO') {
+				$estado = 'replanificado';
+			} elseif ($estado === 'CANCELAR SERVICIO') {
+				$estado = 'cancelado';
+			} elseif ($estado === 'INICIO DE SERVICIO') {
+				$estado = 'inicio_actividades';
+			}
+
 			// Validar estado operativo
+
 			$estados_validos = ['finalizado', 'replanificado', 'cancelado', 'inicio_actividades'];
 			if (!in_array($estado, $estados_validos)) {
 				http_response_code(400);
@@ -818,19 +836,19 @@ class serviciosController extends mainModel
 			if ($estado === 'finalizado') {
 				$estado_servicio = 'finalizado';
 				$estado_visita = 'finalizado';
-				$id_status = 39;
+				$id_status = $this->id_status_finalizado;
 				$finalizado = 1;
 			} elseif ($estado === 'replanificado') {
 				$estado_servicio = 'usuario_alerto';
 				$estado_visita = 'replanificado';
-				$id_status = 38;
+				$id_status = $this->id_status_replanificado;
 			} elseif ($estado === 'cancelado') {
 				$estado_servicio = 'cancelado';
 				$estado_visita = 'cancelado';
-				$id_status = 47;
+				$id_status = $this->id_status_cancelado;
 			} elseif ($estado === 'inicio_actividades') {
 				$estado_servicio = 'usuario_alerto';
-				$id_status = 37;
+				$id_status = $this->id_status_activo;
 			}
 
 			// Si es "Inicio de actividades", registrar la hora
@@ -858,7 +876,7 @@ class serviciosController extends mainModel
 			// === 3. Actualizar servicio con estado_servicio ===
 			$sql = "UPDATE servicios 
 					SET estado_servicio = :v_estado_servicio, 
-						estado_visita = :v_estado_visita;
+						estado_visita = :v_estado_visita,
 						id_status = :v_id_status, 
 						finalizado = :v_finalizado,
 						hora_aviso_usuario = COALESCE(hora_aviso_usuario, :v_hora_aviso_usuario),
@@ -867,7 +885,7 @@ class serviciosController extends mainModel
 
 			$param = [
 				':v_estado_servicio' => $estado_servicio,
-				':v_estado_visita;' => $estado_visita,
+				':v_estado_visita' => $estado_visita,
 				':v_id_status' => $id_status,
 				':v_finalizado' => $finalizado,
 				':v_hora_aviso_usuario' => $hora_aviso,
@@ -1147,6 +1165,118 @@ class serviciosController extends mainModel
 			http_response_code(500);
 			echo json_encode(['error' => 'Error al cargar historial']);
 		}
+	}
+
+	public function procesarClientesDesdeMotor1($id_cliente, $nombre_cliente){
+
+        if (empty($id_cliente) || empty($nombre_cliente)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Faltan datos']);
+            return;
+        }
+
+        $query = "UPDATE clientes SET nombre = :nombre WHERE id_cliente = :id";
+        $params = [
+            ':nombre' => $nombre_cliente,
+            ':id' => $id_cliente
+        ];
+
+        try {
+            $this->ejecutarConsulta($query, 'clientes', $params);
+			return [
+				'status' => 'ok',
+				'message' => 'Cliente actualizado'
+			];
+
+		} catch (Exception $e) {
+			$this->log("Error crítico en Clientes Motor1: " . $e->getMessage(), true);
+			return ['error' => 'Internal server error'];
+        }
+	}
+
+	public function buascar_actualizacion($ultimo_tiempo){
+		try {
+			$this->log("=== Verificando Actualizacion ===");
+
+			$query = "
+				SELECT 
+					s.*,
+					c.nombre AS cliente,
+					cr1.nombre AS crew_1_nombre, cr1.color AS crew_1_color,
+					cr2.nombre AS crew_2_nombre, cr2.color AS crew_2_color,
+					cr3.nombre AS crew_3_nombre, cr3.color AS crew_3_color,
+					cr4.nombre AS crew_4_nombre, cr4.color AS crew_4_color
+
+				FROM servicios s
+				JOIN clientes c ON s.id_cliente = c.id_cliente
+				LEFT JOIN crew cr1 ON s.id_crew_1 = cr1.id_crew
+				LEFT JOIN crew cr2 ON s.id_crew_2 = cr2.id_crew
+				LEFT JOIN crew cr3 ON s.id_crew_3 = cr3.id_crew
+				LEFT JOIN crew cr4 ON s.id_crew_4 = cr4.id_crew
+
+				WHERE
+				    DATE(s.fecha_programada) = CURDATE() 				 
+				 	AND s.id_status != $this->id_status_historico
+					AND (
+						s.fecha_actualizacion > :v_ultimo_tiempo1
+						OR s.hora_aviso_usuario > :v_ultimo_tiempo2
+						OR s.hora_finalizado > :v_ultimo_tiempo3
+					)
+				ORDER BY s.id_servicio, s.fecha_actualizacion DESC;";
+
+			$params = [
+				':v_ultimo_tiempo1' => $ultimo_tiempo,
+				':v_ultimo_tiempo2' => $ultimo_tiempo,
+				':v_ultimo_tiempo3' => $ultimo_tiempo,
+			];
+
+			$servicios = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
+
+			// === Asegurar que $servicios sea un array ===
+			if (!$servicios) {
+				$servicios = [];
+			}
+
+			// === Procesar crew_integrantes (solo si hay datos) ===
+			foreach ($servicios as &$servicio) {
+				$integrantes = [];
+				if (!empty($servicio['crew_1_nombre'])) {
+					$integrantes[] = [
+						'nombre' => $servicio['crew_1_nombre'],
+						'color'  => $servicio['crew_1_color'] ?? '#666'
+					];
+				}
+				if (!empty($servicio['crew_2_nombre'])) {
+					$integrantes[] = [
+						'nombre' => $servicio['crew_2_nombre'],
+						'color'  => $servicio['crew_2_color'] ?? '#666'
+					];
+				}
+				if (!empty($servicio['crew_3_nombre'])) {
+					$integrantes[] = [
+						'nombre' => $servicio['crew_3_nombre'],
+						'color'  => $servicio['crew_3_color'] ?? '#666'
+					];
+				}
+				if (!empty($servicio['crew_4_nombre'])) {
+					$integrantes[] = [
+						'nombre' => $servicio['crew_4_nombre'],
+						'color'  => $servicio['crew_4_color'] ?? '#666'
+					];
+				}
+				$servicio['crew_integrantes'] = $integrantes;
+			}
+
+			// === Siempre devolver un array ===
+			http_response_code(200);
+			echo json_encode(array_values($servicios)); // array_values por seguridad
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en obtenerHistorialServicio: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'Error al cargar historial']);
+		}
+
 	}
 }
 ?>

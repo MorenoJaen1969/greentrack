@@ -114,42 +114,59 @@ class medianocheController extends mainModel
 		file_put_contents($this->errorLogFile, $logMessage . PHP_EOL, FILE_APPEND | LOCK_EX);
 	}
 
+	public function cerrarServiciosNoAtendidos() {
+		try {
+			$this->log("=== INICIANDO: Cierre de servicios no atendidos ==="); 
 
-   	public function cerrarServiciosNoAtendidos() {
-        try {
-            $this->log("=== INICIANDO: Cierre de servicios no atendidos ===");
+			$hoy = date('Y-m-d');
 
-            $hoy = date('Y-m-d');
+			// === 1. Cerrar servicios no atendidos (id_status = 37 → 48) ===
+			$query1 = "
+				UPDATE servicios 
+				SET 
+					id_status = 48,
+					estado_servicio = 'no_servido',
+					fecha_actualizacion = NOW()
+				WHERE 
+					DATE(fecha_programada) < :hoy 
+					AND id_status = 37";
 
-            $query = "
-                UPDATE servicios 
-                SET 
-                    id_status = 48,
-                    estado_servicio = 'no_servido',
-                    fecha_actualizacion = NOW()
-                WHERE 
-                    DATE(fecha_programada) < :hoy 
-                    AND id_status = 37";
+			$params1 = [':hoy' => $hoy];
+			$filasCerradas = $this->ejecutarConsulta($query1, '', $params1, 'rowCount');
 
-            $params = [':hoy' => $hoy];
-            $filas = $this->ejecutarConsulta($query, '', $params, 'rowCount');
+			$this->log("✅ Cierre completado. $filasCerradas servicios marcados como 'No Servido'");
 
-            $this->log("✅ Cierre completado. $filas servicios marcados como 'No Servido'");
+			// === 2. Actualizar campo `historial = 1` en clientes que tengan servicios anteriores válidos ===
+			$query2 = "
+				UPDATE clientes 
+				SET historial = 1 
+				WHERE EXISTS (
+					SELECT 1 
+					FROM servicios s 
+					WHERE s.id_cliente = clientes.id_cliente 
+					AND s.id_status != 39 
+					AND s.fecha_programada < :hoy
+				)";
 
-            http_response_code(200);
-            echo json_encode([
-                'success' => true,
-                'message' => "Cierre de servicios no atendidos completado",
-                'servicios_actualizados' => $filas
-            ]);
+			$params2 = [':hoy' => $hoy];
+			$this->ejecutarConsulta($query2, '', $params2);
 
-        } catch (Exception $e) {
-            $this->logWithBacktrace("Error en cierre nocturno: " . $e->getMessage(), true);
-            http_response_code(500);
-            echo json_encode([
-                'success' => false,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
+			$this->log("✅ Campo 'historial' actualizado en clientes con servicios anteriores válidos");
+
+			http_response_code(200);
+			echo json_encode([
+				'success' => true,
+				'message' => "Cierre de servicios no atendidos y actualización de historial completados",
+				'servicios_cerrados' => $filasCerradas
+			]);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en cierre nocturno: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode([
+				'success' => false,
+				'error' => $e->getMessage()
+			]);
+		}
+	}
 }
