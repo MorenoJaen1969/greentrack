@@ -957,7 +957,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 listaClientes.innerHTML = '<p>No services scheduled for today</p>';
                 
                 // Iniciar polling cada 5 segundos
-                const intervalo = setInterval(async () => {
+                const intervalo = setInterval(async () => { 
                     try {
                         const res = await fetch('/app/ajax/serviciosAjax.php', {
                             method: 'POST',
@@ -983,7 +983,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const clientesMap = new Map();
-            servicios.forEach(s => {
+            servicios.forEach(s => { 
                 if (!clientesMap.has(s.cliente)) {
                     clientesMap.set(s.cliente, []);
                 }
