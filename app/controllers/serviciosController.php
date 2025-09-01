@@ -288,6 +288,7 @@ class serviciosController extends mainModel
 						s.id_crew_2,
 						s.id_crew_3,
 						s.id_crew_4,
+						s.id_status,
 						s.crew_color_principal,
 						s.dia_servicio,
 						s.finalizado,
@@ -350,6 +351,7 @@ class serviciosController extends mainModel
 
 				$registro = [
 					'id_servicio' => $s['id_servicio'],
+					'id_status' => $s['id_status'],
 					'id_cliente' => $s['id_cliente'],
 					'cliente' => $s['cliente'],
 					'direccion' => $s['direccion'],
@@ -1010,6 +1012,7 @@ class serviciosController extends mainModel
 	public function obtenerServicioDetalle($id_servicio)
 	{
 		try {
+			$this->log("Inicio de Consulta para obtener el detalle del Servicio");
 			$query = "SELECT 
 						s.id_servicio,
 						s.id_cliente,
@@ -1026,7 +1029,8 @@ class serviciosController extends mainModel
 						s.crew_color_principal,
 						s.fecha_programada,
 						s.hora_aviso_usuario,
-						s.hora_finalizado
+						s.hora_finalizado,
+						c.historial
 					FROM servicios AS s
 					LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
 					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
@@ -1035,6 +1039,8 @@ class serviciosController extends mainModel
 
 			$params = [':id_servicio' => $id_servicio];
 			$result = $this->ejecutarConsulta($query, '', $params);
+
+			$this->log("Resultado de la consulta de detalle: " . print_r($result, true)	);
 
 			if (!$result) {
 				http_response_code(404);
@@ -1046,8 +1052,10 @@ class serviciosController extends mainModel
 			$result['crew_integrantes'] = $this->obtenerCrewIntegrantes($id_servicio);
 
 			// === Asegurar que los campos temporales estén presentes ===
-			$result['hora_aviso_usuario'] = $result['hora_aviso_usuario'] ?? null;
-			$result['hora_finalizado'] = $result['hora_finalizado'] ?? null;
+			// $result['hora_aviso_usuario'] = $result['hora_aviso_usuario'] ?? null;
+			// $result['hora_finalizado'] = $result['hora_finalizado'] ?? null;
+
+			$this->log("Resultado de la consulta de detalle con Crew: " . print_r($result, true)	);
 
 			http_response_code(200);
 			echo json_encode($result);
@@ -1114,6 +1122,7 @@ class serviciosController extends mainModel
 					s.estado_visita,
 					s.estado_servicio,
 					s.finalizado,
+					h.campo_afectado,
 					CASE 
 						WHEN inicio.fecha_registro IS NOT NULL 
 							AND fin.fecha_registro IS NOT NULL 
@@ -1122,6 +1131,7 @@ class serviciosController extends mainModel
 					END AS tiempo_duracion
 				FROM servicios AS s
 				LEFT JOIN truck AS t ON s.id_truck = t.id_truck
+				LEFT JOIN historial_servicios AS h ON s.id_servicio = h.id_servicio
 				LEFT JOIN (
 					SELECT id_servicio, MIN(fecha_registro) AS fecha_registro 
 					FROM historial_servicios 
@@ -1149,7 +1159,7 @@ class serviciosController extends mainModel
 			];
 			$result = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
 
-			$this->log("Resultado de la consulta de historial: " . print_r($result, true));
+			$this->log(message: "Resultado de la consulta de historial: " . print_r($result, true));
 
 			if (!$result) {
 				http_response_code(404);
@@ -1196,8 +1206,6 @@ class serviciosController extends mainModel
 
 	public function buascar_actualizacion($ultimo_tiempo){
 		try {
-			$this->log("=== Verificando Actualizacion ===");
-
 			$query = "
 				SELECT 
 					s.*,

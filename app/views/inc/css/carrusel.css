@@ -253,6 +253,7 @@
 }
 
 .aviso-cell .hora {
+    font-size: 1.5em;
     font-weight: bold;
     color: #003366;
 }
@@ -273,6 +274,7 @@
 }
 
 .tiempo-cell .contador {
+    font-size: 1.5em;
     font-family: 'Courier New', monospace;
     font-weight: bold;
     color: #d32f2f;

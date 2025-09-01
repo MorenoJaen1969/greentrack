@@ -177,12 +177,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
 
                     <!-- 1,2: Activity -->
-                    <div class="cell aviso-cell">
+                    <div class="cell aviso-cell" id="aviso-cell-${servicio.id_servicio}">
                         <div class="tit_d_grid">Activity</div>
                         <div class="hora" style="line-height: 1.2;">
-                            ${servicio.hora_aviso_usuario ? `<span><b>Start:</b> ${inicioFormato}</span><br>` : ''}
-                            ${servicio.hora_finalizado ? `<span><b>End:</b> ${finFormato}</span><br>` : ''}
-                            <span><b>Duration:</b> ${duracionTexto}</span>
+                            <span id="start-${servicio.id_servicio}" class="time-start"></span><br>
+                            <span id="end-${servicio.id_servicio}" class="time-end"></span><br>
+                            <span id="duration-${servicio.id_servicio}" class="time-duration"><b>Duration:</b> Impossible to calculate</span>
                         </div>
                     </div>
 
@@ -312,18 +312,89 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const servicios = await res.json();
 
-        if (!servicios || !Array.isArray(servicios) || servicios.length === 0) {
-            console.warn("⚠️ No hay servicios para mostrar.");
+        if (!Array.isArray(servicios) || servicios.length === 0) {
+            console.warn("⚠️ No hay servicios para hoy. Iniciando polling...");
             const contenedor = document.getElementById('carrusel') || document.body;
-            if (contenedor) {
-                contenedor.style.display = 'flex';
-                contenedor.innerHTML = `
-                    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; text-align: center; color: #666; font-family: Arial, sans-serif; padding: 20px; width: 100%;">
-                        <h3>No services scheduled for today</h3>
-                        <p>Please verify the system status or load new services.</p>
-                    </div>
-                `;
-            }
+            let intentos = 0;
+            const maxIntentos = 120; // 60 minutos (120 * 30s)
+
+            contenedor.style.display = 'flex';
+            contenedor.innerHTML = `
+        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; text-align: center; color: #666; font-family: Arial, sans-serif; padding: 20px; width: 100%;">
+            <h3>Waiting for today's services...</h3>
+            <p>System will start automatically when services are loaded.</p>
+            <div id="contador-polling" style="font-size: 0.9em; margin-top: 10px;">Attempts: 0</div>
+        </div>`;
+
+            const intervaloPolling = setInterval(async () => {
+                intentos++;
+                document.getElementById('contador-polling').textContent = `Attempts: ${intentos}`;
+                console.log(`🔍 Polling intento ${intentos}`);
+
+                try {
+                    const res = await fetch('/app/ajax/serviciosAjax.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ modulo_servicios: 'listar' })
+                    });
+
+                    if (!res.ok) {
+                        console.error(`❌ HTTP ${res.status}: ${res.statusText}`);
+                        return;
+                    }
+
+                    const nuevosServicios = await res.json();
+                    console.log("📥 Datos recibidos:", nuevosServicios);
+
+                    if (Array.isArray(nuevosServicios) && nuevosServicios.length > 0) {
+                        console.log("✅ Servicios detectados, iniciando carrusel");
+                        clearInterval(intervaloPolling);
+
+                        // Limpiar contenedor
+                        contenedor.innerHTML = '';
+                        contenedor.style.display = '';
+
+                        // Iniciar carrusel
+                        window.serviciosData = nuevosServicios;
+                        carrusel.datos = nuevosServicios;
+                        actualizarEspacio();
+
+                        let indiceCarruselGlobal = 0;
+                        insertarTarjeta(nuevosServicios[indiceCarruselGlobal]);
+                        indiceCarruselGlobal = (indiceCarruselGlobal + 1) % nuevosServicios.length;
+
+                        carrusel.intervalo = setInterval(() => {
+                            insertarTarjeta(carrusel.datos[indiceCarruselGlobal]);
+                            indiceCarruselGlobal = (indiceCarruselGlobal + 1) % carrusel.datos.length;
+                        }, config.intervaloCarrusel);
+
+                        // Marcadores
+                        nuevosServicios.forEach(s => {
+                            if (s.lat && s.lng) {
+                                const marker = L.marker([s.lat, s.lng], {
+                                    icon: L.divIcon({
+                                        html: `<div style="background:${s.crew_color_principal};width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`,
+                                        className: '',
+                                        iconSize: [16, 16],
+                                        iconAnchor: [8, 8]
+                                    })
+                                }).addTo(window.map);
+                                marker.bindPopup(`<b>${s.cliente}</b><br>${s.direccion || 'No address'}<br><b>Crew:</b> ${s.truck || 'N/A'}`);
+                            }
+                        });
+
+                        iniciarSeguimientoGPS();
+                    }
+
+                    if (intentos >= maxIntentos) {
+                        clearInterval(intervaloPolling);
+                        document.getElementById('contador-polling').textContent = 'Error: Timeout. No services loaded.';
+                        console.error("❌ Timeout: No se cargaron servicios después de 60 minutos");
+                    }
+                } catch (err) {
+                    console.error("Error en polling:", err);
+                }
+            }, 30000);
         } else {
             window.serviciosData = servicios;
             carrusel.datos = servicios;
@@ -398,9 +469,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // === 12. MODAL DE DETALLES ===
-    function abrirModalDetalles(servicio, mantenerCarrusel = false) {
+    async function abrirModalDetalles(servicio, mantenerCarrusel = false) {
         servicioTemporal = servicio;
-
 
         // === Pausar carrusel solo si no se indica lo contrario ===
         if (!mantenerCarrusel && carrusel.intervalo) {
@@ -408,46 +478,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             carrusel.intervalo = null;
         }
 
-        // === Cargar datos del servicio y su historial ===
-        Promise.all([
+        try {
             // === 1. Cargar datos del servicio (obligatorio) ===
-            fetch('/app/ajax/serviciosAjax.php', {
+            const response = await fetch('/app/ajax/serviciosAjax.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     modulo_servicios: 'obtener_servicio_detalle',
                     id_servicio: servicio.id_servicio
                 })
-            })
-            .then(r => r.json())
-            .catch(err => {
-                console.error("Error crítico: No se pudo cargar el servicio", err);
-                throw new Error("No se pudo cargar el servicio");
-            }),
+            });
 
-            // === 2. Cargar historial (opcional: si falla, devuelve null) ===
-            fetch('/app/ajax/serviciosAjax.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_servicios: 'obtener_historial_servicio',
-                    id_cliente: servicio.id_cliente
-                })
-            })
-            .then(r => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                return r.json();
-            })
-            .then(data => {
-                // Si el backend devuelve { historial: [] } o datos, los usamos
-                return data?.historial || [];
-            })
-            .catch(err => {
-                console.warn("Historial no disponible (puede no haber datos o error)", err);
-                return []; // ← No rompe, solo devuelve vacío
-            })
-        ])
-        .then(([data, historialData]) => {
+            const data = await response.json();
+
             if (!data) {
                 alert("Error: Could not load service");
                 reanudarCarrusel();
@@ -455,162 +498,174 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const servicioActualizado = data;
-            const historialServicio = historialData || [];
 
-            // === Normalizar valores nulos a booleanos ===
+            // === 2. Decidir si se carga el historial según el campo 'historial' del cliente ===
+            let historialServicio = [];
+
+            // ✅ Verificamos si el cliente tiene historial habilitado
+            if (servicioActualizado.historial === 1) {
+                try {
+                    const historialResponse = await fetch('/app/ajax/serviciosAjax.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            modulo_servicios: 'obtener_historial_servicio',
+                            id_cliente: servicioActualizado.id_cliente
+                        })
+                    });
+
+                    if (historialResponse.ok) {
+                        const historialData = await historialResponse.json();
+                        if (Array.isArray(historialData)) {
+                            historialServicio = historialData; // ← Asume que devuelve el array directo
+                        } else if (historialData?.historial && Array.isArray(historialData.historial)) {
+                            historialServicio = historialData.historial;
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Historial no disponible (error de red o timeout)", err);
+                    // No rompe → historial queda como []
+                }
+            } else {
+                console.log("Historial deshabilitado para este cliente");
+            }
+
+            // ✅ === CORRECCIÓN CLAVE: Asignar el historial al objeto para que esté disponible después ===
+            servicioActualizado.historial = historialServicio;
+
+            // === Continuamos con la lógica de normalización y renderizado ===
             const tieneInicio = !!servicioActualizado.hora_aviso_usuario;
             const estaFinalizado = !!servicioActualizado.finalizado;
             const estadoServicio = servicioActualizado.estado_servicio;
 
-            // === Determinar si se permiten acciones ===
             const puedeAcciones = !estaFinalizado && estadoServicio !== 'finalizado';
 
-            // === Obtener última nota (excepto para "Inicio de actividades") ===
             const notasHistorial = servicioActualizado.historial?.filter(h => h.campo_afectado === 'notas') || [];
             const ultimaNota = notasHistorial.length > 0 ? notasHistorial[notasHistorial.length - 1] : { valor_nuevo: '' };
 
             const contenido = `
-                <div class="modal-overlay">
-                    <div class="modal-contenedor">
-                        <button class="modal-cerrar1">✕</button>
-                        <div class="modal-grid-3x2">
-                            <!-- 1,1 + 2,1: Información principal -->
-                            <div class="modal-info" style="grid-column: 1; grid-row: 1 / 3;">
-                                <h3>Service Details</h3>
-                                <table class="tabla-detalles">
-                                    <tr><th>Client</th><td>${servicioActualizado.cliente}</td></tr>
-                                    <tr><th>Truck</th><td>${servicioActualizado.truck}</td></tr>
-                                    <tr><th>Scheduled Day</th><td>${servicioActualizado.dia_servicio}</td></tr>
-                                    <tr><th>Operational Status</th><td><span class="estado-badge" style="background:${getEstadoColor(servicioActualizado.estado_servicio)}">${servicioActualizado.estado_servicio}</span></td></tr>
-                                    <tr><th>Visit Status</th><td><span class="estado-badge" style="background:${getEstadoColor(servicioActualizado.estado_visita)}">${servicioActualizado.estado_visita || '—'}</span></td></tr>
-                                    <tr><th>Coordinates</th><td>${servicioActualizado.lat}, ${servicioActualizado.lng}</td></tr>
-                                    <tr><th>Address</th><td>${servicioActualizado.direccion}</td></tr>
-                                    <tr><th>Start</th><td>${formatoHora(servicioActualizado.hora_aviso_usuario)}</td></tr>
-                                    <tr><th>End</th><td>${formatoHora(servicioActualizado.hora_finalizado)}</td></tr>
-                                </table>
+            <div class="modal-overlay">
+                <div class="modal-contenedor">
+                    <button class="modal-cerrar1" id="close_modal">✕</button>
+                    <div class="modal-grid-3x2">
+                        <!-- 1,1 + 2,1: Información principal -->
+                        <div class="modal-info" style="grid-column: 1; grid-row: 1 / 3;">
+                            <h3>Service Details</h3>
+                            <table class="tabla-detalles">
+                                <tr><th>Client</th><td>${servicioActualizado.cliente}</td></tr>
+                                <tr><th>Truck</th><td>${servicioActualizado.truck}</td></tr>
+                                <tr><th>Scheduled Day</th><td>${servicioActualizado.dia_servicio}</td></tr>
+                                <tr><th>Operational Status</th><td><span class="estado-badge" style="background:${getEstadoColor(servicioActualizado.estado_servicio)}">${servicioActualizado.estado_servicio}</span></td></tr>
+                                <tr><th>Visit Status</th><td><span class="estado-badge" style="background:${getEstadoColor(servicioActualizado.estado_visita)}">${servicioActualizado.estado_visita || '—'}</span></td></tr>
+                                <tr><th>Coordinates</th><td>${servicioActualizado.lat}, ${servicioActualizado.lng}</td></tr>
+                                <tr><th>Address</th><td>${servicioActualizado.direccion}</td></tr>
+                                <tr><th>Start</th><td>${formatoHora(servicioActualizado.hora_aviso_usuario)}</td></tr>
+                                <tr><th>End</th><td>${formatoHora(servicioActualizado.hora_finalizado)}</td></tr>
+                            </table>
 
-                                <h4>Crew Members</h4>
-                                <div class="crew-detalle-lista">
-                                    ${servicioActualizado.crew_integrantes?.map(p => `
-                                        <div class="crew-item" style="background:${p.color};">
-                                            ${p.nombre} ${p.apellido}
-                                        </div>
-                                    `).join('') || 'Not available'}
-                                </div>
-
-                                <!-- Mostrar última nota -->
-                                ${ultimaNota.valor_nuevo && servicioActualizado.estado_servicio !== 'usuario_alerto' ? `
-                                <div class="ultima-nota" style="margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 6px; font-size: 0.9em;">
-                                    <strong>Last Note:</strong> "${ultimaNota.valor_nuevo}"
-                                </div>` : ''}
+                            <h4>Crew Members</h4>
+                            <div class="crew-detalle-lista">
+                                ${servicioActualizado.crew_integrantes?.map(p => `
+                                    <div class="crew-item" style="background:${p.color};">
+                                        ${p.nombre} ${p.apellido}
+                                    </div>
+                                `).join('') || 'Not available'}
                             </div>
 
-                            <!-- 1,2: Acciones -->
-                            <div class="modal-acciones" style="grid-column: 2; grid-row: 1;">
-                                <h4>Actions</h4>
-                                <button class="btn-accion inicio" 
-                                        onclick="prepararAccion(${servicioActualizado.id_servicio}, 'inicio_actividades')"
-                                        ${tieneInicio || estaFinalizado ? 'disabled' : ''}>
-                                    Start of activities
-                                </button>
-                                <button class="btn-accion procesado" 
-                                        onclick="prepararAccion(${servicioActualizado.id_servicio}, 'finalizado')"
-                                        ${puedeAcciones ? '' : 'disabled'}>
-                                    Processed
-                                </button>
-                                <button class="btn-accion replanificado" 
-                                        onclick="prepararAccion(${servicioActualizado.id_servicio}, 'replanificado')"
-                                        ${puedeAcciones ? '' : 'disabled'}>
-                                    Rescheduled
-                                </button>
-                                <button class="btn-accion cancelado" 
-                                        onclick="prepararAccion(${servicioActualizado.id_servicio}, 'cancelado')"
-                                        ${puedeAcciones ? '' : 'disabled'}>
-                                    Cancelled
-                                </button>
-                            </div>
+                            ${ultimaNota.valor_nuevo && servicioActualizado.estado_servicio !== 'usuario_alerto' ? `
+                            <div class="ultima-nota" style="margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 6px; font-size: 0.9em;">
+                                <strong>Last Note:</strong> "${ultimaNota.valor_nuevo}"
+                            </div>` : ''}
+                        </div>
 
-                            <!-- 2,2: Notas o Tiempo Activo -->
-                            <div class="modal-notas" style="grid-column: 2; grid-row: 2;">
-                                ${(() => {
-                    // Estados que permiten edición de notas
+                        <!-- 1,2: Acciones -->
+                        <div class="modal-acciones" style="grid-column: 2; grid-row: 1;">
+                            <h4>Actions</h4>
+                            <button class="btn-accion inicio" 
+                                    onclick="prepararAccion(${servicioActualizado.id_servicio}, 'inicio_actividades')"
+                                    ${tieneInicio || estaFinalizado ? 'disabled' : ''}>
+                                Start of activities
+                            </button>
+                            <button class="btn-accion procesado" 
+                                    onclick="prepararAccion(${servicioActualizado.id_servicio}, 'finalizado')"
+                                    ${puedeAcciones ? '' : 'disabled'}>
+                                Processed
+                            </button>
+                            <button class="btn-accion replanificado" 
+                                    onclick="prepararAccion(${servicioActualizado.id_servicio}, 'replanificado')"
+                                    ${puedeAcciones ? '' : 'disabled'}>
+                                Rescheduled
+                            </button>
+                            <button class="btn-accion cancelado" 
+                                    onclick="prepararAccion(${servicioActualizado.id_servicio}, 'cancelado')"
+                                    ${puedeAcciones ? '' : 'disabled'}>
+                                Cancelled
+                            </button>
+                        </div>
+
+                        <!-- 2,2: Notas o Tiempo Activo -->
+                        <div class="modal-notas" style="grid-column: 2; grid-row: 2;">
+                            ${(() => {
                     const estadoInicial = !servicioActualizado.estado_servicio ||
                         servicioActualizado.estado_servicio === 'pendiente' ||
                         servicioActualizado.estado_servicio === 'usuario_alerto';
 
                     if (estadoInicial) {
                         return `
-                                            <h4>Notes</h4>
-                                            <textarea placeholder="Add notes..." class="input-notas" 
-                                                    ${estaFinalizado ? 'disabled' : ''}></textarea>
-                                            <div class="acciones-notas" style="display: none;">
-                                                <button class="btn-guardar-notas" onclick="guardarNotas(${servicioActualizado.id_servicio}, '${servicioActualizado.estado_servicio}')">Save</button>
-                                                <button class="btn-cancelar-notas" onclick="cancelarNotas()">Cancel</button>
-                                            </div>
-                                        `;
+                                        <h4>Notes</h4>
+                                        <textarea placeholder="Add notes..." class="input-notas" 
+                                                ${estaFinalizado ? 'disabled' : ''}></textarea>
+                                        <div class="acciones-notas" style="display: none;">
+                                            <button class="btn-guardar-notas" onclick="guardarNotas(${servicioActualizado.id_servicio}, '${servicioActualizado.estado_servicio}')">Save</button>
+                                            <button class="btn-cancelar-notas" onclick="cancelarNotas()">Cancel</button>
+                                        </div>
+                                    `;
                     } else {
-                        // Mostrar tiempo: total si finalizado, activo si no
                         const mostrarTiempoTotal = estaFinalizado && servicioActualizado.hora_aviso_usuario && servicioActualizado.hora_finalizado;
                         const duracion = mostrarTiempoTotal
                             ? calcularDuracion(servicioActualizado.hora_aviso_usuario, servicioActualizado.hora_finalizado)
                             : '00:00:00';
 
                         return `
-                                            <h4>${mostrarTiempoTotal ? 'Total Time' : 'Active Time'}</h4>
-                                            <span class="contador-modal" style="font-size: 1.2em; font-weight: bold; color: ${mostrarTiempoTotal ? '#4CAF50' : '#2196F3'};">
-                                                ${mostrarTiempoTotal ? duracion : '00:00:00'}
-                                            </span>
-                                            <p style="font-size: 0.8em; color: #666; margin-top: 5px;">
-                                                ${mostrarTiempoTotal ? 'Duration of service' : 'Time since start'}
-                                            </p>
-                                        `;
+                                        <h4>${mostrarTiempoTotal ? 'Total Time' : 'Active Time'}</h4>
+                                        <span class="contador-modal" style="font-size: 1.2em; font-weight: bold; color: ${mostrarTiempoTotal ? '#4CAF50' : '#2196F3'};">
+                                            ${mostrarTiempoTotal ? duracion : '00:00:00'}
+                                        </span>
+                                        <p style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                                            ${mostrarTiempoTotal ? 'Duration of service' : 'Time since start'}
+                                        </p>
+                                    `;
                     }
                 })()}
-                            </div>
+                        </div>
 
-                            <!-- 3,1 + 3,2: Historial -->
-                            <div class="modal-historial" style="grid-column: 1 / 3; grid-row: 3; height: 200px; overflow-y: auto;">
-                                <h4>Service History</h4>
-                                <table class="tabla-historial">
-                                    <thead>
-                                        <tr>
-                                            <th>Date</th>
-                                            <th>Truck</th>
-                                            <th>Status</th>
-                                            <th>Duration</th>
-                                        </tr>                                    
-                                    </thead>
-                                    <tbody id="historial-${servicioActualizado.id_servicio}">
-                                        <tr><td colspan="4">Loading...</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                        <!-- 3,1 + 3,2: Historial -->
+                        <div class="modal-historial" style="grid-column: 1 / 3; grid-row: 3; height: 200px; overflow-y: auto;">
+                            <h4>Service History</h4>
+                            <table class="tabla-historial">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Truck</th>
+                                        <th>Status</th>
+                                        <th>Duration</th>
+                                    </tr>                                    
+                                </thead>
+                                <tbody id="historial-${servicioActualizado.id_servicio}">
+                                    <tr><td colspan="4">Loading...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
-            `;
+            </div>`;
 
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = contenido;
             document.body.appendChild(tempDiv.firstElementChild);
 
-            // === Iniciar contador si hay hora de aviso y no está finalizado, y no se muestran notas ===
-            if (!(!servicioActualizado.estado_servicio ||
-                servicioActualizado.estado_servicio === 'pendiente' ||
-                servicioActualizado.estado_servicio === 'usuario_alerto')) {
-
-                if (servicioActualizado.hora_aviso_usuario && !servicioActualizado.finalizado) {
-                    const contador = document.querySelector('.contador-modal');
-                    if (contador) {
-                        iniciarContador(contador, servicioActualizado.hora_aviso_usuario);
-                    }
-                }
-            }
-
-            // === Mostrar contador o tiempo total ===
-            if (estaFinalizado && servicioActualizado.hora_aviso_usuario && servicioActualizado.hora_finalizado) {
-                // Ya se mostró el tiempo total
-            } else if (tieneInicio && !estaFinalizado) {
+            // === Iniciar contador si corresponde ===
+            if (tieneInicio && !estaFinalizado && !puedeAcciones) {
                 const contador = document.querySelector('.contador-modal');
                 if (contador) {
                     iniciarContador(contador, servicioActualizado.hora_aviso_usuario);
@@ -620,18 +675,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             // === Llenar historial del servicio ===
             const historialBody = document.getElementById(`historial-${servicioActualizado.id_servicio}`);
             if (historialBody) {
-                historialBody.innerHTML = ''; // Limpiar
-
+                historialBody.innerHTML = '';
                 if (historialServicio.length > 0) {
                     historialServicio.forEach(h => {
                         const tr = document.createElement('tr');
                         const duracion = h.tiempo_duracion ? h.tiempo_duracion : '—';
                         tr.innerHTML = `
-                            <td>${h.fecha_programada}</td>
-                            <td>${h.truck}</td>
-                            <td>${h.estado_visita ? `<span class="estado-badge" style="background:${getEstadoColor(h.estado_visita)}">${h.estado_visita}</span>` : '—'}</td>
-                            <td><span style="font-size: 0.9em; color: #555;">${duracion}</span></td>
-                        `;
+                        <td>${h.fecha_programada}</td>
+                        <td>${h.truck}</td>
+                        <td>${h.estado_visita ? `<span class="estado-badge" style="background:${getEstadoColor(h.estado_visita)}">${h.estado_visita}</span>` : '—'}</td>
+                        <td><span style="font-size: 0.9em; color: #555;">${duracion}</span></td>
+                    `;
                         historialBody.appendChild(tr);
                     });
                 } else {
@@ -641,9 +695,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
-            // === Cerrar con botón X ===
+            // === Cerrar modal ===
             const modalOverlay = document.querySelector('.modal-overlay');
-            const btnCerrar = modalOverlay.querySelector('.modal-cerrar1');
+
+            const btnCerrar = document.getElementById('close_modal');
             btnCerrar.addEventListener('click', () => {
                 modalOverlay.remove();
                 if (!mantenerCarrusel && carrusel.intervalo) {
@@ -661,15 +716,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     servicioTemporal = null;
                 }
             });
-        })
-        .catch(err => {
-            // Solo llega aquí si la primera promesa falló
+
+        } catch (err) {
             console.error("Error crítico en modal:", err);
             alert("No se pudo cargar el servicio");
             reanudarCarrusel();
-        });
+        }
     }
-
 
 
     // === Función auxiliar: color por estado ===
@@ -884,7 +937,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const serviciosActualizados = await res.json();
 
                 if (Array.isArray(serviciosActualizados) && serviciosActualizados.length > 0) {
-                    
+
                     console.log(`✅ ${serviciosActualizados.length} servicios actualizados`);
 
                     serviciosActualizados.forEach(servicio => {
@@ -906,6 +959,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 if (contador.dataset.timer) clearInterval(contador.dataset.timer);
                                 delete contador.dataset.timer;
                             }
+                            // Debe actualizar los campos de inicio y fin de actividades
+                            actualizarCeldaActividad(servicio);
                         } else {
                             // Si no existe, podrías insertarla, pero no es necesario
                         }
@@ -921,10 +976,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     // === FIN DEL POLLING ===
 
-
     // === Control botón "Select Client" ===
     document.getElementById('btn-select-client').addEventListener('click', async () => {
         const modalSelectClient = document.getElementById('modal-select-client');
+        const btnCerrar_lista = document.getElementById('close-select-client');
+
+        btnCerrar_lista.addEventListener('click', () => {
+            if (modalSelectClient) modalSelectClient.style.display = 'none';
+        });
+
         if (!modalSelectClient) {
             console.error("❌ No se encontró el modal #modal-select-client");
             return;
@@ -933,14 +993,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await cargarListaClientes();
     });
 
-    document.getElementById('close-select-client').addEventListener('click', () => {
-        const modalSelectClient = document.getElementById('modal-daily-status');
-        if (modalSelectClient) modalSelectClient.style.display = 'none';
-    });
-
-
     const listaClientes = document.getElementById('lista-clientes');
-
 
     async function cargarListaClientes() {
         try {
@@ -955,9 +1008,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (!Array.isArray(servicios) || servicios.length === 0) {
                 listaClientes.innerHTML = '<p>No services scheduled for today</p>';
-                
+
                 // Iniciar polling cada 5 segundos
-                const intervalo = setInterval(async () => { 
+                const intervalo = setInterval(async () => {
                     try {
                         const res = await fetch('/app/ajax/serviciosAjax.php', {
                             method: 'POST',
@@ -983,7 +1036,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const clientesMap = new Map();
-            servicios.forEach(s => { 
+            servicios.forEach(s => {
                 if (!clientesMap.has(s.cliente)) {
                     clientesMap.set(s.cliente, []);
                 }
@@ -1141,8 +1194,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                             td.textContent = '❌';
                             td.classList.add('celda-cancelado');
                             cancelados[idx]++;
-                        } else {
+                        } else if (servicio.estado_visita === 'programado' && servicio.hora_aviso_usuario === null) {
                             td.textContent = '🕒';
+                            td.classList.add('celda-por-procesar');
+                        } else {
+                            td.textContent = '🟢';
                             td.classList.add('celda-por-procesar');
                         }
                     } else {
@@ -1171,3 +1227,63 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 });
+
+// ———————————————————————————————————————
+// Función: actualizarCeldaActividad
+// Actualiza solo los elementos visuales de Activity (Start, End, Duration)
+// ———————————————————————————————————————
+function actualizarCeldaActividad(servicio) {
+    const id = servicio.id_servicio;
+    const inicio = servicio.hora_aviso_usuario;
+    const fin = servicio.hora_finalizado;
+
+    const startSpan = document.getElementById(`start-${id}`);
+    const endSpan = document.getElementById(`end-${id}`);
+    const durationSpan = document.getElementById(`duration-${id}`);
+
+    if (!startSpan || !endSpan || !durationSpan) return;
+
+    // Formatear hora: HH:mm
+    const formatTime = (datetime) => {
+        if (!datetime) return '';
+        const date = new Date(datetime);
+        return isNaN(date.getTime())
+            ? ''
+            : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const inicioFormato = formatTime(inicio);
+    const finFormato = formatTime(fin);
+
+    // --- Start ---
+    if (inicioFormato) {
+        startSpan.innerHTML = `<b>Start:</b> ${inicioFormato}`;
+        startSpan.style.display = 'block';
+    } else {
+        startSpan.style.display = 'none';
+    }
+
+    // --- End ---
+    if (finFormato) {
+        endSpan.innerHTML = `<b>End:</b> ${finFormato}`;
+        endSpan.style.display = 'block';
+    } else {
+        endSpan.style.display = 'none';
+    }
+
+    // --- Duration ---
+    let durationText = 'Impossible to calculate';
+
+    if (inicio && !fin) {
+        durationText = 'In progress';
+    } else if (inicio && fin) {
+        const inicioMs = new Date(inicio).getTime();
+        const finMs = new Date(fin).getTime();
+        if (!isNaN(inicioMs) && !isNaN(finMs)) {
+            const diffMin = Math.round((finMs - inicioMs) / 60000);
+            durationText = `${diffMin} min`;
+        }
+    }
+
+    durationSpan.innerHTML = `<b>Duration:</b> ${durationText}`;
+}

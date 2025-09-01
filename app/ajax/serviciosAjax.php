@@ -48,8 +48,6 @@ if (stripos($contentType, 'application/json') !== false) {
 // === 7. Procesar módulo ===
 $modulo = $inputData['modulo_servicios'] ?? '';
 
-error_log("Situacion de modulo: " . json_encode($inputData));
-
 if (!$modulo) {
     http_response_code(400);
     echo json_encode(['error' => 'Falta el parámetro "modulo_servicios"']);

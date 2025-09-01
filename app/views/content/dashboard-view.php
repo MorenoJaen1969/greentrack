@@ -36,8 +36,8 @@
 </div>
 
 <!-- Modal: Daily Status Matrix -->
-<div id="modal-daily-status" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 10000; justify-content: center; align-items: center;">
-    <div style="background: white; width: 90%; max-width: 1400px; height: 85vh; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+<div id="modal-daily-status" class="estilo_modal1">
+    <div class="primer_nivel">
         <!-- Encabezado -->
         <div style="padding: 15px; background: #2196F3; color: white; display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin: 0; font-size: 1.2em;">Daily Status – Crew vs Clients</h3>
@@ -63,11 +63,12 @@
     </div>
 </div>    
 
-<div id="modal-select-client" class="modal-overlay" style="display: none;">
+<div id="modal-select-client" class="segundo_proceso" style="display: none;">
     <div class="modal-contenedor" style="width: 50%;">
+        <!-- Encabezado -->
         <div class="modal-header">
-            <button id="close-select-client" class="modal-cerrar">&times;</button>
             <h3 class="titulo_modal">Select Client</h3>
+            <button id="close-select-client" class="btn_cerrar">&times;</button>
         </div>
         <div id="lista-clientes" style="max-height: 50vh; overflow-y: auto;">
             <p>Loading...</p>
