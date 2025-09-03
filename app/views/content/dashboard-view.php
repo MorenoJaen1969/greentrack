@@ -18,14 +18,14 @@
 
         <!-- Contenedor del carrusel (igual a tu estructura) -->
         <div class="carrusel-container">
-        <div class="contenedor-piso-detalles">
-            <div class="carrusel" id="servicio-carrusel">
-                <div id="carrusel" class="dis_caja forma_caja">
-                    <!-- Aquí se cargan las tarjetas o el mensaje de estado -->
+            <div class="contenedor-piso-detalles">
+                <div class="carrusel" id="servicio-carrusel">
+                    <div id="carrusel" class="dis_caja forma_caja">
+                        <!-- Aquí se cargan las tarjetas o el mensaje de estado -->
+                    </div>
+                <!-- Tarjetas generadas por JS -->
                 </div>
-            <!-- Tarjetas generadas por JS -->
             </div>
-        </div>
         </div>
     </div>
 

@@ -234,11 +234,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             card.appendChild(ev);
         }
 
-        // === CLICK: Abrir modal ===
         card.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (document.querySelector('.modal-overlay')) {
+
+            // === CLICK: Abrir modal ===
+            // if (document.querySelector('.modal-overlay')) {
                 abrirModalDetalles(servicio, false);
+            // }
+
+            // === CLICK: Simular clic en el marcador del mapa ===
+            const markerId = `marker-${servicio.id_servicio}`;
+            const elementoMarcador = document.getElementById(markerId);
+
+            if (elementoMarcador) {
+                elementoMarcador.click();
             }
         });
 
@@ -270,6 +279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // === 8. Insertar nueva tarjeta ===
     function insertarTarjeta(servicio) {
         const card = crearTarjeta(servicio);
+
         const altura = medirAltura(card);
         const requerido = altura + config.separacion;
 
@@ -316,7 +326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.warn("⚠️ No hay servicios para hoy. Iniciando polling...");
             const contenedor = document.getElementById('carrusel') || document.body;
             let intentos = 0;
-            const maxIntentos = 120; // 60 minutos (120 * 30s)
+            const maxIntentos = 1200; // 60 minutos (120 * 30s)
 
             contenedor.style.display = 'flex';
             contenedor.innerHTML = `
@@ -378,7 +388,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         iconSize: [16, 16],
                                         iconAnchor: [8, 8]
                                     })
-                                }).addTo(window.map);
+                                });
+
+                                // === Asignar ID al marcador cuando se añada al mapa ===
+                                marker.on('add', function () {
+                                    const iconElement = this.getElement(); // Obtiene el <div> del marcador
+                                    if (iconElement) {
+                                        iconElement.id = `marker-${s.id_servicio}`; // Le pones el ID
+                                    }
+                                });
+                                
+                                marker.addTo(window.map);
                                 marker.bindPopup(`<b>${s.cliente}</b><br>${s.direccion || 'No address'}<br><b>Crew:</b> ${s.truck || 'N/A'}`);
                             }
                         });
@@ -420,8 +440,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                             iconSize: [16, 16],
                             iconAnchor: [8, 8]
                         })
-                    }).addTo(window.map);
+                    });
 
+                      // === Asignar ID al marcador cuando se añada al mapa ===
+                    marker.on('add', function () {
+                        const iconElement = this.getElement(); // Obtiene el <div> del marcador
+                        if (iconElement) {
+                            iconElement.id = `marker-${s.id_servicio}`; // Le pones el ID
+                        }
+                    });
+                    
+                    marker.addTo(window.map);
                     marker.bindPopup(`<b>${s.cliente}</b><br>${s.direccion || 'No address'}<br><div class="tit_d_grid"><b>Crew:</b> ${s.truck || 'N/A'}</div>`);
                 }
             });
@@ -697,11 +726,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // === Cerrar modal ===
             const modalOverlay = document.querySelector('.modal-overlay');
-
+            
             const btnCerrar = document.getElementById('close_modal');
             btnCerrar.addEventListener('click', () => {
+
                 modalOverlay.remove();
-                if (!mantenerCarrusel && carrusel.intervalo) {
+                if (!mantenerCarrusel) {
                     reanudarCarrusel();
                 }
                 servicioTemporal = null;
@@ -710,7 +740,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalOverlay.addEventListener('click', (e) => {
                 if (e.target === modalOverlay) {
                     modalOverlay.remove();
-                    if (!mantenerCarrusel && carrusel.intervalo) {
+                    if (!mantenerCarrusel) {
                         reanudarCarrusel();
                     }
                     servicioTemporal = null;
@@ -991,6 +1021,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         modalSelectClient.style.display = 'flex';
         await cargarListaClientes();
+
     });
 
     const listaClientes = document.getElementById('lista-clientes');
@@ -1084,7 +1115,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     };
-
 
 
     // === Daily Status Modal ===
@@ -1226,6 +1256,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             tbody.innerHTML = `<tr><td colspan="100">Error: ${err.message}</td></tr>`;
         }
     }
+
+    // === AQUÍ agregas esta línea ===
+    esperarYcargarCarrusel();    
 });
 
 // ———————————————————————————————————————
@@ -1286,4 +1319,29 @@ function actualizarCeldaActividad(servicio) {
     }
 
     durationSpan.innerHTML = `<b>Duration:</b> ${durationText}`;
+}
+
+// ———————————————————————————————————————
+// CARGA OBLIGATORIA A LAS 00:01:00
+// ———————————————————————————————————————
+function esperarYcargarCarrusel() {
+    const ahora = new Date();
+    const ejecucion = new Date(
+        ahora.getFullYear(),
+        ahora.getMonth(),
+        ahora.getDate(),
+        0, 1, 0 // 00:01:00
+    );
+
+    const esperaMs = ejecucion - ahora;
+
+    // Si ya es 00:01:00 o después → cargar ahora
+    // Si aún no es → esperar hasta 00:01:00
+    setTimeout(() => {
+        console.log("⏰ [00:01:00] Cargando datos del carrusel...");
+        cargarDatosIniciales(); // ← Tu función que carga los servicios
+
+        // Programar para mañana
+        setTimeout(esperarYcargarCarrusel, 24 * 60 * 60 * 1000);
+    }, Math.max(0, esperaMs));
 }

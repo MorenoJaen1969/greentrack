@@ -1286,5 +1286,52 @@ class serviciosController extends mainModel
 		}
 
 	}
+
+	public function obtener_direcciones($cantidad){
+		$params = [];
+		$inicio = 1;
+		$registros = $cantidad;
+
+		$query = "
+			SELECT 
+				id_direccion, 
+				direccion
+			FROM direcciones 
+			WHERE 
+				AND direccion IS NOT NULL 
+				AND direccion != ''
+			ORDER BY id_direccion LIMIT " . $inicio . ", " . $registros;
+
+        try {
+            $resultado = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
+			return $resultado;
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error crítico en Direcciones Motor1: " . $e->getMessage(), true);
+			return [];
+        }
+
+	}
+
+	public function act_lat_long_direcciones($id_servicio, $lat, $lon){
+        $update = "UPDATE direcciones SET lat = :v_lat, lng = :v_lng 
+			WHERE id_servicio = :v_id_servicio";
+
+		$params = [
+			':v_id_servicio' => $id_servicio,
+			':v_lat' => $lat,
+			':v_lng' => $lon
+		];
+
+		try {
+            $resultado = $this->ejecutarConsulta($update, '', $params);
+			return $resultado;
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error crítico al actualizar Direcciones Motor1: " . $e->getMessage(), true);
+			return [];
+        }
+
+	}
 }
 ?>
