@@ -71,6 +71,7 @@ class medianocheController extends mainModel
 		}
 	}
 
+
 	private function verificarPermisos()
 	{
 		if (!is_writable($this->log_path)) {

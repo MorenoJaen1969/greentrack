@@ -32,5 +32,6 @@ if (!file_exists($file)) {
     }
     chmod($file, 0644); // Asegurarse de que el archivo sea legible y escribible
 }
-$logEntry = "[" .  date('Y-m-d H:i:s') . " - Ejecución de medianoche\n" . PHP_EOL;
+$logEntry = "[" .  date('Y-m-d H:i:s') . "] - Ejecución de medianoche\n" . PHP_EOL;
+
 file_put_contents($file, $logEntry, FILE_APPEND | LOCK_EX);

@@ -1683,134 +1683,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     });
 
-    // Función para ver coordenadas detalladas
-    function debugCoordenadas() {
-        console.log('=== DEBUG COORDENADAS ===');
-        
-        // Encontrar el carrusel
-        const carrusel = document.getElementById('carrusel');
-        if (!carrusel) {
-            console.log('❌ No se encuentra el carrusel con ID "carrusel"');
-            // Probar otros selectores comunes
-            const posibles = ['carrusel', 'carousel', 'slider', 'contenedor-carrusel'];
-            for (let id of posibles) {
-                const elem = document.getElementById(id);
-                if (elem) {
-                    console.log('✅ Encontrado con ID "' + id + '":', elem);
-                    break;
-                }
-            }
-            return;
-        }
-        
-        const rect = carrusel.getBoundingClientRect();
-        console.log('📊 Coordenadas del carrusel:');
-        console.log('   Left:', rect.left);
-        console.log('   Top:', rect.top);
-        console.log('   Right:', rect.right);
-        console.log('   Bottom:', rect.bottom);
-        console.log('   Width:', rect.width);
-        console.log('   Height:', rect.height);
-        
-        if (window.mousePosition) {
-            console.log('📍 Posición actual del mouse:');
-            console.log('   X:', window.mousePosition.x);
-            console.log('   Y:', window.mousePosition.y);
-            console.log('🎯 ¿Mouse dentro?', 
-                window.mousePosition.x >= rect.left && 
-                window.mousePosition.x <= rect.right &&
-                window.mousePosition.y >= rect.top && 
-                window.mousePosition.y <= rect.bottom
-            );
-        } else {
-            console.log('❌ No hay posición de mouse registrada');
-        }
-        
-        // Mostrar posición del mouse relativa al carrusel
-        if (window.mousePosition) {
-            console.log('📏 Distancias al carrusel:');
-            console.log('   Izquierda:', window.mousePosition.x - rect.left);
-            console.log('   Derecha:', rect.right - window.mousePosition.x);
-            console.log('   Arriba:', window.mousePosition.y - rect.top);
-            console.log('   Abajo:', rect.bottom - window.mousePosition.y);
-        }
-    }
-
-    // Ejecuta: debugCoordenadas()    
-
     // Verificar si el mouse está sobre un elemento del carrusel
     function mouseSobreElementoCarrusel() {
-        // Primero encontrar el carrusel (método más flexible)
-        let carrusel = null;
-        
-        // Probar múltiples formas de encontrar el carrusel
-        const selectores = [
-            '#carrusel',
-            '#carousel', 
-            '#slider',
-            '.carrusel',
-            '.carousel',
-            '.slider',
-            '[id*="carrusel"]',
-            '[id*="carousel"]',
-            '[class*="carrusel"]',
-            '[class*="carousel"]'
-        ];
-        
-        for (let selector of selectores) {
-            carrusel = document.querySelector(selector);
-            if (carrusel) {
-                console.log('✅ Carrusel encontrado con selector:', selector);
-                break;
-            }
-        }
-        
-        // Si no se encuentra por selectores, buscar por estructura
-        if (!carrusel) {
-            // Buscar el contenedor que probablemente sea el carrusel
-            const posiblesCarruseles = document.querySelectorAll('div');
-            for (let div of posiblesCarruseles) {
-                // Buscar divs que tengan elementos con data-servicio-id
-                if (div.querySelectorAll && div.querySelectorAll('[data-servicio-id]').length > 0) {
-                    carrusel = div;
-                    console.log('✅ Carrusel encontrado por contenido (data-servicio-id)');
-                    break;
-                }
-            }
-        }
+        // Usar la misma referencia del carrusel que usas en insertarTarjeta
+        const carrusel = window.carrusel ? window.carrusel.contenedor : document.getElementById('carrusel');
         
         if (!carrusel || !window.mousePosition) {
-            if (!carrusel) console.log('❌ No se encontró carrusel');
-            if (!window.mousePosition) console.log('❌ No hay posición de mouse');
             return null;
         }
         
         const rect = carrusel.getBoundingClientRect();
+        
+        // Verificar si el carrusel tiene dimensiones válidas
+        if (rect.width === 0 && rect.height === 0) {
+            return null;
+        }
+        
         const mouseX = window.mousePosition.x;
         const mouseY = window.mousePosition.y;
         
-        // Verificar si el mouse está dentro del carrusel (con un pequeño margen de tolerancia)
-        const tolerancia = 10; // píxeles de tolerancia
+        // Verificar si el mouse está dentro del carrusel
         const dentroDelCarrusel = (
-            mouseX >= (rect.left - tolerancia) && 
-            mouseX <= (rect.right + tolerancia) &&
-            mouseY >= (rect.top - tolerancia) && 
-            mouseY <= (rect.bottom + tolerancia)
+            mouseX >= rect.left && 
+            mouseX <= rect.right &&
+            mouseY >= rect.top && 
+            mouseY <= rect.bottom
         );
         
         if (!dentroDelCarrusel) {
-            console.log('🔍 Mouse NO dentro del carrusel (con tolerancia)');
-            console.log('   Mouse X,Y:', mouseX, mouseY);
-            console.log('   Carrusel área:', rect.left, rect.top, rect.right, rect.bottom);
             return null;
         }
-        
-        console.log('✅ Mouse dentro del carrusel');
         
         // Buscar elementos del carrusel que contengan el mouse
         const elementos = carrusel.querySelectorAll('[data-servicio-id]');
         if (elementos.length === 0) {
-            console.log('❌ No hay elementos con data-servicio-id');
             return null;
         }
         
@@ -1824,7 +1730,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (mouseEnElemento) {
                 const servicioId = elemento.getAttribute('data-servicio-id');
-                console.log('🎯 Servicio encontrado:', servicioId);
                 return {
                     elemento: elemento,
                     servicioId: servicioId
@@ -1834,6 +1739,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         return null;
     }
+
 
     // Encontrar contenedor del mapa
     function encontrarContenedorMapa() {
@@ -1941,7 +1847,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function rastrearMouseYCrearFlecha() {
         const elementoBajoMouse = mouseSobreElementoCarrusel();
         
-        console.log('🔍 Rastreando mouse...', elementoBajoMouse);
+        // console.log('🔍 Rastreando mouse...', elementoBajoMouse);
         
         if (elementoBajoMouse) {
             console.log('🎯 Elemento encontrado:', elementoBajoMouse.servicioId);

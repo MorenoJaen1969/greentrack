@@ -1,0 +1,64 @@
+# ==================== CONFIGURACIÓN QR_MOD ====================
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Ajusta según el contexto (si se accede directamente por puerto, no necesitas RewriteBase)
+    # Si se accede vía subdirectorio, descomenta y ajusta:
+    # RewriteBase /qr_mod/
+</IfModule>
+
+# ==================== SEGURIDAD ====================
+# Desactivar listado de directorios
+Options -Indexes
+
+# Desactivar ETags
+FileETag None
+
+# Bloquear acceso a archivos sensibles
+<FilesMatch "\.(env|log|ini|conf|config|php~|php\.bak|htaccess|git)$">
+    Require all denied
+</FilesMatch>
+
+# ==================== COMPRESIÓN GZIP ====================
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE text/javascript
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE application/xml
+</IfModule>
+
+# ==================== CABECERAS DE SEGURIDAD ====================
+<IfModule mod_headers.c>
+    # Protección contra clickjacking
+    Header always set X-Frame-Options "DENY"
+    
+    # Prevenir sniffing de MIME
+    Header always set X-Content-Type-Options "nosniff"
+    
+    # Habilitar protección XSS en navegadores modernos
+    Header always set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# ==================== CACHÉ DE RECURSOS ESTÁTICOS ====================
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+    ExpiresByType image/jpg "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 year"
+    ExpiresByType application/pdf "access plus 1 month"
+</IfModule>
+
+# ==================== TIPOS DE ARCHIVO ADICIONALES ====================
+<IfModule mod_mime.c>
+    AddType application/json .json
+    AddType text/css .css
+    AddType application/javascript .js
+    AddType image/svg+xml .svg
+</IfModule>
