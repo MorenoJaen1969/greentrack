@@ -23,7 +23,7 @@ class medianocheController extends mainModel
 		$nom_controlador = "medianocheController";
 		// ____________________________________________________________________
 
-		$this->log_path = __DIR__ . '/../logs/controlador/';
+		$this->log_path = __DIR__ . '/../logs/cron/';
 
 		if (!file_exists($this->log_path)) {
 			mkdir($this->log_path, 0775, true);

@@ -15,6 +15,346 @@
  * - Todo en inglés
  */
 
+// Función para aplicar efecto visual al marcador
+// Al inicio de tu script, después de crear el mapa
+window.mapMarkers = {};
+
+// Funciones específicas para cada tipo de alerta
+function suiteAlertSuccess(titulo, mensaje) {
+    return mostrarSuiteAlert('success', titulo, mensaje);
+}
+
+function suiteAlertError(titulo, mensaje) {
+    return mostrarSuiteAlert('error', titulo, mensaje);
+}
+
+function suiteAlertWarning(titulo, mensaje) {
+    return mostrarSuiteAlert('warning', titulo, mensaje);
+}
+
+function suiteAlertInfo(titulo, mensaje) {
+    return mostrarSuiteAlert('info', titulo, mensaje);
+}
+
+// Modal de confirmación
+function suiteConfirm(titulo, mensaje, opcionesConfirm = {}) {
+    const opciones = {
+        botones: [
+            { texto: opcionesConfirm.cancelar || 'Cancelar', tipo: 'secondary', valor: false },
+            { texto: opcionesConfirm.aceptar || 'Aceptar', tipo: 'primary', valor: true }
+        ]
+    };
+    return mostrarSuiteAlert('warning', titulo, mensaje, opciones);
+}
+
+function mostrarSuiteAlert(tipo, titulo, mensaje, opciones = {}) {
+    return new Promise((resolve) => {
+        // Eliminar alerta existente
+        const alertaExistente = document.querySelector('.alerta-overlay');
+        if (alertaExistente) {
+            alertaExistente.remove();
+        }
+
+        // Crear elementos de la alerta
+        const overlay = document.createElement('div');
+        overlay.className = 'alerta-overlay';
+
+        const alerta = document.createElement('div');
+        alerta.className = 'suite-alerta-box';
+
+        const header = document.createElement('div');
+        header.className = `alerta-header ${tipo}`;
+
+        const icon = document.createElement('div');
+        icon.className = 'alerta-icon';
+
+        // Iconos según el tipo
+        const iconos = {
+            success: '✓',
+            error: '✕',
+            warning: '⚠',
+            info: 'ℹ'
+        };
+        icon.textContent = iconos[tipo] || 'ℹ';
+
+        const title = document.createElement('h2');
+        title.className = 'alerta-title';
+        title.textContent = titulo;
+
+        const body = document.createElement('div');
+        body.className = 'alerta-body';
+
+        const message = document.createElement('p');
+        message.className = 'alerta-message';
+        message.textContent = mensaje;
+
+        const actions = document.createElement('div');
+        actions.className = 'alerta-actions';
+
+        // Botones según opciones
+        const botones = opciones.botones || [{ texto: 'OK', tipo: 'primary' }];
+
+        botones.forEach((btn, index) => {
+            const button = document.createElement('button');
+            button.className = `btn-alerta btn-alerta-${btn.tipo}`;
+            button.textContent = btn.texto;
+            button.onclick = () => {
+                overlay.classList.remove('activo');
+                setTimeout(() => {
+                    overlay.remove();
+                    resolve(btn.valor || index);
+                }, 300);
+            };
+            actions.appendChild(button);
+        });
+
+        // Construir la alerta
+        header.appendChild(icon);
+        header.appendChild(title);
+        body.appendChild(message);
+        body.appendChild(actions);
+        alerta.appendChild(header);
+        alerta.appendChild(body);
+        overlay.appendChild(alerta);
+
+        // Añadir al documento
+        document.body.appendChild(overlay);
+
+        // Mostrar con animación
+        setTimeout(() => {
+            overlay.classList.add('activo');
+            alerta.classList.add('alerta-pulse');
+        }, 10);
+
+        // Cerrar con Escape
+        const teclaEscape = (e) => {
+            if (e.key === 'Escape') {
+                overlay.classList.remove('activo');
+                setTimeout(() => {
+                    overlay.remove();
+                    document.removeEventListener('keydown', teclaEscape);
+                    resolve(null);
+                }, 300);
+            }
+        };
+        document.addEventListener('keydown', teclaEscape);
+
+        // Cerrar haciendo clic fuera de la alerta
+        if (opciones.cerrarClickFuera !== false) {
+            overlay.onclick = (e) => {
+                if (e.target === overlay) {
+                    overlay.classList.remove('activo');
+                    setTimeout(() => {
+                        overlay.remove();
+                        resolve(null);
+                    }, 300);
+                }
+            };
+        }
+    });
+}
+
+// Función para encontrar el contenedor del mapa
+function encontrarContenedorMapa() {
+    // Buscar por diferentes selectores comunes
+    const posiblesSelectores = ['#map', '#map-container', '.map', '.leaflet-container', '#leaflet-map'];
+
+    for (let selector of posiblesSelectores) {
+        const elemento = document.querySelector(selector);
+        if (elemento) {
+            return elemento;
+        }
+    }
+
+    // Si no encuentra por selectores, buscar el primer div con clases de Leaflet
+    const divs = document.querySelectorAll('div');
+    for (let div of divs) {
+        if (div.className && (div.className.includes('leaflet') || div.className.includes('map'))) {
+            return div;
+        }
+    }
+
+    // Último recurso: usar el body
+    return document.body;
+}
+
+function crearEfectoRadar(idServicio) {
+    // Verificar que el marcador exista
+    if (!window.mapMarkers || !window.mapMarkers[idServicio]) {
+        console.warn(`Marcador no encontrado para servicio ${idServicio}`);
+        return;
+    }
+
+    try {
+        // Obtener coordenadas del marcador
+        const marker = window.mapMarkers[idServicio];
+        const latlng = marker.getLatLng();
+
+        // Convertir a coordenadas de pantalla
+        const punto = window.map.latLngToContainerPoint(latlng);
+
+        // Encontrar el contenedor del mapa
+        const contenedorMapa = encontrarContenedorMapa();
+
+        // Crear tres circunferencias con diferentes características
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+                const onda = document.createElement('div');
+                onda.style.cssText = `
+                    position: absolute;
+                    border: 4px solid #0066cc;  /* Azul oscuro más grueso */
+                    border-radius: 50%;
+                    pointer-events: none;
+                    left: ${punto.x}px;
+                    top: ${punto.y}px;
+                    width: 0px;
+                    height: 0px;
+                    opacity: 0.9;
+                    transform: translate(-50%, -50%);
+                    z-index: 999;
+                    box-shadow: 0 0 10px #0066cc; /* Sombra azul oscuro */
+                `;
+
+                // Añadir al contenedor del mapa
+                contenedorMapa.appendChild(onda);
+
+                // Animación de crecimiento
+                let size = 0;
+                const maxSize = 120;
+                const interval = setInterval(() => {
+                    size += 5;
+                    onda.style.width = size + 'px';
+                    onda.style.height = size + 'px';
+                    onda.style.opacity = 0.9 - (size / maxSize);
+
+                    if (size >= maxSize) {
+                        clearInterval(interval);
+                        if (onda.parentNode) {
+                            onda.parentNode.removeChild(onda);
+                        }
+                    }
+                }, 30);
+
+            }, i * 200); // Espaciar las circunferencias en el tiempo
+        }
+
+    } catch (error) {
+        console.error('Error al crear efecto radar:', error);
+    }
+}
+
+function destacarMarcadorEnMapa_3(idServicio) {
+    // esto es un Color
+    const markerId = `marker-${idServicio}`;
+    const markerElement = document.getElementById(markerId);
+
+    if (markerElement) {
+        // Guardar color original
+        const colorOriginal = markerElement.style.background || '#ff0000';
+
+        // Efecto de cambio de color
+        let cambios = 0;
+        const maxCambios = 8;
+
+        const intervaloColor = setInterval(() => {
+            if (cambios >= maxCambios) {
+                markerElement.style.background = colorOriginal;
+                markerElement.style.transition = 'background 0.3s ease';
+                clearInterval(intervaloColor);
+                return;
+            }
+
+            if (cambios % 2 === 0) {
+                markerElement.style.background = '#ffff00'; // Amarillo brillante
+            } else {
+                markerElement.style.background = '#ff00ff'; // Magenta
+            }
+
+            markerElement.style.transition = 'background 0.3s ease';
+            cambios++;
+        }, 300);
+    }
+}
+
+function destacarMarcadorEnMapa_2(idServicio) {
+    // esto es un Pulso
+    const markerId = `marker-${idServicio}`;
+    const markerElement = document.getElementById(markerId);
+
+    if (markerElement) {
+        // Agregar clase CSS para animación de pulso
+        markerElement.style.animation = 'pulsoMarker 2s ease-in-out';
+        markerElement.style.zIndex = '1000';
+
+        // Crear estilo CSS dinámico si no existe
+        if (!document.getElementById('animacion-pulso-marker')) {
+            const style = document.createElement('style');
+            style.id = 'animacion-pulso-marker';
+            style.textContent = `
+                @keyframes pulsoMarker {
+                    0% { transform: scale(1); box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+                    50% { transform: scale(1.6); box-shadow: 0 0 20px rgba(255,255,0,0.8), 0 0 30px rgba(255,255,0,0.6); }
+                    100% { transform: scale(1); box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // Limpiar después de la animación
+        setTimeout(() => {
+            if (markerElement) {
+                markerElement.style.animation = '';
+                markerElement.style.zIndex = '1';
+            }
+        }, 2000);
+    }
+}
+
+function destacarMarcadorEnMapa(idServicio) {
+    const markerId = `marker-${idServicio}`;
+    const markerElement = document.getElementById(markerId);
+
+    if (markerElement) {
+        // Guardar estilos originales
+        const estiloOriginal = {
+            transform: markerElement.style.transform || 'scale(1)',
+            boxShadow: markerElement.style.boxShadow || '0 0 5px rgba(0,0,0,0.5)',
+            zIndex: markerElement.style.zIndex || '1'
+        };
+
+        // Aplicar efecto de destello/intermitencia
+        let intermitencias = 0;
+        const maxIntermitencias = 6; // 3 ciclos completos
+
+        const intervaloDestello = setInterval(() => {
+            if (intermitencias >= maxIntermitencias) {
+                // Restaurar estilos originales
+                markerElement.style.transform = estiloOriginal.transform;
+                markerElement.style.boxShadow = estiloOriginal.boxShadow;
+                markerElement.style.zIndex = estiloOriginal.zIndex;
+                markerElement.style.transition = 'all 0.3s ease';
+                clearInterval(intervaloDestello);
+                return;
+            }
+
+            if (intermitencias % 2 === 0) {
+                // Efecto "encendido" - más grande y brillante
+                markerElement.style.transform = 'scale(1.8)';
+                markerElement.style.boxShadow = '0 0 15px rgba(255,255,255,0.8), 0 0 30px yellow';
+                markerElement.style.zIndex = '1000';
+            } else {
+                // Efecto "apagado" - volver a normal
+                markerElement.style.transform = 'scale(1)';
+                markerElement.style.boxShadow = estiloOriginal.boxShadow;
+                markerElement.style.zIndex = estiloOriginal.zIndex;
+            }
+
+            markerElement.style.transition = 'all 0.3s ease';
+            intermitencias++;
+        }, 400); // Cambia cada 400ms
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("🟢 GreenTrack Live: Iniciando dashboard");
     let servicioTemporal = null;
@@ -239,7 +579,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // === CLICK: Abrir modal ===
             // if (document.querySelector('.modal-overlay')) {
-                abrirModalDetalles(servicio, false);
+            abrirModalDetalles(servicio, false);
             // }
 
             // === CLICK: Simular clic en el marcador del mapa ===
@@ -280,6 +620,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     function insertarTarjeta(servicio) {
         const card = crearTarjeta(servicio);
 
+        // === AGREGAR EL ATRIBUTO DATA-SERVICIO-ID ===
+        // Esta es la línea crucial que falta
+        card.setAttribute('data-servicio-id', servicio.id_servicio);
+        // === FIN DE LA MODIFICACIÓN ===
+
         const altura = medirAltura(card);
         const requerido = altura + config.separacion;
 
@@ -309,6 +654,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             card.style.opacity = '1';
             reposicionarElementos();
         }, 50);
+
+        // Agregar el efecto visual al marcador correspondiente
+        if (servicio && servicio.id_servicio) {
+            setTimeout(() => {
+                crearEfectoRadar(servicio.id_servicio);
+            }, 100); // Pequeño delay para asegurar que el DOM esté listo
+        }
     }
 
     // === 9. Cargar servicios y empezar ===
@@ -395,9 +747,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     const iconElement = this.getElement(); // Obtiene el <div> del marcador
                                     if (iconElement) {
                                         iconElement.id = `marker-${s.id_servicio}`; // Le pones el ID
+                                        iconElement.style.transition = 'all 0.3s ease'; // Transición suave para efectos
                                     }
                                 });
-                                
+
                                 marker.addTo(window.map);
                                 marker.bindPopup(`<b>${s.cliente}</b><br>${s.direccion || 'No address'}<br><b>Crew:</b> ${s.truck || 'N/A'}`);
                             }
@@ -442,14 +795,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                         })
                     });
 
-                      // === Asignar ID al marcador cuando se añada al mapa ===
+                    // Guardar referencia al marcador
+                    window.mapMarkers[s.id_servicio] = marker;
+
+                    // === Asignar ID al marcador cuando se añada al mapa ===
                     marker.on('add', function () {
                         const iconElement = this.getElement(); // Obtiene el <div> del marcador
                         if (iconElement) {
                             iconElement.id = `marker-${s.id_servicio}`; // Le pones el ID
                         }
                     });
-                    
+
                     marker.addTo(window.map);
                     marker.bindPopup(`<b>${s.cliente}</b><br>${s.direccion || 'No address'}<br><div class="tit_d_grid"><b>Crew:</b> ${s.truck || 'N/A'}</div>`);
                 }
@@ -521,7 +877,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await response.json();
 
             if (!data) {
-                alert("Error: Could not load service");
+                await suiteAlertError("Error", "Could not load service");
                 reanudarCarrusel();
                 return;
             }
@@ -572,6 +928,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const notasHistorial = servicioActualizado.historial?.filter(h => h.campo_afectado === 'notas') || [];
             const ultimaNota = notasHistorial.length > 0 ? notasHistorial[notasHistorial.length - 1] : { valor_nuevo: '' };
 
+            const carac_serv = !servicioActualizado.estado_servicio ||
+                servicioActualizado.estado_servicio === 'pendiente' ||
+                servicioActualizado.estado_servicio === 'inicio_actividades';
+
+            const sin_nota = servicioActualizado.estado_servicio === 'finalizado' ||
+                servicioActualizado.estado_servicio === 'cancelado' ||
+                servicioActualizado.estado_servicio === 'replanificado';
+
             const contenido = `
             <div class="modal-overlay">
                 <div class="modal-contenedor">
@@ -584,7 +948,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 <tr><th>Client</th><td>${servicioActualizado.cliente}</td></tr>
                                 <tr><th>Truck</th><td>${servicioActualizado.truck}</td></tr>
                                 <tr><th>Scheduled Day</th><td>${servicioActualizado.dia_servicio}</td></tr>
-                                <tr><th>Operational Status</th><td><span class="estado-badge" style="background:${getEstadoColor(servicioActualizado.estado_servicio)}">${servicioActualizado.estado_servicio}</span></td></tr>
+                                <tr><th>Operational Status</th><td><span class="estado-badge" style="background:${getEstadoColor(servicioActualizado.estado_servicio)}">${getEstadoMessage(servicioActualizado.estado_servicio)}</span></td></tr>
                                 <tr><th>Visit Status</th><td><span class="estado-badge" style="background:${getEstadoColor(servicioActualizado.estado_visita)}">${servicioActualizado.estado_visita || '—'}</span></td></tr>
                                 <tr><th>Coordinates</th><td>${servicioActualizado.lat}, ${servicioActualizado.lng}</td></tr>
                                 <tr><th>Address</th><td>${servicioActualizado.direccion}</td></tr>
@@ -634,21 +998,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                         <!-- 2,2: Notas o Tiempo Activo -->
                         <div class="modal-notas" style="grid-column: 2; grid-row: 2;">
-                            ${(() => {
+
+                        ${(() => {
+                    if (!sin_nota) {
+                        return `
+                                    <h4>Notes</h4>
+                                    <textarea placeholder="Add notes..." class="input-notas" 
+                                            ${estaFinalizado ? 'disabled' : ''}></textarea>
+                                    <div class="acciones-notas" style="display: none;">
+                                        <button class="btn-guardar-notas" onclick="guardarNotas(${servicioActualizado.id_servicio}, '${servicioActualizado.estado_servicio}')">Save</button>
+                                        <button class="btn-cancelar-notas" onclick="cancelarNotas()">Cancel</button>
+                                    </div>
+                                            `;
+                    } else {
+                        return `
+                                    <h4>Preview Notes</h4>
+                                    <textarea placeholder="Add notes..." class="input-notas" disabled>${servicioActualizado.notas_anteriores}</textarea>`;
+                    }
+                })()}
+
+
+                        ${(() => {
                     const estadoInicial = !servicioActualizado.estado_servicio ||
                         servicioActualizado.estado_servicio === 'pendiente' ||
                         servicioActualizado.estado_servicio === 'usuario_alerto';
 
                     if (estadoInicial) {
                         return `
-                                        <h4>Notes</h4>
-                                        <textarea placeholder="Add notes..." class="input-notas" 
-                                                ${estaFinalizado ? 'disabled' : ''}></textarea>
-                                        <div class="acciones-notas" style="display: none;">
-                                            <button class="btn-guardar-notas" onclick="guardarNotas(${servicioActualizado.id_servicio}, '${servicioActualizado.estado_servicio}')">Save</button>
-                                            <button class="btn-cancelar-notas" onclick="cancelarNotas()">Cancel</button>
-                                        </div>
-                                    `;
+                                            `;
                     } else {
                         const mostrarTiempoTotal = estaFinalizado && servicioActualizado.hora_aviso_usuario && servicioActualizado.hora_finalizado;
                         const duracion = mostrarTiempoTotal
@@ -666,6 +1043,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     `;
                     }
                 })()}
+
+
                         </div>
 
                         <!-- 3,1 + 3,2: Historial -->
@@ -726,7 +1105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // === Cerrar modal ===
             const modalOverlay = document.querySelector('.modal-overlay');
-            
+
             const btnCerrar = document.getElementById('close_modal');
             btnCerrar.addEventListener('click', () => {
 
@@ -749,7 +1128,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         } catch (err) {
             console.error("Error crítico en modal:", err);
-            alert("No se pudo cargar el servicio");
+            await suiteAlertError("Error", "No se pudo cargar el servicio");
+
             reanudarCarrusel();
         }
     }
@@ -760,6 +1140,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         switch (estado) {
             case 'finalizado':
             case 'usuario_alerto':
+            case 'inicio_actividades':
+                return '#565709ff';
             case 'gps_detectado':
                 return '#4CAF50';
             case 'replanificado':
@@ -772,6 +1154,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return '#F44336';
             default:
                 return '#666';
+        }
+    }
+
+    // === Función auxiliar: color por estado ===
+    function getEstadoMessage(estado) {
+        switch (estado) {
+            case 'finalizado':
+                return 'Service completed successfully';
+            case 'usuario_alerto':
+                return 'User has alerted';
+            case 'inicio_actividades':
+                return 'Activities started';
+            case 'gps_detectado':
+                return 'GPS detected';
+            case 'replanificado':
+                return 'Service rescheduled';
+            case 'sin_programar':
+                return 'Not scheduled';
+            case 'pendiente':
+                return 'Pending';
+            case 'cancelado':
+                return 'Cancelled by user';
+            default:
+                return 'Unknown status';
         }
     }
 
@@ -820,12 +1226,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const esFinalizado = !!servicio.finalizado;
 
         if (esFinalizado) {
-            alert("This service is already completed. No further actions allowed.");
+            suiteAlertInfo("Info", "This service is already completed. No further actions allowed.")
             return;
         }
 
         if (nuevoEstado === 'inicio_actividades' && tieneInicio) {
-            alert("Start of activities has already been registered.");
+            suiteAlertInfo("Info", "Start of activities has already been registered.")
             return;
         }
 
@@ -861,12 +1267,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const nuevoEstado = estadoTemporal;
 
         if (!nuevoEstado) {
-            alert("No action selected");
+            suiteAlertWarning("Warning", "No action selected")
             return;
         }
 
         if (!servicioTemporal) {
-            alert("Error: Service not found. Reload the page.");
+            suiteAlertError("Error", "Service not found. Reload the page.");
             return;
         }
 
@@ -888,7 +1294,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .then(r => r.json())
             .then(resp => {
                 if (resp.success) {
-                    alert(`Service updated to ${nuevoEstado}`);
+                    suiteAlertSuccess('Updated', `Service updated to ${nuevoEstado}`);
                     const servicio = carrusel.datos.find(s => s.id_servicio == id_servicio);
                     if (servicio) {
                         servicio.estado_servicio = (nuevoEstado === 'inicio_actividades') ? 'usuario_alerto' : servicio.estado_servicio;
@@ -908,12 +1314,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     document.querySelector('.modal-overlay')?.remove();
                     reanudarCarrusel();
                 } else {
-                    alert("Error: " + resp.error);
+                    suiteAlertError("Error", resp.error);
                 }
             })
             .catch(err => {
                 console.error("Error al guardar:", err);
-                alert("Connection error");
+                suiteAlertError("Error", "Connection error");
             });
     };
 
@@ -1258,8 +1664,334 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // === AQUÍ agregas esta línea ===
-    esperarYcargarCarrusel();    
-});
+    esperarYcargarCarrusel();
+
+    // === SISTEMA DE FLECHA HACIA MAPA ===
+    // Variables globales para el sistema de flecha
+    window.mousePosition = { x: 0, y: 0 };
+    window.flechaActual = null;
+    window.tooltipActual = null;
+    window.lineaActual = null;
+    window.puntaActual = null;
+    window.servicioActualRastreado = null;
+
+    // Capturar posición del mouse
+    document.addEventListener('mousemove', function (event) {
+        window.mousePosition = {
+            x: event.clientX,
+            y: event.clientY
+        };
+    });
+
+    // Función para ver coordenadas detalladas
+    function debugCoordenadas() {
+        console.log('=== DEBUG COORDENADAS ===');
+        
+        // Encontrar el carrusel
+        const carrusel = document.getElementById('carrusel');
+        if (!carrusel) {
+            console.log('❌ No se encuentra el carrusel con ID "carrusel"');
+            // Probar otros selectores comunes
+            const posibles = ['carrusel', 'carousel', 'slider', 'contenedor-carrusel'];
+            for (let id of posibles) {
+                const elem = document.getElementById(id);
+                if (elem) {
+                    console.log('✅ Encontrado con ID "' + id + '":', elem);
+                    break;
+                }
+            }
+            return;
+        }
+        
+        const rect = carrusel.getBoundingClientRect();
+        console.log('📊 Coordenadas del carrusel:');
+        console.log('   Left:', rect.left);
+        console.log('   Top:', rect.top);
+        console.log('   Right:', rect.right);
+        console.log('   Bottom:', rect.bottom);
+        console.log('   Width:', rect.width);
+        console.log('   Height:', rect.height);
+        
+        if (window.mousePosition) {
+            console.log('📍 Posición actual del mouse:');
+            console.log('   X:', window.mousePosition.x);
+            console.log('   Y:', window.mousePosition.y);
+            console.log('🎯 ¿Mouse dentro?', 
+                window.mousePosition.x >= rect.left && 
+                window.mousePosition.x <= rect.right &&
+                window.mousePosition.y >= rect.top && 
+                window.mousePosition.y <= rect.bottom
+            );
+        } else {
+            console.log('❌ No hay posición de mouse registrada');
+        }
+        
+        // Mostrar posición del mouse relativa al carrusel
+        if (window.mousePosition) {
+            console.log('📏 Distancias al carrusel:');
+            console.log('   Izquierda:', window.mousePosition.x - rect.left);
+            console.log('   Derecha:', rect.right - window.mousePosition.x);
+            console.log('   Arriba:', window.mousePosition.y - rect.top);
+            console.log('   Abajo:', rect.bottom - window.mousePosition.y);
+        }
+    }
+
+    // Ejecuta: debugCoordenadas()    
+
+    // Verificar si el mouse está sobre un elemento del carrusel
+    function mouseSobreElementoCarrusel() {
+        // Primero encontrar el carrusel (método más flexible)
+        let carrusel = null;
+        
+        // Probar múltiples formas de encontrar el carrusel
+        const selectores = [
+            '#carrusel',
+            '#carousel', 
+            '#slider',
+            '.carrusel',
+            '.carousel',
+            '.slider',
+            '[id*="carrusel"]',
+            '[id*="carousel"]',
+            '[class*="carrusel"]',
+            '[class*="carousel"]'
+        ];
+        
+        for (let selector of selectores) {
+            carrusel = document.querySelector(selector);
+            if (carrusel) {
+                console.log('✅ Carrusel encontrado con selector:', selector);
+                break;
+            }
+        }
+        
+        // Si no se encuentra por selectores, buscar por estructura
+        if (!carrusel) {
+            // Buscar el contenedor que probablemente sea el carrusel
+            const posiblesCarruseles = document.querySelectorAll('div');
+            for (let div of posiblesCarruseles) {
+                // Buscar divs que tengan elementos con data-servicio-id
+                if (div.querySelectorAll && div.querySelectorAll('[data-servicio-id]').length > 0) {
+                    carrusel = div;
+                    console.log('✅ Carrusel encontrado por contenido (data-servicio-id)');
+                    break;
+                }
+            }
+        }
+        
+        if (!carrusel || !window.mousePosition) {
+            if (!carrusel) console.log('❌ No se encontró carrusel');
+            if (!window.mousePosition) console.log('❌ No hay posición de mouse');
+            return null;
+        }
+        
+        const rect = carrusel.getBoundingClientRect();
+        const mouseX = window.mousePosition.x;
+        const mouseY = window.mousePosition.y;
+        
+        // Verificar si el mouse está dentro del carrusel (con un pequeño margen de tolerancia)
+        const tolerancia = 10; // píxeles de tolerancia
+        const dentroDelCarrusel = (
+            mouseX >= (rect.left - tolerancia) && 
+            mouseX <= (rect.right + tolerancia) &&
+            mouseY >= (rect.top - tolerancia) && 
+            mouseY <= (rect.bottom + tolerancia)
+        );
+        
+        if (!dentroDelCarrusel) {
+            console.log('🔍 Mouse NO dentro del carrusel (con tolerancia)');
+            console.log('   Mouse X,Y:', mouseX, mouseY);
+            console.log('   Carrusel área:', rect.left, rect.top, rect.right, rect.bottom);
+            return null;
+        }
+        
+        console.log('✅ Mouse dentro del carrusel');
+        
+        // Buscar elementos del carrusel que contengan el mouse
+        const elementos = carrusel.querySelectorAll('[data-servicio-id]');
+        if (elementos.length === 0) {
+            console.log('❌ No hay elementos con data-servicio-id');
+            return null;
+        }
+        
+        // Verificar cada elemento
+        for (let elemento of elementos) {
+            const elemRect = elemento.getBoundingClientRect();
+            const mouseEnElemento = (
+                mouseX >= elemRect.left && mouseX <= elemRect.right &&
+                mouseY >= elemRect.top && mouseY <= elemRect.bottom
+            );
+            
+            if (mouseEnElemento) {
+                const servicioId = elemento.getAttribute('data-servicio-id');
+                console.log('🎯 Servicio encontrado:', servicioId);
+                return {
+                    elemento: elemento,
+                    servicioId: servicioId
+                };
+            }
+        }
+        
+        return null;
+    }
+
+    // Encontrar contenedor del mapa
+    function encontrarContenedorMapa() {
+        const posiblesSelectores = ['#map', '#map-container', '.map', '.leaflet-container', '#leaflet-map'];
+        for (let selector of posiblesSelectores) {
+            const elemento = document.querySelector(selector);
+            if (elemento) return elemento;
+        }
+        const divs = document.querySelectorAll('div');
+        for (let div of divs) {
+            if (div.className && (div.className.includes('leaflet') || div.className.includes('map'))) {
+                return div;
+            }
+        }
+        return document.body;
+    }
+
+    // Crear flecha con tooltip
+    function crearFlechaHaciaMapa(servicio) {
+        // Eliminar flecha anterior si existe
+        eliminarFlechaActual();
+
+        if (!servicio || !servicio.lat || !servicio.lng) return;
+
+        // Obtener posición del marcador en el mapa
+        if (window.mapMarkers && window.mapMarkers[servicio.id_servicio]) {
+            const marker = window.mapMarkers[servicio.id_servicio];
+            const latlng = marker.getLatLng();
+            const puntoMapa = window.map.latLngToContainerPoint(latlng);
+
+            // Obtener posición del elemento del carrusel
+            const elementoCarrusel = document.querySelector(`[data-servicio-id="${servicio.id_servicio}"]`);
+            if (!elementoCarrusel) return;
+
+            const rectCarrusel = elementoCarrusel.getBoundingClientRect();
+            const puntoCarrusel = {
+                x: rectCarrusel.left + rectCarrusel.width / 2,
+                y: rectCarrusel.top + rectCarrusel.height / 2
+            };
+
+            // Calcular ángulo y distancia
+            const deltaX = puntoMapa.x - puntoCarrusel.x;
+            const deltaY = puntoMapa.y - puntoCarrusel.y;
+            const distancia = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const angulo = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
+
+            // Crear línea de la flecha
+            const linea = document.createElement('div');
+            linea.className = 'flecha-linea';
+            linea.style.width = distancia + 'px';
+            linea.style.height = '4px';
+            linea.style.left = puntoCarrusel.x + 'px';
+            linea.style.top = puntoCarrusel.y + 'px';
+            linea.style.transform = `rotate(${angulo}deg)`;
+
+            // Crear punta de la flecha
+            const punta = document.createElement('div');
+            punta.className = 'flecha-punta';
+            punta.style.left = (puntoMapa.x - 10) + 'px';
+            punta.style.top = (puntoMapa.y - 6) + 'px';
+            punta.style.transform = `rotate(${angulo}deg)`;
+
+            // Crear tooltip con información
+            const tooltip = document.createElement('div');
+            tooltip.className = 'flecha-tooltip';
+            tooltip.innerHTML = `
+            <div style="font-size: 11px; margin-bottom: 2px;">${servicio.cliente}</div>
+            <div style="font-size: 10px; opacity: 0.9;">${servicio.direccion || 'Sin dirección'}</div>
+        `;
+            tooltip.style.left = (puntoMapa.x + 15) + 'px';
+            tooltip.style.top = (puntoMapa.y - 30) + 'px';
+
+            // Añadir al documento
+            const contenedorMapa = encontrarContenedorMapa();
+            contenedorMapa.appendChild(linea);
+            contenedorMapa.appendChild(punta);
+            contenedorMapa.appendChild(tooltip);
+
+            // Guardar referencias
+            window.lineaActual = linea;
+            window.puntaActual = punta;
+            window.tooltipActual = tooltip;
+        }
+    }
+
+    // Eliminar flecha actual
+    function eliminarFlechaActual() {
+        if (window.lineaActual && window.lineaActual.parentNode) {
+            window.lineaActual.parentNode.removeChild(window.lineaActual);
+        }
+        if (window.puntaActual && window.puntaActual.parentNode) {
+            window.puntaActual.parentNode.removeChild(window.puntaActual);
+        }
+        if (window.tooltipActual && window.tooltipActual.parentNode) {
+            window.tooltipActual.parentNode.removeChild(window.tooltipActual);
+        }
+
+        window.lineaActual = null;
+        window.puntaActual = null;
+        window.tooltipActual = null;
+    }
+
+    // Función principal de rastreo
+    // Función principal de rastreo DEBUG
+    function rastrearMouseYCrearFlecha() {
+        const elementoBajoMouse = mouseSobreElementoCarrusel();
+        
+        console.log('🔍 Rastreando mouse...', elementoBajoMouse);
+        
+        if (elementoBajoMouse) {
+            console.log('🎯 Elemento encontrado:', elementoBajoMouse.servicioId);
+            
+            // Si es un servicio diferente al actualmente rastreado
+            if (elementoBajoMouse.servicioId !== window.servicioActualRastreado) {
+                console.log('🔄 Cambio de servicio detectado');
+                
+                // Eliminar flecha anterior
+                eliminarFlechaActual();
+                
+                // Buscar el servicio completo
+                if (window.serviciosData) {
+                    const servicio = window.serviciosData.find(s => s.id_servicio == elementoBajoMouse.servicioId);
+                    console.log('📋 Servicio encontrado:', servicio);
+                    
+                    if (servicio) {
+                        // Crear nueva flecha
+                        console.log('➡️ Creando flecha para servicio:', servicio.id_servicio);
+                        setTimeout(() => {
+                            crearFlechaHaciaMapa(servicio);
+                        }, 50);
+                        
+                        window.servicioActualRastreado = elementoBajoMouse.servicioId;
+                    } else {
+                        console.log('❌ Servicio no encontrado en window.serviciosData');
+                    }
+                }
+            }
+        } else {
+            // Si el mouse no está sobre ningún elemento, eliminar flecha
+            if (window.servicioActualRastreado) {
+                console.log('🧹 Limpiando flecha anterior');
+                eliminarFlechaActual();
+                window.servicioActualRastreado = null;
+            }
+        }
+    }
+
+    // Iniciar rastreo continuo
+    function iniciarRastreoFlecha() {
+        setInterval(rastrearMouseYCrearFlecha, 100);
+    }
+
+    // === INICIAR SISTEMA DE FLECHA ===
+    // Iniciar rastreo de flecha
+    iniciarRastreoFlecha();
+    console.log("🚀 Sistema de flecha hacia mapa iniciado");
+
+}); // Cierre del DOMContentLoaded
 
 // ———————————————————————————————————————
 // Función: actualizarCeldaActividad
@@ -1326,22 +2058,92 @@ function actualizarCeldaActividad(servicio) {
 // ———————————————————————————————————————
 function esperarYcargarCarrusel() {
     const ahora = new Date();
-    const ejecucion = new Date(
+    let ejecucion = new Date(
         ahora.getFullYear(),
         ahora.getMonth(),
         ahora.getDate(),
         0, 1, 0 // 00:01:00
     );
 
+    // Si ya pasó la hora de hoy, programar para mañana
+    if (ejecucion <= ahora) {
+        ejecucion.setDate(ejecucion.getDate() + 1);
+    }
+
     const esperaMs = ejecucion - ahora;
 
-    // Si ya es 00:01:00 o después → cargar ahora
-    // Si aún no es → esperar hasta 00:01:00
-    setTimeout(() => {
-        console.log("⏰ [00:01:00] Cargando datos del carrusel...");
-        cargarDatosIniciales(); // ← Tu función que carga los servicios
+    console.log(`⏱️ Programado para ejecutar en: ${Math.ceil(esperaMs / 1000 / 60)} minutos`);
 
-        // Programar para mañana
-        setTimeout(esperarYcargarCarrusel, 24 * 60 * 60 * 1000);
-    }, Math.max(0, esperaMs));
+    setTimeout(async () => {
+        console.log("⏰ [00:01:00] Ejecutando reinicio del sistema...");
+
+        try {
+            location.reload();
+
+        } catch (error) {
+            console.error("❌ Error en ejecución programada:", error);
+            setTimeout(() => location.reload(), 5000);
+        }
+    }, esperaMs);
 }
+
+// === ESTILOS CSS PARA LA FLECHA ===
+// (Esto puede ir también en tu archivo CSS principal)
+const estiloFlecha = `
+.flecha-tooltip {
+    position: absolute;
+    background: linear-gradient(135deg, #4CAF50, #2E7D32);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    white-space: nowrap;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    pointer-events: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.flecha-tooltip::before {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid #4CAF50;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.flecha-linea {
+    position: absolute;
+    background: #4CAF50;
+    transform-origin: 0 0;
+    z-index: 999;
+    pointer-events: none;
+}
+
+.flecha-punta {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-left: 10px solid #4CAF50;
+    z-index: 999;
+    pointer-events: none;
+}
+`;
+
+// Insertar estilos en el documento
+const styleSheet = document.createElement('style');
+styleSheet.textContent = estiloFlecha;
+document.head.appendChild(styleSheet);

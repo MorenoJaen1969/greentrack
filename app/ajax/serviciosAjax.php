@@ -104,7 +104,7 @@ switch ($modulo) {
             exit();
         }
 
-        $controller->actualizarEstadoConHistorial($inputData);
+        $controller->actualizarEstadoConHistorial($inputData, "web");
         break;
 
     case 'actualizar_con_motor1':
@@ -115,19 +115,13 @@ switch ($modulo) {
         $cliente = $datos['cliente'] ?? null;
         $truck = $datos['truck'] ?? null;
 
-        error_log("Informacion: " . json_encode($datos));
-        error_log("Informacion id_servicio: " . $id_servicio);
-        error_log("Informacion estado: " . $estado);
-        error_log("Informacion cliente: " . $cliente);
-        error_log("Informacion truck: " . $truck);
-
         if (!$id_servicio || !$estado || !$cliente || !$truck) {
             http_response_code(400);
             echo json_encode(['error' => 'Faltan datos requeridos']);
             exit();
         }
 
-        $controller->actualizarEstadoConHistorial($datos);
+        $controller->actualizarEstadoConHistorial($datos, "motor1");
         break;
 
     case 'obtener_servicio_detalle':
@@ -167,7 +161,7 @@ switch ($modulo) {
     case 'listar_actualizados':
         $ultimo_tiempo = $_POST['ultimo_tiempo'] ?? date('Y-m-d H:i:s', strtotime('-24 hours'));
 
-        $controller->buascar_actualizacion($ultimo_tiempo);
+        $controller->buscar_actualizacion($ultimo_tiempo);
         break;
                 
     default:

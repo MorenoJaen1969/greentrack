@@ -21,4 +21,16 @@ $ctrl = new medianocheController();
 $ctrl->cerrarServiciosNoAtendidos();
 
 // Registro de ejecución
-file_put_contents('app/logs/cron/cron.log', date('Y-m-d H:i:s') . " - Ejecución de medianoche\n", FILE_APPEND);
+
+$file = 'app/logs/cron/cron.log';
+if (!file_exists($file)) {
+    $initialContent = "[" . date('Y-m-d H:i:s') . "] Archivo de log iniciado" . PHP_EOL;
+    $created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
+    if ($created === false) {
+        error_log("No se pudo crear el archivo de log: " . $file);
+        return;
+    }
+    chmod($file, 0644); // Asegurarse de que el archivo sea legible y escribible
+}
+$logEntry = "[" .  date('Y-m-d H:i:s') . " - Ejecución de medianoche\n" . PHP_EOL;
+file_put_contents($file, $logEntry, FILE_APPEND | LOCK_EX);

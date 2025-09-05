@@ -1,5 +1,4 @@
 <?php
-
 namespace app\models;
 
 use app\models\otras_fun;
@@ -28,29 +27,44 @@ class mainModel
     private $isConectared = false;
     private $parametros;
     private $conn;
+
     private $log_path;
     private $logFile;
     private $errorLogFile;
-    private $logsInitialized = false;
+
     private static $instanceTracker = []; 
     private $o_f;
 
     public function __construct()
     {
+        $nom_modelo = "mainModel";
+        // Asegurar que la ruta sea absoluta y correcta
+        
+//        $this->log_path = __DIR__ . '/../logs/modelo/';
+
+        if (!file_exists($this->log_path)) {
+            mkdir($this->log_path, 0775, true);
+            chgrp($this->log_path, 'www-data');
+            chmod($this->log_path, 0775);
+        }
+
+//        $this->logFile = $this->log_path . $nom_modelo . '_' . date('Y-m-d') . ".log";
+        $this->errorLogFile = $this->log_path . $nom_modelo . '_error_' . date('Y-m-d') . ".log";
+
+		$this->initializeLogFile(file: $this->logFile);
+		$this->initializeLogFile($this->errorLogFile);
+
+		$this->verificarPermisos();
+
+		// rotación automatica de log (Elimina logs > XX dias)
+		$this->rotarLogs(15);
+
         // === Establecer zona horaria al inicio ===
         //date_default_timezone_set('America/Chicago'); // Conroe, TX (CDT/UTC-5)
     
-        // Configurar manejo de errores
-        set_error_handler([$this, 'handleError']);
-        register_shutdown_function([$this, 'shutdownCheck']);
-
         // Inicializar la constante correctamente (sin namespace)
         $this->app_r_proy = defined('APP_R_PROY') ? APP_R_PROY : '';
 
-        $this->initializeLoggingSystem();
-        $this->verificarPermisos();
-        // rotación automatica de log (Elimina logs > XX dias)
-        $this->rotarLogs(15);
 
         $this->parametros = array();
 
@@ -62,198 +76,56 @@ class mainModel
         ];
     }
 
-    public function handleError($error, $errstr, $errfile, $errline)
-    {
-        $this->emergencyLog("ERROR PHP: $errstr EN $errfile LÍNEA $errline");
-    }
+	private function initializeLogFile($file)
+	{
+		if (!file_exists($file)) {
+			$initialContent = "[" . date('Y-m-d H:i:s') . "] Archivo de log iniciado" . PHP_EOL;
+			$created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
+			if ($created === false) {
+				error_log("No se pudo crear el archivo de log: " . $file);
+			} else {
+				chmod($file, 0644); // Asegurarse de que el archivo sea legible y escribible
+			}
+			if (!is_writable($file)) {
+				throw new \Exception("El archivo de log no es escribible: " . $file);
+			}
+		}
+	}
 
-    public function checkLogConsistency()
-    {
-        $report = ['main_log' => ['path' => $this->logFile, 'exists' => file_exists($this->logFile), 'writable' => is_writable($this->logFile), 'size' => file_exists($this->logFile) ? filesize($this->logFile) : 0, 'last_change' => file_exists($this->logFile) ? date('Y-m-d H:i:s', filemtime($this->logFile)) : 'N/A'], 'error_log' => ['path' => $this->errorLogFile, 'exists' => file_exists($this->errorLogFile), 'writable' => is_writable($this->errorLogFile)], 'system' => ['php_user' => get_current_user(), 'process_user' => function_exists('posix_geteuid') ? posix_getpwuid(posix_geteuid())['name'] : 'N/A', 'disk_space' => disk_free_space(__DIR__)]];
-        $this->emergencyLog("REPORTE CONSISTENCIA: " . print_r($report, true));
-        return $report;
-    }
+	private function verificarPermisos()
+	{
+		if (!is_writable($this->log_path)) {
+			error_log("No hay permiso de escritura en: " . $this->log_path);
+		}
+	}
 
-    public function shutdownCheck()
-    {
-        $error = error_get_last();
-        if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-            $this->emergencyLog("SHUTDOWN ERROR: " . print_r($error, true));
-        }
+	private function log($message, $isError = false)
+	{
+		$file = $isError ? $this->errorLogFile : $this->logFile;
 
-        // Verificar si la instancia está en el rastreador
-        if (!file_exists($this->logFile) || !is_writable($this->logFile)) {
-            $this->emergencyLog("ESTADO FINAL: Log principal no accesible");
-            $this->repairLogFile($this->logFile);
-        }
-    }
-
-    private function initializeLoggingSystem()
-    {
-        if ($this->logsInitialized) {
-            return;
-        }
-
-        try {
-            $nom_modelo = "mainModel";
-            // Asegurar que la ruta sea absoluta y correcta
-            
-            $this->log_path = __DIR__ . '/../logs/modelo/';
-
-            if (!file_exists($this->log_path)) {
-                if (!mkdir($this->log_path, 0775, true)) {
-                    throw new \RuntimeException("No se pudo crear directorio de logs: " . $this->log_path);
-                }
-                chgrp($this->log_path, 'www-data');
-                chown($this->log_path, 'www-data');
-                chmod($this->log_path, 0775);
-            }
-
-            // Nombres de archivo con marca de tiempo para depuración 
-            $this->logFile = $this->log_path . $nom_modelo . '_' . date('Y-m-d') . ".log";
-            $this->errorLogFile = $this->log_path . $nom_modelo . '_error_' . date('Y-m-d') . ".log";
-
-            // Creación Garantizada de archivos 
-            $this->createLogFile($this->logFile);
-            $this->createLogFile($this->errorLogFile);
-
-            if (!file_exists($this->logFile) || !is_writable($this->logFile)) {
-                throw new \RuntimeException("Fallo en inicialización de archivo de log principal");
-            }
-
-            $this->logsInitialized = true;
-
-            // Registro de inicio
-            $this->log("Inicializando logs en: " . $this->log_path);
-        } catch (Exception $e) {
-            error_log("FALLO CRITICO EN LOGS: " . $e->getMessage());
-            throw $e;
-        }
-    }
-
-    //** * Método seguro para creación de archivos de log  */
-    private function createLogFile($filePath)
-    {
-        if (!file_exists($filePath)) {
-            $result = file_put_contents($filePath, "[" . date('Y-m-d H:i:s') . "] Archivo creado/n");
-            if ($result === false) {
-                error_log("No se pudo crear el archivo de log: " . $filePath);
-                $error = error_get_last();
-                throw new RuntimeException("Error creando archivo {$filePath}. PHP Error: {$error['message']}. Owner: " . posix_getpwuid(fileowner(dirname($filePath)))['name'] . ", Perms: " . decoct(fileperms(dirname($filePath)) & 0777));
-            }
-            chmod($filePath, 0775); // Asegurarse de que el archivo sea legible y escribible
-        }
-    }
-
-    private function verificarPermisos()
-    {
-        if (!is_writable($this->log_path)) {
-            error_log("No hay permiso de escritura en: " . $this->log_path);
-        }
-    }
-
-    private function log($message, $isError = false)
-    {
-        if (!$this->logsInitialized) {
-            try {
-                $this->initializeLoggingSystem();
-            } catch (Exception $e) {
-                error_log("Intento de log antes de inicialización: " . $message . " | Error: " . $e->getMessage());
-                return false;
-            }
-            // Si sigue sin inicializar, abortar
-            if (!$this->logsInitialized) {
-                error_log("No se pudo inicializar el sistema de logs: " . $message);
-                return false;
-            }
-        }
-
-        $file = $isError ? $this->errorLogFile : $this->logFile;
-
-        // Obtener información de backtrace
-        $bt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-        $caller = $bt[1] ?? $bt[0];
-        $origen = isset($caller['class']) ? $caller['class'] : '';
-        $origen .= isset($caller['function']) ? '::' . $caller['function'] : '';
-        $origen .= isset($caller['line']) ? ' (Línea ' . $caller['line'] . ')' : '';
-
-        $logEntry = "[" . date('Y-m-d H:i:s') . "] [$origen] " . $message . PHP_EOL;
+        error_log("Valor de file: " . $file);
 
         if (!file_exists($file)) {
-            $this->emergencyLog("Archivo de log no existe, creando: " . $file);
-            if (!$this->repairLogFile($file)) {
-                $this->emergencyLog("FALLO LA REPARACION: " . $file);
-                return false;
-            }
-        }
-        $bytes = @file_put_contents($file, $logEntry, FILE_APPEND | LOCK_EX);
-
-        if ($bytes === false) {
-            $error = error_get_last();
-            $this->emergencyLog("Error al escribir en el log: " . ($error['message'] ?? 'Desconocido') . " - Archivo: " . $file);
-            $this->emergencyLog("MENSAJE PERDIDO: " . trim($message));
-            return false;
-        }
-
-        return true;
-    }
-
-    private function repairLogFile($file)
-    {
-        try {
-            if (file_put_contents($file, "") === false) {
-                throw new RuntimeException("No se pudo crear el archivo de log: " . $file);
-            }
-
-            if (!chmod($file, 0775)) {
-                throw new RuntimeException("No se pudo cambiar los permisos del archivo de log: " . $file);
-            }
-
-            if (!is_writable($file)) {
-                throw new RuntimeException("El archivo de log no es escribible: " . $file);
-            }
-            return true;
-        } catch (Exception $e) {
-            $this->emergencyLog("Error al reparar el archivo de log: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    private function emergencyLog($message)
-    {
-        $emergencyPath = $this->app_r_proy . 'app/logs/emergency.log';
-        $message = "[" . date('Y-m-d H:i:s') . "] " . $message . PHP_EOL;
-        $message . PHP_EOL;
-
-        // Intento escribir en el log de emergencia
-        if (@file_put_contents($emergencyPath, $message, FILE_APPEND | LOCK_EX) === false) {
-            error_log("EMERGENCY LOG FALLIDO: " . $message);
-        }
-    }
+			$initialContent = "[" . date('Y-m-d H:i:s') . "] Archivo de log iniciado" . PHP_EOL;
+			$created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
+			if ($created === false) {
+				error_log("No se pudo crear el archivo de log: " . $file);
+				return;
+			}
+			chmod($file, 0644); // Asegurarse de que el archivo sea legible y escribible
+		}
+		$logEntry = "[" . date('Y-m-d H:i:s') . "] " . $message . PHP_EOL;
+		file_put_contents($file, $logEntry, FILE_APPEND | LOCK_EX);
+	}
 
     private function logWithBacktrace($message, $isError = true)
     {
         $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
         $caller = $backtrace[1] ?? $backtrace[0];
         $logMessage = sprintf("[%s] %s - Called from %s::%s (Line %d)%s%s", date('Y-m-d H:i:s'), $message, $caller['class'] ?? '', $caller['function'], $caller['line'], PHP_EOL, "Stack trace:" . PHP_EOL . json_encode($backtrace, JSON_PRETTY_PRINT));
-        $this->log($logMessage, $isError);
+//        $this->log($logMessage, $isError);
     }
-
-    public function verifyLogSystem()
-    {
-        return [
-            'initialized' => $this->logsInitialized,
-            'log_path' => $this->log_path,
-            'logFile' => $this->logFile,
-            'errorLogFile' => $this->errorLogFile,
-            'logFile_exists' => file_exists($this->logFile),
-            'logFile_writable' => is_writable($this->logFile),
-            'errorLogFile_exists' => file_exists($this->errorLogFile),
-            'errorLogFile_writable' => is_writable($this->errorLogFile),
-            'instanceTracker' => self::$instanceTracker
-        ];
-    }
-
+    
     private function rotarLogs($dias)
     {
         $archivos = glob($this->log_path . '*.log');
@@ -313,16 +185,16 @@ class mainModel
         } catch (Exception $e) { 
             
             $error_act = "Error de conexión a BD [{$bas_dat}]: ". $e->getMessage();
-            $this->logWithBacktrace($error_act, true);
+    //        $this->logWithBacktrace($error_act, true);
             throw new Exception("No se pudo conectar a la base de datos. Por favor, intente más tarde."); 
         } 
     } 
     
     protected function ejecutarConsulta($consulta, $tabla = "", $params = [], $fetchmode = PDO::FETCH_ASSOC, $base_datos = "")
     {
-        $this->log("=== INICIO DE CONSULTA ===");
+//        $this->log("=== INICIO DE CONSULTA ===");
         $consulta = $this->sanitize($consulta);
-        $this->log("Ejecutar Consulta: " . $consulta);
+//        $this->log("Ejecutar Consulta: " . $consulta);
 
         // Validar parámetros
         if (!is_array($params)) {
@@ -341,10 +213,10 @@ class mainModel
             // Determinar conexión según la tabla 
             if (!empty($base_datos)) {
                 $conn = $this->conectar($base_datos); 
-                $this->log("Consulta en: " . $base_datos); 
+        //        $this->log("Consulta en: " . $base_datos); 
             } else if ($tabla !== "" && in_array($tabla, ["administrators", "clients", "dbs"])) {
                 $conn = $this->conectar("principal"); 
-                $this->log("Consulta en: principal");
+        //        $this->log("Consulta en: principal");
             } else {
                 $conn = $this->conectar(); 
             }
@@ -353,7 +225,7 @@ class mainModel
             if ($parametrosLog === false) {
                 $parametrosLog = 'json_encode failed - Non-serializable data';
             }
-            $this->log("Parámetros: " . json_encode($params));            
+    //        $this->log("Parámetros: " . json_encode($params));            
 
             $stmt = $conn->prepare($consulta); 
 
@@ -362,7 +234,7 @@ class mainModel
             $stmt->execute($params); 
             $duration = round((microtime(true) - $startTime) * 1000, 2); 
 
-            $this->log("Consulta ejecutada en {$duration}ms"); 
+    //        $this->log("Consulta ejecutada en {$duration}ms"); 
 
             if ($statement === 'select' || $statement === 'show') {
                 // Manejar diferentes tipos de fetch 
@@ -399,11 +271,11 @@ class mainModel
                 'trace' => $e->getTraceAsString() 
             ]; 
             
-            $this->logWithBacktrace("🚨 Error en consulta: " . json_encode($errorDetails), true); 
+    //        $this->logWithBacktrace("🚨 Error en consulta: " . json_encode($errorDetails), true); 
             throw new Exception("Fallo en consulta: " . $e->getMessage()); 
 
         } catch (Exception $e) {
-            $this->logWithBacktrace("⚠️ Excepción general: " . $e->getMessage(), true);
+    //        $this->logWithBacktrace("⚠️ Excepción general: " . $e->getMessage(), true);
             throw $e;
         }
     }
@@ -528,7 +400,7 @@ class mainModel
     /*----------  Funcion para ejecutar una consulta UPDATE preparada  ----------*/
     protected function actualizarDatos($tabla, $datos, $condicion)
     {
-        $this->log("=== INICIO ACTUALIZACIÓN ===");
+//        $this->log("=== INICIO ACTUALIZACIÓN ===");
         try {
             $conn = $this->conectar();
             $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -549,7 +421,7 @@ class mainModel
             // Obtener metadatos de los campos
             $estructuraCampos = $this->obtenerEstructuraCampos($conn, $tabla);
 
-            $this->log("Origen de datos: " . print_r($datos, true));
+    //        $this->log("Origen de datos: " . print_r($datos, true));
             foreach ($datos as $clave) {
                 $campo = $clave['campo_nombre'];
                 $marcador = $clave['campo_marcador'];
@@ -558,14 +430,14 @@ class mainModel
                     $changes = true;
                     $sets[] = "$campo = $marcador";
                     $datos_final[] = $clave;
-                    $this->log("Campo '$campo' tiene cambios (Tipo: $tipoCampo)");
+            //        $this->log("Campo '$campo' tiene cambios (Tipo: $tipoCampo)");
                 } else {
-                    $this->log("Campo '$campo' sin cambios (Tipo: $tipoCampo)");
+            //        $this->log("Campo '$campo' sin cambios (Tipo: $tipoCampo)");
                 }
             }
 
             if (!$changes) {
-                $this->log("ADVERTENCIA: No hay cambios reales en los datos");
+        //        $this->log("ADVERTENCIA: No hay cambios reales en los datos");
                 $conn->rollBack();
                 $mensaje = $this->generarHtmlError(2, []);
                 return $mensaje;
@@ -580,16 +452,16 @@ class mainModel
             // Vincular parámetros 
             foreach ($datos_final as $clave) {
                 $stmt->bindValue($clave['campo_marcador'], $clave['campo_valor']);
-                $this->log("Vinculado: " . $clave['campo_marcador'] . " = " . $clave['campo_valor']);
+        //        $this->log("Vinculado: " . $clave['campo_marcador'] . " = " . $clave['campo_valor']);
             }
 
             $stmt->bindValue($condicion['condicion_marcador'], $condicion['condicion_valor']);
-            $this->log("Consulta final: " . print_r($stmt, true));
+    //        $this->log("Consulta final: " . print_r($stmt, true));
 
-            $this->log("Valores vinculados:");
+    //        $this->log("Valores vinculados:");
 
             foreach ($datos as $clave) {
-                $this->log(" - " . $clave['campo_nombre'] . " = " . $clave['campo_valor']);
+        //        $this->log(" - " . $clave['campo_nombre'] . " = " . $clave['campo_valor']);
             }
             
             // 4. Ejecutar y verificar 
@@ -598,9 +470,9 @@ class mainModel
 
             if ($filas === 0) {
                 // Debug avanzado 
-                $this->log("=== DEBUG AVANZADO ==="); 
-                $this->log("Registro actual: " . print_r($registro, true));
-                $this->log("Valores nuevos: " . print_r(array_column($datos, 'campo_valor', 'campo_nombre'), true));
+        //        $this->log("=== DEBUG AVANZADO ==="); 
+        //        $this->log("Registro actual: " . print_r($registro, true));
+        //        $this->log("Valores nuevos: " . print_r(array_column($datos, 'campo_valor', 'campo_nombre'), true));
 
                 // Verificar constraints 
                 $this->verificarConstraints($conn, $tabla); 
@@ -608,13 +480,13 @@ class mainModel
             }
 
             $conn->commit();
-            $this->log("Actualización exitosa. Filas afectadas: $filas");
+    //        $this->log("Actualización exitosa. Filas afectadas: $filas");
             return true;
         } catch (Exception $e) {
             if (isset($conn) && $conn->inTransaction()) {
                 $conn->rollBack();
             }
-            $this->logWithBacktrace("ERROR: " . $e->getMessage(), true);
+    //        $this->logWithBacktrace("ERROR: " . $e->getMessage(), true);
             $mensaje = $this->generarHtmlError(1, $e, $query, $datos, $condicion);
             return $mensaje;
         }
@@ -691,12 +563,12 @@ $this->log("Palabras: ", json_encode($palabras));
         // Verificar triggers 
         $stmt = $conn->query("SHOW TRIGGERS LIKE '$tabla'");
         $triggers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $this->log("Triggers existentes: " . print_r($triggers, true));
+//        $this->log("Triggers existentes: " . print_r($triggers, true));
 
         // Verificar foreign keys 
         $stmt = $conn->query(" SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '$tabla' AND REFERENCED_TABLE_NAME IS NOT NULL ");
         $fks = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $this->log("Foreign Keys: " . print_r($fks, true));
+//        $this->log("Foreign Keys: " . print_r($fks, true));
     }
 
     private function determinarTipoPdo($valor)

@@ -20,12 +20,12 @@ class serviciosController extends mainModel
 	private $o_f;
 
 	public function __construct()
-	{
+	{ 
 		// Nombre del controlador actual abreviado para reconocer el archivo
 		$nom_controlador = "serviciosController";
 		// ____________________________________________________________________
 
-		$this->log_path = __DIR__ . '/../logs/controlador/';
+		$this->log_path = __DIR__ . '/../logs/greentrack/';
 
 		if (!file_exists($this->log_path)) {
 			mkdir($this->log_path, 0775, true);
@@ -36,7 +36,7 @@ class serviciosController extends mainModel
 		$this->logFile = $this->log_path . $nom_controlador . '_' . date('Y-m-d') . '.log';
 		$this->errorLogFile = $this->log_path . $nom_controlador . '_error_' . date('Y-m-d') . '.log';
 
-		$this->initializeLogFile($this->logFile);
+		$this->initializeLogFile(file: $this->logFile);
 		$this->initializeLogFile($this->errorLogFile);
 
 		$this->verificarPermisos();
@@ -317,7 +317,7 @@ class serviciosController extends mainModel
 				':v_fecha_programada' => date('Y-m-d')
 			];
 
-			$this->log("Consulta: " . $query);
+			$this->log("Consulta de listarServiciosConEstado(): " . $query);
 
 			$servicios = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
 
@@ -798,7 +798,7 @@ class serviciosController extends mainModel
 		}
 	}
 
-	public function actualizarEstadoConHistorial($data)
+	public function actualizarEstadoConHistorial($data, $origen_act)
 	{
 		$id_servicio = $data['id_servicio'] ?? null;
 		$estado = $data['estado'] ?? null;
@@ -810,19 +810,32 @@ class serviciosController extends mainModel
 		try {
 			$this->log("=== ACTUALIZANDO CON HISTORIAL: Servicio $id_servicio a $estado ===");
 
-			if ($estado === 'FINALIZO SERVICIO') {
-				$estado = 'finalizado';
-			} elseif ($estado === 'REPLANIFICAR SERVICIO') {
-				$estado = 'replanificado';
-			} elseif ($estado === 'CANCELAR SERVICIO') {
-				$estado = 'cancelado';
-			} elseif ($estado === 'INICIO DE SERVICIO') {
-				$estado = 'inicio_actividades';
+			if ($origen_act = "motor1") {
+				if ($estado === 'INICIO DE SERVICIO') {
+					$estado = 'inicio_actividades';
+				} elseif ($estado === 'FINALIZO SERVICIO') {
+					$estado = 'finalizado';
+				} elseif ($estado === 'CANCELAR SERVICIO') {
+					$estado = 'cancelado';
+				} elseif ($estado === 'REPLANIFICAR SERVICIO') {
+					$estado = 'replanificado';
+				}
+			}else{			
+				if ($estado === 'FINALIZO SERVICIO') {
+					$estado = 'finalizado';
+				} elseif ($estado === 'REPLANIFICAR SERVICIO') {
+					$estado = 'replanificado';
+				} elseif ($estado === 'CANCELAR SERVICIO') {
+					$estado = 'cancelado';
+				} elseif ($estado === 'INICIO DE SERVICIO') {
+					$estado = 'inicio_actividades';
+				}
 			}
 
 			// Validar estado operativo
 
 			$estados_validos = ['finalizado', 'replanificado', 'cancelado', 'inicio_actividades'];
+			                   
 			if (!in_array($estado, $estados_validos)) {
 				http_response_code(400);
 				echo json_encode(['error' => 'Estado no válido']);
@@ -849,7 +862,7 @@ class serviciosController extends mainModel
 				$estado_visita = 'cancelado';
 				$id_status = $this->id_status_cancelado;
 			} elseif ($estado === 'inicio_actividades') {
-				$estado_servicio = 'usuario_alerto';
+				$estado_servicio = 'inicio_actividades';
 				$id_status = $this->id_status_activo;
 			}
 
@@ -1051,6 +1064,9 @@ class serviciosController extends mainModel
 			// Añadir crew_integrantes
 			$result['crew_integrantes'] = $this->obtenerCrewIntegrantes($id_servicio);
 
+			// Añadir notas previas del servicio
+			$result['notas_anteriores'] = trim($this->obtenerNotasHist($id_servicio));
+
 			// === Asegurar que los campos temporales estén presentes ===
 			// $result['hora_aviso_usuario'] = $result['hora_aviso_usuario'] ?? null;
 			// $result['hora_finalizado'] = $result['hora_finalizado'] ?? null;
@@ -1065,6 +1081,30 @@ class serviciosController extends mainModel
 			http_response_code(500);
 			echo json_encode(['error' => 'Error al cargar servicio']);
 		}
+	}
+
+	private function obtenerNotasHist($id_servicio){
+		try {
+			$query = "SELECT 
+						h.valor_nuevo
+					FROM historial_servicios AS h
+					WHERE h.id_servicio = :id_servicio AND
+						h.campo_afectado = 'notas'";
+
+			$params = [':id_servicio' => $id_servicio];
+			$result = $this->ejecutarConsulta($query, '', $params);
+
+			if (!$result) {
+				return '';
+			}
+
+			return $result['valor_nuevo'];
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en obtenerCrewIntegrantes: " . $e->getMessage(), true);
+			return '';
+		}
+
 	}
 
 	private function obtenerCrewIntegrantes($id_servicio)
@@ -1204,7 +1244,7 @@ class serviciosController extends mainModel
         }
 	}
 
-	public function buascar_actualizacion($ultimo_tiempo){
+	public function buscar_actualizacion($ultimo_tiempo){
 		try {
 			$query = "
 				SELECT 
@@ -1236,7 +1276,7 @@ class serviciosController extends mainModel
 				':v_ultimo_tiempo1' => $ultimo_tiempo,
 				':v_ultimo_tiempo2' => $ultimo_tiempo,
 				':v_ultimo_tiempo3' => $ultimo_tiempo,
-			];
+			]; 
 
 			$servicios = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
 
