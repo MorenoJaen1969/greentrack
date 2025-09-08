@@ -13,3 +13,7 @@ define('DEBUG', true);
 define('APP_R_PROY', realpath(__DIR__ . '/../') . '/');
 
 define('APP_SESSION_NAME', "DIRECTORY");
+
+const RUTA_FONTAWESOME=APP_URL."node_modules/@fortawesome/fontawesome-free/";
+const RUTA_SWEETALERT=APP_URL."node_modules/sweetalert2/dist/";
+

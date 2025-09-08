@@ -1,5 +1,4 @@
 <?php
-// servicios_dia.php - Motor 1 (versión completa)
 ob_start();
 
 require_once '../../config/app.php';
@@ -8,10 +7,14 @@ if (!defined('APP_R_PROY')) {
 }
 
 require_once APP_R_PROY . 'app/models/mainModel.php';
-require_once APP_R_PROY . 'app/controllers/serviciosController.php';
+require_once APP_R_PROY . 'app/controllers/ExcelController.php';
+require_once APP_R_PROY . 'app/controllers/Motor3Controller.php';
 
 use app\models\mainModel;
-use app\controllers\serviciosController;
+use app\controllers\ExcelController;
+use app\controllers\Motor3Controller;
+
+use app\lib\Motor3PDFGenerator;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -85,8 +88,31 @@ if (!DateTime::createFromFormat('Y-m-d', $fecha_servicio)) {
 
 // === DELEGAR AL CONTROLADOR OFICIAL ===
 try {
-    $controller = new serviciosController();
+    $controller = new ExcelController();
     $resultado = $controller->procesarServiciosDesdeMotor1($fecha_servicio, $servicios);
+
+    // === GENERAR PDFs DESPUÉS DEL PROCESAMIENTO EXITOSO ===
+    if ($resultado['status'] === 'ok' && $resultado['insertados'] > 0) {
+        // Asegurarse de que existe el directorio PDF
+        $directorio_pdf = $_SERVER['DOCUMENT_ROOT'] . '/PDF/';
+        if (!file_exists($directorio_pdf)) {
+            mkdir($directorio_pdf, 0755, true);
+        }
+
+        // Generar PDFs solo si hay servicios procesados
+        if (isset($resultado['servicios_para_motor3']) && count($resultado['servicios_para_motor3']) > 0) {
+            $pdf_generator = new Motor3PDFGenerator(); // Clase simple para PDF
+            $pdf_urls = $pdf_generator->generarPDFsDesdeServicios(
+                $resultado['servicios_para_motor3'], 
+                $fecha_servicio
+            );
+            
+            // Agregar URLs de PDF a la respuesta
+            $resultado['pdf_urls'] = $pdf_urls;
+        }
+    }
+    // === FIN GENERACIÓN PDFs ===
+error_log("Resultado final: " . json_encode($resultado));            
 
     http_response_code(200);
     echo json_encode($resultado, JSON_PRETTY_PRINT);

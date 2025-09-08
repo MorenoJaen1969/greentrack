@@ -7,7 +7,7 @@
 // ================================================= //
 
 // Definir ruta base del proyecto
-$RUTA_PROYECTO = '/var/www/directorio/';
+$RUTA_PROYECTO = '/var/www/greentrack/';
 
 // Incluir configuración principal
 require_once $RUTA_PROYECTO . 'config/app.php';

@@ -1,5 +1,6 @@
 # === Ignorar logs ===
 /app/logs/
+/app/lib/tcpdf/
 
 # === Opcional: Otros archivos que no deben subirse ===
 .env
@@ -21,3 +22,5 @@ Thumbs.db
 # === Carpetas de desarrollo ===
 node_modules/
 vendor/
+PDF/
+QR_BASE/
