@@ -20,12 +20,15 @@ class serviciosController extends mainModel
 	private $o_f;
 
 	public function __construct()
-	{ 
+	{
+		// ¡ESTA LÍNEA ES CRUCIAL!
+		parent::__construct();
+
 		// Nombre del controlador actual abreviado para reconocer el archivo
 		$nom_controlador = "serviciosController";
 		// ____________________________________________________________________
 
-		$this->log_path = __DIR__ . '/../logs/greentrack/';
+		$this->log_path = APP_R_PROY . 'app/logs/greentrack/';
 
 		if (!file_exists($this->log_path)) {
 			mkdir($this->log_path, 0775, true);
@@ -382,7 +385,8 @@ class serviciosController extends mainModel
 		}
 	}
 
-	public function listarServiciosParaModal(){
+	public function listarServiciosParaModal()
+	{
 		$this->log("Inicio: listarServiciosParaModal");
 
 		try {
@@ -621,7 +625,7 @@ class serviciosController extends mainModel
 				} elseif ($estado === 'REPLANIFICAR SERVICIO') {
 					$estado = 'replanificado';
 				}
-			}else{			
+			} else {
 				if ($estado === 'FINALIZO SERVICIO') {
 					$estado = 'finalizado';
 				} elseif ($estado === 'REPLANIFICAR SERVICIO') {
@@ -636,7 +640,7 @@ class serviciosController extends mainModel
 			// Validar estado operativo
 
 			$estados_validos = ['finalizado', 'replanificado', 'cancelado', 'inicio_actividades'];
-			                   
+
 			if (!in_array($estado, $estados_validos)) {
 				http_response_code(400);
 				echo json_encode(['error' => 'Estado no válido']);
@@ -764,6 +768,22 @@ class serviciosController extends mainModel
 		}
 	}
 
+	private function validarCliente($nombre_cliente)
+	{
+		$query = "SELECT id_cliente FROM clientes WHERE nombre = :nombre AND id_status = 1";
+		$params = [':nombre' => trim($nombre_cliente)];
+		$result = $this->ejecutarConsulta($query, '', $params);
+		return $result ? $result['id_cliente'] : false;
+	}
+
+	private function validarTruck($truck)
+	{
+		$query = "SELECT id_truck FROM truck WHERE nombre = :nombre AND id_status = 26";
+		$params = [':nombre' => $truck];
+		$result = $this->ejecutarConsulta($query, '', $params);
+		return $result ? $result['id_truck'] : false;
+	}
+
 	/**
 	 * Actualiza el estado de un servicio desde el modal
 	 * @param int $id_servicio
@@ -854,7 +874,7 @@ class serviciosController extends mainModel
 			$params = [':id_servicio' => $id_servicio];
 			$result = $this->ejecutarConsulta($query, '', $params);
 
-			$this->log("Resultado de la consulta de detalle: " . print_r($result, true)	);
+			$this->log("Resultado de la consulta de detalle: " . print_r($result, true));
 
 			if (!$result) {
 				http_response_code(404);
@@ -872,7 +892,7 @@ class serviciosController extends mainModel
 			// $result['hora_aviso_usuario'] = $result['hora_aviso_usuario'] ?? null;
 			// $result['hora_finalizado'] = $result['hora_finalizado'] ?? null;
 
-			$this->log("Resultado de la consulta de detalle con Crew: " . print_r($result, true)	);
+			$this->log("Resultado de la consulta de detalle con Crew: " . print_r($result, true));
 
 			http_response_code(200);
 			echo json_encode($result);
@@ -1018,34 +1038,142 @@ class serviciosController extends mainModel
 		}
 	}
 
-	public function procesarClientesDesdeMotor1($id_cliente, $nombre_cliente){
+	public function procesarClientesDesdeMotor1($datos)
+	{
+		$id_cliente = $datos['id_cliente'];
+		$nombre_cliente = $datos['nombre_cliente'];
+		$telefono_cliente = $datos['telefono_cliente'];
+		$email_cliente = $datos['email_cliente'];
+		$direccion_cliente = $datos['direccion_cliente'];
+		$latitud_cliente = $this->normalizarCoordenada($datos['latitud'], "Latitud");
+		$longitud_cliente = $this->normalizarCoordenada($datos['longitud'], "Longitud");
 
-        if (empty($id_cliente) || empty($nombre_cliente)) {
-            http_response_code(400);
-            echo json_encode(['success' => false, 'error' => 'Faltan datos']);
-            return;
-        }
+		$this->log("Latitud normalizada: " . $latitud_cliente);
+		$this->log("Longitud normalizada: " . $longitud_cliente);
 
-        $query = "UPDATE clientes SET nombre = :nombre WHERE id_cliente = :id";
-        $params = [
-            ':nombre' => $nombre_cliente,
-            ':id' => $id_cliente
-        ];
+		$this->log("Procesando cliente desde Motor1: " . print_r($datos, true))	;
 
-        try {
-            $this->ejecutarConsulta($query, 'clientes', $params);
-			return [
-				'status' => 'ok',
-				'message' => 'Cliente actualizado'
-			];
+		if (empty($id_cliente) || empty($nombre_cliente)) {
+			http_response_code(400);
+			echo json_encode(['success' => false, 'error' => 'Faltan datos']);
+			return;
+		}
+		$query = "SELECT * FROM clientes WHERE nombre = :v_nombre";
+		$params = [
+			':v_nombre' => $nombre_cliente
+		];
+		try {
+			$resulta = $this->ejecutarConsulta($query, "", $params);
+			if ($resulta) {
+				$query1 = "SELECT * FROM direcciones WHERE id_cliente = :v_id_cliente";
+				$params = [
+					':v_id_cliente' => $resulta['id_cliente']
+				];
+				$respuesta = $this->ejecutarConsulta($query1, "", $params);
+				if ($respuesta) {
+					if ($respuesta['direccion'] == "" || is_null($respuesta['direccion'])) {
+						if ($direccion_cliente != "" && !is_null($direccion_cliente)) {
+							$query3 = "UPDATE direcciones SET direccion = :v_direccion WHERE id_cliente = :v_id_cliente";
+							$params = [
+								':v_direccion' => $direccion_cliente,
+								':v_id_cliente' => $resulta['id_cliente']
+							];
+							$respuesta3 = $this->ejecutarConsulta($query3, "", $params);
+							return [
+								'status' => 'ok',
+								'id_cliente' => $resulta['id_cliente'],
+								'message' => 'Direccion de Cliente actualizada'
+							];
+						} else {
+							return [
+								'status' => 'ok',
+								'id_cliente' => $resulta['id_cliente'],
+								'message' => 'No hubo actualizacion'
+							];
+						}
+					} else {
+						return [
+							'status' => 'ok',
+							'id_cliente' => $resulta['id_cliente'],
+							'message' => 'No hubo actualizacion'
+						];
+					}
+				}
+			} else {
+				$datos = [
+					['campo_nombre' => 'nombre', 'campo_marcador' => ':id_cliente', 'campo_valor' => $nombre_cliente],
+					['campo_nombre' => 'telefono', 'campo_marcador' => ':direccion', 'campo_valor' => $telefono_cliente],
+					['campo_nombre' => 'email', 'campo_marcador' => ':lat', 'campo_valor' => $email_cliente],
+					['campo_nombre' => 'id_status', 'campo_marcador' => ':lng', 'campo_valor' => 1],
+					['campo_nombre' => 'historial', 'campo_marcador' => ':historial', 'campo_valor' => 0],
+					['campo_nombre' => 'tiene_historial', 'campo_marcador' => ':tiene_historial', 'campo_valor' => 0]
+				];
 
+				$id_cliente_new = $this->guardarDatos('clientes', $datos);
+
+				if ($id_cliente_new > 0) {
+					error_log("Nuevo Codigo: $id_cliente_new");
+
+					$datos = [
+						['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $id_cliente_new],
+						['campo_nombre' => 'direccion', 'campo_marcador' => ':direccion', 'campo_valor' => $direccion_cliente],
+						['campo_nombre' => 'lat', 'campo_marcador' => ':lat', 'campo_valor' => $latitud_cliente],
+						['campo_nombre' => 'lng', 'campo_marcador' => ':lng', 'campo_valor' => $longitud_cliente]
+					];
+
+					$id_direccion = $this->guardarDatos('direcciones', $datos);
+
+					return [
+						'status' => 'ok',
+						'id_cliente' => $id_cliente_new,
+						'message' => 'Cliente y Direccion creados'
+					];
+				} else {
+					$this->logWithBacktrace("Error crítico en Nuevo Clientes: " . print_r($id_cliente_new,true), true);
+					return ['error' => 'No se pudo crear al Cliente'];
+				}
+			}
 		} catch (Exception $e) {
-			$this->log("Error crítico en Clientes Motor1: " . $e->getMessage(), true);
-			return ['error' => 'Internal server error'];
-        }
+			$this->logWithBacktrace("Error crítico en Clientes Motor1: " . $e->getMessage(), true);
+			return ['error' => 'Error en la consulta (Nombre)'];
+		}
 	}
 
-	public function buscar_actualizacion($ultimo_tiempo){
+	function normalizarCoordenada($coord_str, $nombre_campo = "Coordenada") {
+		// 1. Trim: Eliminar espacios iniciales/finales
+		$coord_str = trim($coord_str);
+
+		// 2. Verificar si está vacío
+		if ($coord_str === '') {
+			error_log("Advertencia: $nombre_campo está vacía.");
+			return null; // o lanzar una excepción si es requerida
+		}
+
+		// 3. Reemplazar coma por punto
+		// Esta es la parte crucial que resuelve tu problema de localización.
+		$coord_normalizada_str = str_replace(',', '.', $coord_str);
+
+		// 4. Verificar si es numérica después del reemplazo
+		if (!is_numeric($coord_normalizada_str)) {
+			error_log("Error: $nombre_campo '$coord_str' no es un número válido después de normalizar.");
+			// O lanzar una excepción
+			// throw new InvalidArgumentException("$nombre_campo '$coord_str' no es un número válido.");
+			return null;
+		}
+
+		// 5. Convertir a float
+		$coord_float = (float)$coord_normalizada_str;
+
+		// 6. (Opcional) Validaciones de rango básicas
+		// Latitud válida: -90 a 90
+		// Longitud válida: -180 a 180
+		// Puedes agregar estas validaciones aquí si es necesario.
+
+		return $coord_float;
+	}
+
+	public function buscar_actualizacion($ultimo_tiempo)
+	{
 		try {
 			$query = "
 				SELECT 
@@ -1077,7 +1205,7 @@ class serviciosController extends mainModel
 				':v_ultimo_tiempo1' => $ultimo_tiempo,
 				':v_ultimo_tiempo2' => $ultimo_tiempo,
 				':v_ultimo_tiempo3' => $ultimo_tiempo,
-			]; 
+			];
 
 			$servicios = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
 
@@ -1092,25 +1220,25 @@ class serviciosController extends mainModel
 				if (!empty($servicio['crew_1_nombre'])) {
 					$integrantes[] = [
 						'nombre' => $servicio['crew_1_nombre'],
-						'color'  => $servicio['crew_1_color'] ?? '#666'
+						'color' => $servicio['crew_1_color'] ?? '#666'
 					];
 				}
 				if (!empty($servicio['crew_2_nombre'])) {
 					$integrantes[] = [
 						'nombre' => $servicio['crew_2_nombre'],
-						'color'  => $servicio['crew_2_color'] ?? '#666'
+						'color' => $servicio['crew_2_color'] ?? '#666'
 					];
 				}
 				if (!empty($servicio['crew_3_nombre'])) {
 					$integrantes[] = [
 						'nombre' => $servicio['crew_3_nombre'],
-						'color'  => $servicio['crew_3_color'] ?? '#666'
+						'color' => $servicio['crew_3_color'] ?? '#666'
 					];
 				}
 				if (!empty($servicio['crew_4_nombre'])) {
 					$integrantes[] = [
 						'nombre' => $servicio['crew_4_nombre'],
-						'color'  => $servicio['crew_4_color'] ?? '#666'
+						'color' => $servicio['crew_4_color'] ?? '#666'
 					];
 				}
 				$servicio['crew_integrantes'] = $integrantes;
@@ -1128,7 +1256,8 @@ class serviciosController extends mainModel
 
 	}
 
-	public function obtener_direcciones($cantidad){
+	public function obtener_direcciones($cantidad)
+	{
 		$params = [];
 		$inicio = 1;
 		$registros = $cantidad;
@@ -1143,19 +1272,20 @@ class serviciosController extends mainModel
 				AND direccion != ''
 			ORDER BY id_direccion LIMIT " . $inicio . ", " . $registros;
 
-        try {
-            $resultado = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
+		try {
+			$resultado = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
 			return $resultado;
 
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error crítico en Direcciones Motor1: " . $e->getMessage(), true);
 			return [];
-        }
+		}
 
 	}
 
-	public function act_lat_long_direcciones($id_servicio, $lat, $lon){
-        $update = "UPDATE direcciones SET lat = :v_lat, lng = :v_lng 
+	public function act_lat_long_direcciones($id_servicio, $lat, $lon)
+	{
+		$update = "UPDATE direcciones SET lat = :v_lat, lng = :v_lng 
 			WHERE id_servicio = :v_id_servicio";
 
 		$params = [
@@ -1165,13 +1295,13 @@ class serviciosController extends mainModel
 		];
 
 		try {
-            $resultado = $this->ejecutarConsulta($update, '', $params);
+			$resultado = $this->ejecutarConsulta($update, '', $params);
 			return $resultado;
 
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error crítico al actualizar Direcciones Motor1: " . $e->getMessage(), true);
 			return [];
-        }
+		}
 
 	}
 }

@@ -13,6 +13,9 @@ class VerizonImportController extends mainModel
 
     public function __construct()
     {
+        // ¡ESTA LÍNEA ES CRUCIAL!
+        parent::__construct();
+
         // Nombre del controlador actual abreviado para reconocer el archivo
         $nom_controlador = "VerizonImportController";
         // ____________________________________________________________________

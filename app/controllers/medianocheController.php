@@ -19,11 +19,14 @@ class medianocheController extends mainModel
 
 	public function __construct()
 	{
+       // ¡ESTA LÍNEA ES CRUCIAL!
+        parent::__construct();
+
 		// Nombre del controlador actual abreviado para reconocer el archivo
 		$nom_controlador = "medianocheController";
 		// ____________________________________________________________________
 
-		$this->log_path = __DIR__ . '/../logs/cron/';
+		$this->log_path = APP_R_PROY . 'app/logs/cron/';
 
 		if (!file_exists($this->log_path)) {
 			mkdir($this->log_path, 0775, true);
@@ -127,7 +130,7 @@ class medianocheController extends mainModel
 				SET 
 					id_status = 48,
 					estado_servicio = 'no_servido',
-					fecha_actualizacion = NOW()
+					fecha_actualizacion = NOW() 
 				WHERE 
 					DATE(fecha_programada) < :hoy 
 					AND id_status = 37";

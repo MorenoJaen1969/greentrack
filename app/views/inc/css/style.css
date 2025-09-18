@@ -760,3 +760,18 @@ body {
     z-index: 999;
     pointer-events: none;
 }
+
+.sede-marker {
+    z-index: 1000 !important;
+}
+
+.sede-marker .leaflet-marker-icon,
+.sede-marker .leaflet-marker-shadow {
+    z-index: 1000 !important;
+}
+
+/* Asegura que el SVG también tenga prioridad */
+.sede-marker svg {
+    position: relative;
+    z-index: 1000;
+}

@@ -355,6 +355,71 @@ function destacarMarcadorEnMapa(idServicio) {
     }
 }
 
+// === Función reutilizable para procesar servicios ===
+function procesarYSistema(serviciosRaw) {
+    const servicios = serviciosRaw.map(s => ({
+        ...s,
+        lat: typeof s.lat === 'string' ? parseFloat(s.lat) : s.lat,
+        lng: typeof s.lng === 'string' ? parseFloat(s.lng) : s.lng
+    }));
+
+    const serviciosValidos = servicios.filter(s => 
+        typeof s.lat === 'number' && 
+        typeof s.lng === 'number' && 
+        !isNaN(s.lat) && 
+        !isNaN(s.lng)
+    );
+
+    if (serviciosValidos.length === 0) {
+        console.error("🔴 No hay servicios con coordenadas válidas después de conversión");
+        return;
+    }
+
+    window.serviciosData = serviciosValidos;
+    carrusel.datos = serviciosValidos;
+    actualizarEspacio();
+
+    let indiceCarruselGlobal = 0;
+    insertarTarjeta(serviciosValidos[indiceCarruselGlobal]);
+    indiceCarruselGlobal = (indiceCarruselGlobal + 1) % serviciosValidos.length;
+
+    if (carrusel.intervalo) clearInterval(carrusel.intervalo);
+    carrusel.intervalo = setInterval(() => {
+        insertarTarjeta(serviciosValidos[indiceCarruselGlobal]);
+        indiceCarruselGlobal = (indiceCarruselGlobal + 1) % serviciosValidos.length;
+    }, config.intervaloCarrusel);
+
+    serviciosValidos.forEach(s => {
+        if (s.lat && s.lng) {
+            const marker = L.marker([s.lat, s.lng], {
+                icon: L.divIcon({
+                    html: `<div style="background:${s.crew_color_principal};width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`,
+                    className: '',
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8]
+                })
+            });
+
+            window.mapMarkers[s.id_servicio] = marker;
+
+            marker.on('add', function () {
+                const iconElement = this.getElement();
+                if (iconElement) {
+                    iconElement.id = `marker-${s.id_servicio}`;
+                    iconElement.style.transition = 'all 0.3s ease';
+                }
+            });
+
+            marker.addTo(window.map);
+            marker.bindPopup(`<b>${s.cliente}</b><br>${s.direccion || 'No address'}<br><div class="tit_d_grid"><b>Crew:</b> ${s.truck || 'N/A'}</div>`);
+        }
+    });
+
+    const event = new Event('serviciosCargados');
+    document.dispatchEvent(event);
+    console.log("✅ Evento 'serviciosCargados' lanzado");
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("🟢 GreenTrack Live: Iniciando dashboard");
     let servicioTemporal = null;
@@ -384,12 +449,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     // === 3. Inicializar mapa ===
     let map;
     try {
-        map = L.map('live-map').setView([30.3096, -95.4750], 12);
+        map = L.map('live-map').setView([30.3204272, -95.4217815], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
         map.scrollWheelZoom.disable();
         window.map = map;
+
+        // === MARCADOR FIJO: Sede de Sergio's Landscape (Estrella de David - Color uniforme) ===
+        const starSvgUniform = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="-16 -16 32 32">
+        <!-- Triángulo hacia arriba -->
+        <polygon 
+            points="0,-14 12,7 -12,7" 
+            fill="#0066FF" 
+            stroke="#0066FF" 
+            stroke-width="1"
+        />
+        <!-- Triángulo hacia abajo -->
+        <polygon 
+            points="0,14 12,-7 -12,-7" 
+            fill="#0066FF" 
+            stroke="#0066FF" 
+            stroke-width="1"
+        />
+        </svg>`;
+
+        const sedeMarker = L.marker([30.3204272, -95.4217815], {
+            icon: L.divIcon({
+                html: starSvgUniform,
+                className: 'sede-marker',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -16]
+            })
+        }).addTo(window.map);
+
+        sedeMarker.bindPopup(`
+            <b>Sergio's Landscape</b><br>
+            <span style="font-size: 0.9em; color: #555;">Headquarters • Starting Point</span>
+        `);
+
     } catch (e) {
         console.error("❌ Error al cargar el mapa:", e);
         return;
@@ -663,7 +763,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // === 9. Cargar servicios y empezar ===
+    // === 9. CARGAR SERVICIOS Y EMPEZAR ===
     try {
         const res = await fetch('/app/ajax/serviciosAjax.php', {
             method: 'POST',
@@ -672,21 +772,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        const servicios = await res.json();
 
-        if (!Array.isArray(servicios) || servicios.length === 0) {
-            console.warn("⚠️ No hay servicios para hoy. Iniciando polling...");
+        const serviciosRaw = await res.json();
+
+        if (!Array.isArray(serviciosRaw) || serviciosRaw.length === 0) {
+            console.warn("⚠️ No hay servicios programados para hoy. Iniciando polling...");
+
+            // === Mostrar estado visual y comenzar polling ===
             const contenedor = document.getElementById('carrusel') || document.body;
             let intentos = 0;
-            const maxIntentos = 1200; // 60 minutos (120 * 30s)
-
+            const maxIntentos = 120; // 60 minutos (120 x 30 seg)
+            
+            // Estilo limpio y visible
             contenedor.style.display = 'flex';
             contenedor.innerHTML = `
-        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; text-align: center; color: #666; font-family: Arial, sans-serif; padding: 20px; width: 100%;">
-            <h3>Waiting for today's services...</h3>
-            <p>System will start automatically when services are loaded.</p>
-            <div id="contador-polling" style="font-size: 0.9em; margin-top: 10px;">Attempts: 0</div>
-        </div>`;
+                <div style="
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100%;
+                    text-align: center;
+                    color: #666;
+                    font-family: Arial, sans-serif;
+                    padding: 20px;
+                    width: 100%;
+                ">
+                    <h3>⏳ Waiting for today's services...</h3>
+                    <p>System will start automatically when services are loaded.</p>
+                    <div id="contador-polling" style="font-size: 0.9em; margin-top: 10px;">Attempts: 0</div>
+                </div>
+            `;
 
             const intervaloPolling = setInterval(async () => {
                 intentos++;
@@ -706,85 +822,71 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
 
                     const nuevosServicios = await res.json();
-                    console.log("📥 Datos recibidos:", nuevosServicios);
 
                     if (Array.isArray(nuevosServicios) && nuevosServicios.length > 0) {
-                        console.log("✅ Servicios detectados, iniciando carrusel");
+                        console.log("✅ Servicios detectados, recargando sistema");
                         clearInterval(intervaloPolling);
-
+                        
                         // Limpiar contenedor
                         contenedor.innerHTML = '';
                         contenedor.style.display = '';
 
-                        // Iniciar carrusel
-                        window.serviciosData = nuevosServicios;
-                        carrusel.datos = nuevosServicios;
-                        actualizarEspacio();
-
-                        let indiceCarruselGlobal = 0;
-                        insertarTarjeta(nuevosServicios[indiceCarruselGlobal]);
-                        indiceCarruselGlobal = (indiceCarruselGlobal + 1) % nuevosServicios.length;
-
-                        carrusel.intervalo = setInterval(() => {
-                            insertarTarjeta(carrusel.datos[indiceCarruselGlobal]);
-                            indiceCarruselGlobal = (indiceCarruselGlobal + 1) % carrusel.datos.length;
-                        }, config.intervaloCarrusel);
-
-                        // Marcadores
-                        nuevosServicios.forEach(s => {
-                            if (s.lat && s.lng) {
-                                const marker = L.marker([s.lat, s.lng], {
-                                    icon: L.divIcon({
-                                        html: `<div style="background:${s.crew_color_principal};width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`,
-                                        className: '',
-                                        iconSize: [16, 16],
-                                        iconAnchor: [8, 8]
-                                    })
-                                });
-
-                                // === Asignar ID al marcador cuando se añada al mapa ===
-                                marker.on('add', function () {
-                                    const iconElement = this.getElement(); // Obtiene el <div> del marcador
-                                    if (iconElement) {
-                                        iconElement.id = `marker-${s.id_servicio}`; // Le pones el ID
-                                        iconElement.style.transition = 'all 0.3s ease'; // Transición suave para efectos
-                                    }
-                                });
-
-                                marker.addTo(window.map);
-                                marker.bindPopup(`<b>${s.cliente}</b><br>${s.direccion || 'No address'}<br><b>Crew:</b> ${s.truck || 'N/A'}`);
-                            }
-                        });
-
-                        iniciarSeguimientoGPS();
-                    }
-
-                    if (intentos >= maxIntentos) {
-                        clearInterval(intervaloPolling);
-                        document.getElementById('contador-polling').textContent = 'Error: Timeout. No services loaded.';
-                        console.error("❌ Timeout: No se cargaron servicios después de 60 minutos");
+                        // Recargar todo el flujo con los nuevos datos
+                        procesarYSistema(nuevosServicios); // ← Llama al mismo flujo principal
                     }
                 } catch (err) {
                     console.error("Error en polling:", err);
                 }
-            }, 30000);
+
+                if (intentos >= maxIntentos) {
+                    clearInterval(intervaloPolling);
+                    document.getElementById('contador-polling').textContent = '❌ Timeout: No services loaded after 60 minutes.';
+                    console.error("❌ Timeout: No se cargaron servicios después de 60 minutos");
+                }
+            }, 30000); // Cada 30 segundos
         } else {
-            window.serviciosData = servicios;
-            carrusel.datos = servicios;
+            // === CONVERTIR lat y lng a números ===
+            const servicios = serviciosRaw.map(s => ({
+                ...s,
+                lat: typeof s.lat === 'string' ? parseFloat(s.lat) : s.lat,
+                lng: typeof s.lng === 'string' ? parseFloat(s.lng) : s.lng
+            }));
+
+            // === Validar coordenadas numéricas ===
+            const serviciosValidos = servicios.filter(s => 
+                typeof s.lat === 'number' && 
+                typeof s.lng === 'number' && 
+                !isNaN(s.lat) && 
+                !isNaN(s.lng)
+            );
+
+            if (serviciosValidos.length === 0) {
+                console.error("🔴 No hay servicios con coordenadas válidas después de conversión");
+            } else {
+                console.log(`✅ ${serviciosValidos.length} servicios con coordenadas válidas`);
+            }
+
+            // Asignar al contexto global
+            window.serviciosData = serviciosValidos;
+
+            // Actualizar carrusel
+            carrusel.datos = serviciosValidos;
             actualizarEspacio();
 
+            // Insertar primera tarjeta
             let indiceCarruselGlobal = 0;
-            insertarTarjeta(servicios[indiceCarruselGlobal]);
-            indiceCarruselGlobal = (indiceCarruselGlobal + 1) % servicios.length;
+            insertarTarjeta(serviciosValidos[indiceCarruselGlobal]);
+            indiceCarruselGlobal = (indiceCarruselGlobal + 1) % serviciosValidos.length;
 
-            // === Iniciar carrusel con referencia guardada ===
+            // Iniciar carrusel
+            if (carrusel.intervalo) clearInterval(carrusel.intervalo);
             carrusel.intervalo = setInterval(() => {
-                insertarTarjeta(servicios[indiceCarruselGlobal]);
-                indiceCarruselGlobal = (indiceCarruselGlobal + 1) % servicios.length;
+                insertarTarjeta(serviciosValidos[indiceCarruselGlobal]);
+                indiceCarruselGlobal = (indiceCarruselGlobal + 1) % serviciosValidos.length;
             }, config.intervaloCarrusel);
 
             // === 10. Marcadores fijos ===
-            servicios.forEach(s => {
+            serviciosValidos.forEach(s => {
                 if (s.lat && s.lng) {
                     const marker = L.marker([s.lat, s.lng], {
                         icon: L.divIcon({
@@ -795,14 +897,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                         })
                     });
 
-                    // Guardar referencia al marcador
+                    // Guardar referencia
                     window.mapMarkers[s.id_servicio] = marker;
 
-                    // === Asignar ID al marcador cuando se añada al mapa ===
+                    // Asignar ID al elemento
                     marker.on('add', function () {
-                        const iconElement = this.getElement(); // Obtiene el <div> del marcador
+                        const iconElement = this.getElement();
                         if (iconElement) {
-                            iconElement.id = `marker-${s.id_servicio}`; // Le pones el ID
+                            iconElement.id = `marker-${s.id_servicio}`;
+                            iconElement.style.transition = 'all 0.3s ease';
                         }
                     });
 
@@ -811,44 +914,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
 
-            // === 11. SEGUIMIENTO GPS ===
-            let crewMarker = null;
-            let polilinea = null;
-            const rutaCoordenadas = [];
+            // ✅ Disparar evento para GPS
+            const event = new Event('serviciosCargados');
+            document.dispatchEvent(event);
+            console.log("✅ Evento 'serviciosCargados' lanzado");
 
-            function iniciarSeguimientoGPS() {
-                crewMarker = L.marker([30.3096, -95.4750], {
-                    icon: L.divIcon({
-                        html: '<div style="background:#FF5722;width:18px;height:18px;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.6);"></div>',
-                        className: '',
-                        iconSize: [18, 18],
-                        iconAnchor: [9, 9]
-                    })
-                }).addTo(window.map);
-                crewMarker.bindPopup("<b>CREW moving</b>");
-
-                polilinea = L.polyline([], { color: 'blue', weight: 5, opacity: 0.7 }).addTo(window.map);
-
-                setInterval(async () => {
-                    try {
-                        const res = await fetch('/webhooks/verizon/ultima_coordenada.php?vehicle_id=Crew%201');
-                        const data = await res.json();
-
-                        if (data.lat && data.lng) {
-                            const latlng = [data.lat, data.lng];
-                            crewMarker.setLatLng(latlng);
-                            crewMarker.setPopupContent(`<b>CREW 1</b><br>Lat: ${data.lat.toFixed(6)}<br>Lng: ${data.lng.toFixed(6)}`);
-                            rutaCoordenadas.push(latlng);
-                            polilinea.setLatLngs(rutaCoordenadas);
-                        }
-                    } catch (error) {
-                        console.error("Error al obtener coordenada:", error);
-                    }
-                }, config.intervaloGPS);
-            }
-
-            iniciarSeguimientoGPS();
+            // También inicia seguimiento directamente como fallback
+            setTimeout(() => {
+                if (typeof iniciarSeguimientoGPS === 'function') {
+                    console.log("🔄 Iniciando GPS manualmente");
+                    //iniciarSeguimientoGPS();
+                }
+            }, 1000);
         }
+
     } catch (error) {
         console.error("❌ Error al cargar servicios:", error);
     }
@@ -1666,6 +1745,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     // === AQUÍ agregas esta línea ===
     esperarYcargarCarrusel();
 
+
+    // === SEGUIMIENTO MÚLTIPLE DE VEHÍCULOS – Emulado con datos reales ===
+    window.gpsMarkers = {};
+    window.gpsPolylines = {};
+    window.gpsPositions = {};
+
+
+    // ✅ Iniciar seguimiento solo cuando los servicios estén listos
+    document.addEventListener('serviciosCargados', () => {
+        console.log("✅ Evento: serviciosCargados → iniciando GPS");
+        //iniciarSeguimientoGPS();
+    });
+
+    // O si no usas eventos, inicia después de esperarYcargarCarrusel()
+    setTimeout(() => {
+        if (window.serviciosData && window.serviciosData.length > 0) {
+            console.log("✅ serviciosData listo → iniciando GPS");
+            //iniciarSeguimientoGPS();
+        } else {
+            console.warn("❌ serviciosData aún no disponible");
+        }
+    }, 3000);
+
     // === SISTEMA DE FLECHA HACIA MAPA ===
     // Variables globales para el sistema de flecha
     window.mousePosition = { x: 0, y: 0 };
@@ -2053,3 +2155,4 @@ const estiloFlecha = `
 const styleSheet = document.createElement('style');
 styleSheet.textContent = estiloFlecha;
 document.head.appendChild(styleSheet);
+

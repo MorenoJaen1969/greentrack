@@ -18,11 +18,14 @@ class Motor3Controller extends mainModel{
 
 	public function __construct()
 	{ 
+        // ¡ESTA LÍNEA ES CRUCIAL!
+        parent::__construct();
+
 		// Nombre del controlador actual abreviado para reconocer el archivo
 		$nom_controlador = "Motor3Controller";
 		// ____________________________________________________________________
 
-		$this->log_path = __DIR__ . '/../logs/Motor3/';
+		$this->log_path = APP_R_PROY . 'app/logs/Motor3/';
 
 		if (!file_exists($this->log_path)) {
 			mkdir($this->log_path, 0775, true);

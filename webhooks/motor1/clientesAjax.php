@@ -1,5 +1,5 @@
+
 <?php
-// servicios_dia.php - Motor 1 (versión completa)
 ob_start();
 
 require_once '../../config/app.php';
@@ -49,18 +49,55 @@ if (json_last_error() !== JSON_ERROR_NONE) {
 
 $id_cliente = $data['id_cliente'];
 $nombre_cliente = $data['nombre_cliente'];
+$telefono_cliente = $data['telefono'] ?? '';
+$email_cliente = $data['email'] ?? '';
+$direccion_cliente = $data['direccion'] ?? '';
+$latitud = $data['latitud'] ?? '';
+$longitud = $data['longitud'] ?? '';    
+
+$params = [
+    'id_cliente' => $id_cliente,
+    'nombre_cliente' => $nombre_cliente,
+    'telefono_cliente' => $telefono_cliente,
+    'email_cliente' => $email_cliente,
+    'direccion_cliente' => $direccion_cliente,
+    'latitud' => $latitud,
+    'longitud' => $longitud
+];
 
 // === DELEGAR AL CONTROLADOR OFICIAL ===
 try {
+    if (ob_get_level()) {
+        ob_clean(); // Limpia el búfer actual sin enviarlo
+    }    
     $controller = new serviciosController();
-    $resultado = $controller->procesarClientesDesdeMotor1($id_cliente, $nombre_cliente);
+    error_log("Registrando cliente: " . print_r($params, true));
+    
+    $resultado = $controller->procesarClientesDesdeMotor1($params);
+    if (!headers_sent()) {
+        http_response_code(200);
+        header('Content-Type: application/json');
+    } else {
+        error_log("Advertencia: Algunos encabezados ya fueron enviados antes de la respuesta JSON.");
+        // O manejar el error
+    }
 
-    http_response_code(200);
+    // Enviar la respuesta JSON limpia
     echo json_encode($resultado, JSON_PRETTY_PRINT);
+    // Asegurarse de que no haya más salida después
+    exit; // Salir inmediatamente después de enviar el JSON
 
 } catch (Exception $e) {
-    error_log("Error en servicios_dia.php: " . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['error' => 'Internal server error']);
+    // Limpiar búfer también en caso de error
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    error_log("Error en clientesAjax.php: " . $e->getMessage());
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+    }
+    echo json_encode(['error' => 'Internal server error: ' . $e->getMessage()]);
+    exit;
 }
 

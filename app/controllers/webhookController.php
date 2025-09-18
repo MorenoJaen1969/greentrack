@@ -10,22 +10,35 @@ class webhookController extends mainModel
 	private $logFile;
 	private $errorLogFile;
 
-
 	private $o_f;
 
 	public function __construct()
 	{
+        // ¡ESTA LÍNEA ES CRUCIAL!
+        parent::__construct();
+
 		// Nombre del controlador actual abreviado para reconocer el archivo
 		$nom_controlador = "webhookController";
 		// ____________________________________________________________________
 
-		$this->log_path = __DIR__ . '/../logs/controlador/';
+		$this->log_path = APP_R_PROY . 'app/logs/webhooks/';
 
+		// Verificar y crear directorio con mejor manejo de errores
 		if (!file_exists($this->log_path)) {
-			mkdir($this->log_path, 0775, true);
-			chgrp($this->log_path, 'www-data');
-			chmod($this->log_path, 0775); // Asegurarse de que el directorio sea legible y escribible
+			if (!mkdir($this->log_path, 0755, true)) {
+				error_log("No se pudo crear el directorio de logs: " . $this->log_path);
+				// Fallback a un directorio temporal
+				$this->log_path = '/tmp/greentrack_logs/';
+				if (!file_exists($this->log_path)) {
+					mkdir($this->log_path, 0755, true);
+				}
+			}
 		}
+
+		// Establecer permisos y propietario
+		chown($this->log_path, 'www-data');
+		chgrp($this->log_path, 'www-data');
+		chmod($this->log_path, 0755);
 
 		$this->logFile = $this->log_path . $nom_controlador . '_' . date('Y-m-d') . '.log';
 		$this->errorLogFile = $this->log_path . $nom_controlador . '_error_' . date('Y-m-d') . '.log';
@@ -51,22 +64,61 @@ class webhookController extends mainModel
 	{
 		if (!file_exists($file)) {
 			$initialContent = "[" . date('Y-m-d H:i:s') . "] Archivo de log iniciado" . PHP_EOL;
+			
+			// Intentar crear el archivo
 			$created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
+			
 			if ($created === false) {
-				error_log("No se pudo crear el archivo de log: " . $file);
-			} else {
-				chmod($file, 0644); // Asegurarse de que el archivo sea legible y escribible
+				// Si falla, intentar crear directorio padre
+				$dir = dirname($file);
+				if (!file_exists($dir)) {
+					mkdir($dir, 0755, true);
+					chown($dir, 'www-data');
+					chgrp($dir, 'www-data');
+				}
+				// Intentar nuevamente
+				$created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
+				
+				if ($created === false) {
+					error_log("No se pudo crear el archivo de log: " . $file);
+					return false;
+				}
 			}
-			if (!is_writable($file)) {
-				throw new \Exception("El archivo de log no es escribible: " . $file);
-			}
+			
+			// Establecer permisos correctos
+			chown($file, 'www-data');
+			chgrp($file, 'www-data');
+			chmod($file, 0644);
 		}
+		
+		return true;
 	}
-
+	
 	private function verificarPermisos()
 	{
+		// Verificar permisos del directorio
 		if (!is_writable($this->log_path)) {
 			error_log("No hay permiso de escritura en: " . $this->log_path);
+			
+			// Intentar corregir permisos al crear
+			if (is_dir($this->log_path)) {
+				chmod($this->log_path, 0755);
+				chown($this->log_path, 'www-data');
+				chgrp($this->log_path, 'www-data');
+			}
+		}
+		
+		// Verificar permisos de los archivos
+		if (file_exists($this->logFile) && !is_writable($this->logFile)) {
+			chmod($this->logFile, 0644);
+			chown($this->logFile, 'www-data');
+			chgrp($this->logFile, 'www-data');
+		}
+		
+		if (file_exists($this->errorLogFile) && !is_writable($this->errorLogFile)) {
+			chmod($this->errorLogFile, 0644);
+			chown($this->errorLogFile, 'www-data');
+			chgrp($this->errorLogFile, 'www-data');
 		}
 	}
 
@@ -82,7 +134,7 @@ class webhookController extends mainModel
 		}
 	}
 
-	private function log($message, $isError = false)
+	private function log($message, $isError = false): void
 	{
 		$file = $isError ? $this->errorLogFile : $this->logFile;
 		if (!file_exists($file)) {

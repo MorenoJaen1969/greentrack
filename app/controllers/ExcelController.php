@@ -21,6 +21,9 @@ class ExcelController extends mainModel{
 
 	public function __construct()
 	{ 
+       // ¡ESTA LÍNEA ES CRUCIAL!
+        parent::__construct();
+			
 		// Nombre del controlador actual abreviado para reconocer el archivo
 		$nom_controlador = "ExcelController";
 		// ____________________________________________________________________
@@ -206,7 +209,7 @@ class ExcelController extends mainModel{
 		}
 
 		// === 2. Validar TRUCK ===
-		$truck = 'Truck' . trim($s['truck']);
+		$truck = 'TRUCK ' . trim($s['truck']);
 
 		$id_truck = $this->validarTruck($truck);
 		if (!$id_truck) {
