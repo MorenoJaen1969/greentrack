@@ -5,7 +5,7 @@ require_once APP_R_PROY . 'app/models/mainModel.php';
 use app\models\mainModel;
 
 use \Exception;
-class medianocheController extends mainModel
+class paradasController extends mainModel
 {
 	private $log_path;
 	private $logFile;
@@ -14,19 +14,21 @@ class medianocheController extends mainModel
 	private $id_status_cancelado;
 	private $id_status_activo;
 	private $id_status_historico;
+	private $id_status_finalizado;
+	private $id_status_replanificado;
 
 	private $o_f;
 
 	public function __construct()
 	{
-       // ¡ESTA LÍNEA ES CRUCIAL!
-        parent::__construct();
+		// ¡ESTA LÍNEA ES CRUCIAL!
+		parent::__construct();
 
 		// Nombre del controlador actual abreviado para reconocer el archivo
-		$nom_controlador = "medianocheController";
+		$nom_controlador = "paradasController";
 		// ____________________________________________________________________
 
-		$this->log_path = APP_R_PROY . 'app/logs/cron/';
+		$this->log_path = APP_R_PROY . 'app/logs/paradasTruck/';
 
 		if (!file_exists($this->log_path)) {
 			mkdir($this->log_path, 0775, true);
@@ -37,7 +39,7 @@ class medianocheController extends mainModel
 		$this->logFile = $this->log_path . $nom_controlador . '_' . date('Y-m-d') . '.log';
 		$this->errorLogFile = $this->log_path . $nom_controlador . '_error_' . date('Y-m-d') . '.log';
 
-		$this->initializeLogFile($this->logFile);
+		$this->initializeLogFile(file: $this->logFile);
 		$this->initializeLogFile($this->errorLogFile);
 
 		$this->verificarPermisos();
@@ -46,8 +48,10 @@ class medianocheController extends mainModel
 		$this->rotarLogs(15);
 
 		$this->id_status_cancelado = 47;
+		$this->id_status_finalizado = 38;
 		$this->id_status_historico = 39;
 		$this->id_status_activo = 37;
+		$this->id_status_replanificado = 40;
 
 		// if (isset($_COOKIE['clang'])) {
 		// 	$this->idioma_act = $_COOKIE['clang'];
@@ -73,7 +77,6 @@ class medianocheController extends mainModel
 			}
 		}
 	}
-
 
 	private function verificarPermisos()
 	{
@@ -118,65 +121,74 @@ class medianocheController extends mainModel
 		file_put_contents($this->errorLogFile, $logMessage . PHP_EOL, FILE_APPEND | LOCK_EX);
 	}
 
-	public function cerrarServiciosNoAtendidos() {
-		try {
-			$this->log("=== INICIANDO: Cierre de servicios no atendidos ==="); 
+    public function iniciar_parada($vehicle_id, $lat, $lng, $hora_act)
+    {
+        try {
+            if (!$vehicle_id || !is_numeric($lat) || !is_numeric($lng)) {
+                throw new Exception("Datos incompletos");
+            }
 
-			$hoy = date('Y-m-d');
+			// Obtener id_truck desde tabla truck
+			$sql = "SELECT id_truck FROM truck WHERE nombre = :v_nombre";
+			$param = [':v_nombre' => $vehicle_id];
 
-			// === 1. Cerrar servicios no atendidos (id_status = 37 → 48) ===
-			$query1 = "
-				UPDATE servicios 
-				SET 
-					id_status = 48,
-					estado_servicio = 'no_servido',
-					fecha_actualizacion = NOW() 
-				WHERE 
-					DATE(fecha_programada) < :hoy 
-					AND id_status = 37";
+			$result = $this->ejecutarConsulta($sql, '', $param);
+			if ($result) {
+				$id_truck = $result[0]['id_truck'];
 
-			$params1 = [':hoy' => $hoy];
-			$filasCerradas = $this->ejecutarConsulta($query1, '', $params1, 'rowCount');
+				$datos = [
+					['campo_nombre' => 'id_truck',          'campo_marcador' => ':id_truck',		'campo_valor' => $id_truck],
+					['campo_nombre' => 'vehicle_id',        'campo_marcador' => ':vehicle_id',      'campo_valor' => $vehicle_id],
+					['campo_nombre' => 'fecha_operacion',   'campo_marcador' => ':fecha_operacion',	'campo_valor' => date('Y-m-d', strtotime($hora_act))],
+					['campo_nombre' => 'hora_inicio',      	'campo_marcador' => ':hora_inicio',		'campo_valor' => $hora_act],
+					['campo_nombre' => 'lat_inicial',       'campo_marcador' => ':lat_inicial',   	'campo_valor' => $lat],
+					['campo_nombre' => 'lng_inicial',       'campo_marcador' => ':lng_inicial',   	'campo_valor' => $lng]
+				];
 
-			$this->log("✅ Cierre completado. $filasCerradas servicios marcados como 'No Servido'");
+				try {
+					$id_parada = $this->guardarDatos('paradas_operativas', $datos);
+					http_response_code(200);
+					echo json_encode([
+						'success' => true,
+						'id_parada' => $id_parada
+					]);
 
-			// === 2. Actualizar campo `historial = 1` en clientes que tengan servicios anteriores válidos ===
-			$query2 = "
-				UPDATE clientes 
-				SET historial = 1 
-				WHERE EXISTS (
-					SELECT 1 
-					FROM servicios s 
-					WHERE s.id_cliente = clientes.id_cliente 
-					AND s.id_status != 39 
-					AND s.fecha_programada < :hoy
-				)";
+				} catch (Exception $e) {
+					error_log("Error al guardar GPS: " . $e->getMessage());
+					http_response_code(500);
+					echo json_encode(['error' => 'Error interno']);
+				}
 
-			$params2 = [':hoy' => $hoy];
-			$this->ejecutarConsulta($query2, '', $params2);
-
-			// Limpiar estado GPS al cerrar el día
-			if (isset($_SESSION['gps_tracker_last'])) {
-				unset($_SESSION['gps_tracker_last']);
-				$this->log("🧹 SESIÓN gps_tracker_last limpiada a medianoche");
 			}
+        } catch (Exception $e) {
+            $this->logWithBacktrace("Error en iniciar_parada: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Error del servidor']);
+        }
+    }
 
-			$this->log("✅ Campo 'historial' actualizado en clientes con servicios anteriores válidos");
+	public function cerrar_parada($id_parada, $vehicle_id){
+		if (!$id_parada || !$vehicle_id) {
+            throw new Exception("ID requerido");
+        }
 
-			http_response_code(200);
-			echo json_encode([
-				'success' => true,
-				'message' => "Cierre de servicios no atendidos y actualización de historial completados",
-				'servicios_cerrados' => $filasCerradas
-			]);
+		$datos = [
+			["campo_nombre" => "hora_fin",	"campo_marcador" => ":hora_fin",	"campo_valor" => date('H:i:s')],
+			["campo_nombre" => "estado",	"campo_marcador" => ":estado",		"campo_valor" => 'cerrada'],
+		];
 
-		} catch (Exception $e) {
-			$this->logWithBacktrace("Error en cierre nocturno: " . $e->getMessage(), true);
-			http_response_code(500);
-			echo json_encode([
-				'success' => false,
-				'error' => $e->getMessage()
-			]);
-		}
+		$condicion = [
+			["condicion_campo" => "id_parada", 	"condicion_marcador" => ":id_parada", 	"condicion_valor" => $id_parada],
+			["condicion_campo" => "vehicle_id", "condicion_marcador" => ":vehicle_id", 	"condicion_valor" => $vehicle_id],
+			["condicion_campo" => "estado", 	"condicion_marcador" => ":estado", 		"condicion_valor" => 'abierta']
+		];
+
+		$cant_reg = $this->actualizarDatos("paradas_operativas", $datos, $condicion);
+		
+		if ($cant_reg > 0) {
+            echo json_encode(['success' => true]);
+        } else {
+            echo json_encode(['success' => false, 'error' => 'No se encontró parada abierta']);
+        }
 	}
 }

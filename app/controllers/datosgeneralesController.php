@@ -5,7 +5,7 @@ require_once APP_R_PROY . 'app/models/mainModel.php';
 use app\models\mainModel;
 
 use \Exception;
-class medianocheController extends mainModel
+class datosgeneralesController extends mainModel
 {
 	private $log_path;
 	private $logFile;
@@ -14,19 +14,21 @@ class medianocheController extends mainModel
 	private $id_status_cancelado;
 	private $id_status_activo;
 	private $id_status_historico;
+	private $id_status_finalizado;
+	private $id_status_replanificado;
 
 	private $o_f;
 
 	public function __construct()
 	{
-       // ¡ESTA LÍNEA ES CRUCIAL!
-        parent::__construct();
+		// ¡ESTA LÍNEA ES CRUCIAL!
+		parent::__construct();
 
 		// Nombre del controlador actual abreviado para reconocer el archivo
-		$nom_controlador = "medianocheController";
+		$nom_controlador = "datosgeneralesController";
 		// ____________________________________________________________________
 
-		$this->log_path = APP_R_PROY . 'app/logs/cron/';
+		$this->log_path = APP_R_PROY . 'app/logs/datosgenerales/';
 
 		if (!file_exists($this->log_path)) {
 			mkdir($this->log_path, 0775, true);
@@ -37,7 +39,7 @@ class medianocheController extends mainModel
 		$this->logFile = $this->log_path . $nom_controlador . '_' . date('Y-m-d') . '.log';
 		$this->errorLogFile = $this->log_path . $nom_controlador . '_error_' . date('Y-m-d') . '.log';
 
-		$this->initializeLogFile($this->logFile);
+		$this->initializeLogFile(file: $this->logFile);
 		$this->initializeLogFile($this->errorLogFile);
 
 		$this->verificarPermisos();
@@ -46,8 +48,10 @@ class medianocheController extends mainModel
 		$this->rotarLogs(15);
 
 		$this->id_status_cancelado = 47;
+		$this->id_status_finalizado = 38;
 		$this->id_status_historico = 39;
 		$this->id_status_activo = 37;
+		$this->id_status_replanificado = 40;
 
 		// if (isset($_COOKIE['clang'])) {
 		// 	$this->idioma_act = $_COOKIE['clang'];
@@ -73,7 +77,6 @@ class medianocheController extends mainModel
 			}
 		}
 	}
-
 
 	private function verificarPermisos()
 	{
@@ -118,65 +121,61 @@ class medianocheController extends mainModel
 		file_put_contents($this->errorLogFile, $logMessage . PHP_EOL, FILE_APPEND | LOCK_EX);
 	}
 
-	public function cerrarServiciosNoAtendidos() {
+    public function obtener_Clave($clave) 
+    {
+        $query = "SELECT valor FROM configuracion_sistema WHERE clave = :v_clave";
+        $parametros = ['v_clave' => $clave];
+
 		try {
-			$this->log("=== INICIANDO: Cierre de servicios no atendidos ==="); 
+			$resultado = $this->ejecutarConsulta($query, '', $parametros, 'fetchAll');
+			$clave = array_map(function($row) {
+				return [
+					'valor' => $row['valor']
+				];
+			}, $resultado);
 
-			$hoy = date('Y-m-d');
+        	echo json_encode(['valor' => $clave]);
 
-			// === 1. Cerrar servicios no atendidos (id_status = 37 → 48) ===
-			$query1 = "
-				UPDATE servicios 
-				SET 
-					id_status = 48,
-					estado_servicio = 'no_servido',
-					fecha_actualizacion = NOW() 
-				WHERE 
-					DATE(fecha_programada) < :hoy 
-					AND id_status = 37";
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error crítico en obtenerClave: " . $e->getMessage(), true);
+	        echo json_encode(['valor' => []]);
+		}
 
-			$params1 = [':hoy' => $hoy];
-			$filasCerradas = $this->ejecutarConsulta($query1, '', $params1, 'rowCount');
+    }
 
-			$this->log("✅ Cierre completado. $filasCerradas servicios marcados como 'No Servido'");
+	public function datos_para_gps()
+	{
+        $query = "SELECT valor FROM configuracion_sistema WHERE clave = :v_clave1 or clave = :v_clave2 OR clave = :v_clave3";
+        $parametros = [
+			'v_clave1' => "mapa_base",
+			'v_clave2' => "umbral_metros",
+			'v_clave3' => "umbral_minutos"
+		];
 
-			// === 2. Actualizar campo `historial = 1` en clientes que tengan servicios anteriores válidos ===
-			$query2 = "
-				UPDATE clientes 
-				SET historial = 1 
-				WHERE EXISTS (
-					SELECT 1 
-					FROM servicios s 
-					WHERE s.id_cliente = clientes.id_cliente 
-					AND s.id_status != 39 
-					AND s.fecha_programada < :hoy
-				)";
+		try {
+			$resultado = $this->ejecutarConsulta($query, '', $parametros, 'fetchAll');
 
-			$params2 = [':hoy' => $hoy];
-			$this->ejecutarConsulta($query2, '', $params2);
-
-			// Limpiar estado GPS al cerrar el día
-			if (isset($_SESSION['gps_tracker_last'])) {
-				unset($_SESSION['gps_tracker_last']);
-				$this->log("🧹 SESIÓN gps_tracker_last limpiada a medianoche");
+			// Convertir resultado en un array asociativo: ['mapa_base' => 'ESRI', ...]
+			$config = [];
+			foreach ($resultado as $row) {
+				$config[$row['valor']] = $row['valor'];
 			}
 
-			$this->log("✅ Campo 'historial' actualizado en clientes con servicios anteriores válidos");
+			// Ahora puedes acceder fácilmente:
+			// $config['mapa_base'], $config['umbral_metros'], etc.
 
-			http_response_code(200);
 			echo json_encode([
 				'success' => true,
-				'message' => "Cierre de servicios no atendidos y actualización de historial completados",
-				'servicios_cerrados' => $filasCerradas
+				'config' => $config
 			]);
 
 		} catch (Exception $e) {
-			$this->logWithBacktrace("Error en cierre nocturno: " . $e->getMessage(), true);
-			http_response_code(500);
 			echo json_encode([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => 'Error al obtener configuraciones',
+				'detalle' => $e->getMessage()
 			]);
 		}
 	}
 }
+?>    

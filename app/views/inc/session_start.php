@@ -147,3 +147,4 @@ if (!is_session_started()) {
 // No cerramos el buffer: lo deja abierto para el resto del script
 // El script principal decidirá cuándo hacer ob_end_flush() o similar
 
+

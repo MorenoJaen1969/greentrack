@@ -578,8 +578,15 @@ class mainModel
             }
 
             $query .= implode(", ", $sets);
-            $query .= " WHERE " . $condicion['condicion_campo'] . " = " . $condicion['condicion_marcador'];
+            $query .= " WHERE ";
 
+            // === CONSTRUCCIÓN DE MÚLTIPLES CONDICIONES ===
+            $where_parts = [];
+            foreach ($condicion as $cond) {
+                $where_parts[] = $cond['condicion_campo'] . " = " . $cond['condicion_marcador'];
+            }
+            $query .= implode(" AND ", $where_parts);
+                        
             // 3. Ejecutar con DEBUG profundo
             $stmt = $conn->prepare($query);
             
@@ -589,14 +596,13 @@ class mainModel
                 $this->log("Vinculado: " . $clave['campo_marcador'] . " = " . $clave['campo_valor']);
             }
 
-            $stmt->bindValue($condicion['condicion_marcador'], $condicion['condicion_valor']);
-            $this->log("Consulta final: " . print_r($stmt, true));
-
-            $this->log("Valores vinculados:");
-
-            foreach ($datos as $clave) {
-                $this->log(" - " . $clave['campo_nombre'] . " = " . $clave['campo_valor']);
+            // Vincular cada condición
+            foreach ($condicion as $cond) {
+                $stmt->bindValue($cond['condicion_marcador'], $cond['condicion_valor']);
+                $this->log("Vinculado WHERE: " . $cond['condicion_marcador'] . " = " . $cond['condicion_valor']);
             }
+
+            $this->log("Consulta final: $query");
             
             // 4. Ejecutar y verificar 
             $stmt->execute();
@@ -615,7 +621,8 @@ class mainModel
 
             $conn->commit();
             $this->log("Actualización exitosa. Filas afectadas: $filas");
-            return true;
+            return $filas;
+            
         } catch (Exception $e) {
             if (isset($conn) && $conn->inTransaction()) {
                 $conn->rollBack();

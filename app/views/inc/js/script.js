@@ -19,6 +19,9 @@
 // Al inicio de tu script, después de crear el mapa
 window.mapMarkers = {};
 
+// === Estado de actividades en curso ===
+window.estadoActividades = {}; // truck → { tipo: 'servicio' | 'parada', id_registro: int, inicio: Date }
+
 // Funciones específicas para cada tipo de alerta
 function suiteAlertSuccess(titulo, mensaje) {
     return mostrarSuiteAlert('success', titulo, mensaje);
@@ -393,7 +396,8 @@ function procesarYSistema(serviciosRaw) {
         if (s.lat && s.lng) {
             const marker = L.marker([s.lat, s.lng], {
                 icon: L.divIcon({
-                    html: `<div style="background:${s.crew_color_principal};width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`,
+                    html: `
+                        <div style="background:${s.crew_color_principal};width:16px;height:16px;border-radius:50%;border:2px solid black;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`,
                     className: '',
                     iconSize: [16, 16],
                     iconAnchor: [8, 8]
@@ -420,7 +424,144 @@ function procesarYSistema(serviciosRaw) {
     console.log("✅ Evento 'serviciosCargados' lanzado");
 }
 
+function inicializarMapa() {
+    const contenedor = 'live-map';
+    if (!document.getElementById(contenedor)) {
+        console.warn('❌ No se encontró el contenedor del mapa');
+        return;
+    }
+
+    // Si ya existe un mapa, eliminarlo antes de crear uno nuevo
+    if (window.map) {
+        window.map.remove();
+        delete window.map;
+    }
+
+    const map = L.map(contenedor).setView([30.3204272, -95.4217815], 12);
+
+        // ✅ Asegurar que APP_CONFIG existe
+    if (!window.APP_CONFIG || !window.APP_CONFIG.mapa_base) {
+        console.warn('⚠️ APP_CONFIG o mapa_base no definido. Usando ESRI por defecto');
+        window.APP_CONFIG = window.APP_CONFIG || {};
+        window.APP_CONFIG.mapa_base = 'ESRI'; // valor por defecto
+    }
+
+    const tipo = window.APP_CONFIG.mapa_base.toUpperCase(); // ahora seguro
+
+    console.log('🌍 Inicializando mapa con capa:', tipo);
+
+    switch (tipo) {
+        case 'OSM':
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            break;
+
+        case 'ESRI':
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+                maxZoom: 20
+            }).addTo(map);
+            break;
+
+        default:
+            console.warn(`⚠️ Tipo de mapa desconocido: ${tipo}. Usando OSM por defecto.`);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
+            break;
+    }
+
+    // Desactivar zoom con rueda
+    map.scrollWheelZoom.disable();
+
+    // Guardar referencia global
+    window.map = map;
+
+    console.log('✅ Mapa inicializado con éxito');
+}    
+
 document.addEventListener('DOMContentLoaded', async () => {
+    // === Sincronizar cambios con backend cuando se detecta inicio/cierre por geofencing ===
+    async function sincronizarEstadoGPS(id_servicio, tipo, hora) {
+        // tipo: 'inicio' o 'fin'
+        try {
+            const data = {
+                modulo_servicios: 'actualizar_hora_gps',
+                id_servicio: id_servicio
+            };
+            if (tipo === 'inicio') {
+                data.hora_inicio_gps = hora;
+            } else if (tipo === 'fin') {
+                data.hora_fin_gps = hora;
+                // Calcular duración y enviar tiempo_servicio
+                const servicio = window.serviciosData?.find(s => s.id_servicio == id_servicio);
+                let inicio = servicio?.hora_inicio_gps || servicio?.hora_aviso_usuario;
+                if (inicio && hora) {
+                    const t1 = new Date(inicio);
+                    const t2 = new Date(hora);
+                    let diff = Math.abs(t2 - t1) / 1000; // segundos
+                    const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+                    const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+                    const s = String(Math.floor(diff % 60)).padStart(2, '0');
+                    data.tiempo_servicio = `${h}:${m}:${s}`;
+                }
+            }
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const resp = await res.json();
+            if (resp.success) {
+                console.log(`✅ GPS time updated (${tipo}) for service ${id_servicio}`);
+            } else {
+                console.warn(`⚠️ Error updating GPS time: ${resp.error}`);
+            }
+        } catch (err) {
+            console.error('Error updating GPS time with backend:', err);
+        }
+    }
+
+    window.addEventListener('servicioIniciado', function(e) {
+        const { id_servicio, hora } = e.detail;
+        sincronizarEstadoGPS(id_servicio, 'inicio', hora);
+    });
+
+    window.addEventListener('servicioCerrado', function(e) {
+        const { id_servicio, hora } = e.detail;
+        sincronizarEstadoGPS(id_servicio, 'fin', hora);
+    });
+    // === Escuchar eventos de geofencing desde motor2.js ===
+    window.addEventListener('servicioIniciado', function(e) {
+        const { id_servicio, hora } = e.detail;
+        // Actualizar datos globales
+        const servicio = carrusel.datos.find(s => s.id_servicio == id_servicio);
+        if (servicio) {
+            servicio.hora_aviso_usuario = hora;
+            servicio.estado_servicio = 'inicio_actividades';
+            servicio.finalizado = false;
+            actualizarTarjeta(servicio);
+            actualizarCeldaActividad(servicio);
+            actualizarCeldaActividadGps(servicio);
+            console.log(`🟢 Servicio iniciado por geofencing: ${id_servicio}`);
+        }
+    });
+
+    window.addEventListener('servicioCerrado', function(e) {
+        const { id_servicio, hora } = e.detail;
+        // Actualizar datos globales
+        const servicio = carrusel.datos.find(s => s.id_servicio == id_servicio);
+        if (servicio) {
+            servicio.hora_finalizado = hora;
+            servicio.estado_servicio = 'finalizado';
+            servicio.finalizado = true;
+            actualizarTarjeta(servicio);
+            actualizarCeldaActividad(servicio);
+            actualizarCeldaActividadGps(servicio);
+            console.log(`🔴 Servicio cerrado por geofencing: ${id_servicio}`);
+        }
+    });
     console.log("🟢 GreenTrack Live: Iniciando dashboard");
     let servicioTemporal = null;
 
@@ -449,12 +590,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // === 3. Inicializar mapa ===
     let map;
     try {
-        map = L.map('live-map').setView([30.3204272, -95.4217815], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-        map.scrollWheelZoom.disable();
-        window.map = map;
+
+        // ✅ Ahora sí, puedes inicializar el mapa
+        console.log("Inicializando Mapa");
+        inicializarMapa();
 
         // === MARCADOR FIJO: Sede de Sergio's Landscape (Estrella de David - Color uniforme) ===
         const starSvgUniform = `
@@ -622,7 +761,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div class="hora" style="line-height: 1.2;">
                             <span id="start-${servicio.id_servicio}" class="time-start"></span><br>
                             <span id="end-${servicio.id_servicio}" class="time-end"></span><br>
-                            <span id="duration-${servicio.id_servicio}" class="time-duration"><b>Duration:</b> Impossible to calculate</span>
+                            <span id="duration-${servicio.id_servicio}" class="time-duration"><b>Duration:</b> Waiting for data to calculate</span>
                         </div>
                     </div>
 
@@ -633,7 +772,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
 
                     <!-- 2,2: GPS -->
-                    <div class="cell gps-cell">
+                    <div class="cell gps-cell" data-id="${servicio.id_servicio}">
                         <div class="tit_d_grid">Activity GPS</div>
                         <span class="hora">${servicio.hora_inicio_gps ? new Date(servicio.hora_inicio_gps).toLocaleTimeString() : '—'}</span>
                         <br>
@@ -886,11 +1025,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, config.intervaloCarrusel);
 
             // === 10. Marcadores fijos ===
+            const vehicles = [];
+            const seenTrucks = new Set();
+
             serviciosValidos.forEach(s => {
-                if (s.lat && s.lng) {
+                if (s.lat && s.lng && s.truck && s.crew_color_principal) {
+                    // Solo agregar si no se ha visto este truck
+                    if (!seenTrucks.has(s.truck)) {
+                        seenTrucks.add(s.truck);
+
+                        vehicles.push({
+                            id: s.truck,
+                            color: s.crew_color_principal,
+                            crew: Array.isArray(s.crew_integrantes) ? [...s.crew_integrantes] : []
+                        });
+                    }
+
+                    // === Crear marcador (tu lógica actual) ===
                     const marker = L.marker([s.lat, s.lng], {
                         icon: L.divIcon({
-                            html: `<div style="background:${s.crew_color_principal};width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`,
+                            html: `<div style="background:${s.crew_color_principal};width:16px;height:16px;border-radius:50%;border:2px solid black;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`,
                             className: '',
                             iconSize: [16, 16],
                             iconAnchor: [8, 8]
@@ -900,7 +1054,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Guardar referencia
                     window.mapMarkers[s.id_servicio] = marker;
 
-                    // Asignar ID al elemento
+                    // Asignar ID al ícono cuando se añada al mapa
                     marker.on('add', function () {
                         const iconElement = this.getElement();
                         if (iconElement) {
@@ -910,22 +1064,42 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
 
                     marker.addTo(window.map);
-                    marker.bindPopup(`<b>${s.cliente}</b><br>${s.direccion || 'No address'}<br><div class="tit_d_grid"><b>Crew:</b> ${s.truck || 'N/A'}</div>`);
+                    marker.bindPopup(`
+                        <b>${s.cliente}</b><br>
+                        ${s.direccion || 'No address'}<br>
+                        <div class="tit_d_grid"><b>Crew:</b> ${s.truck || 'N/A'}</div>
+                    `);
                 }
-            });
-
+            });            
+            
             // ✅ Disparar evento para GPS
             const event = new Event('serviciosCargados');
             document.dispatchEvent(event);
             console.log("✅ Evento 'serviciosCargados' lanzado");
 
-            // También inicia seguimiento directamente como fallback
-            setTimeout(() => {
-                if (typeof iniciarSeguimientoGPS === 'function') {
-                    console.log("🔄 Iniciando GPS manualmente");
-                    //iniciarSeguimientoGPS();
-                }
-            }, 1000);
+            // Insertar botones
+            const container = document.getElementById('contenedor-vehiculos-historico');
+            container.innerHTML = ''; // Limpiar antes
+
+            vehicles.forEach(v => {
+                const btn = document.createElement('button');
+                btn.textContent = v.id;
+                btn.style.background = v.color;
+                btn.style.color = getColorContraste(v.color); // Blanco o negro según contraste
+                btn.style.border = 'none';
+                btn.style.borderRadius = '4px';
+                btn.style.padding = '2px 6px';
+                btn.style.fontSize = '0.8em';
+                btn.style.cursor = 'pointer';
+                btn.style.fontWeight = 'bold';
+                btn.style.minWidth = '60px';
+                btn.style.textAlign = 'center';
+
+                // Opcional: tooltip
+                btn.title = `Vehicle: ${v.id}`;
+
+                container.appendChild(btn);
+            });            
         }
 
     } catch (error) {
@@ -1016,9 +1190,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 servicioActualizado.estado_servicio === 'replanificado';
 
             const contenido = `
-            <div class="modal-overlay">
+            <div class="modal-overlay_gps">
                 <div class="modal-contenedor">
-                    <button class="modal-cerrar1" id="close_modal">✕</button>
+                    <button id="close_modal" class="modal-cerrar1">✕</button>
                     <div class="modal-grid-3x2">
                         <!-- 1,1 + 2,1: Información principal -->
                         <div class="modal-info" style="grid-column: 1; grid-row: 1 / 3;">
@@ -1183,11 +1357,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // === Cerrar modal ===
-            const modalOverlay = document.querySelector('.modal-overlay');
+            const modalOverlay = document.querySelector('.modal-overlay_gps');
 
             const btnCerrar = document.getElementById('close_modal');
             btnCerrar.addEventListener('click', () => {
-
+console.log("Cerrando modal");                
                 modalOverlay.remove();
                 if (!mantenerCarrusel) {
                     reanudarCarrusel();
@@ -1390,7 +1564,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         actualizarTarjeta(servicio);
                     }
 
-                    document.querySelector('.modal-overlay')?.remove();
+                    document.querySelector('.modal-overlay_gps')?.remove();
                     reanudarCarrusel();
                 } else {
                     suiteAlertError("Error", resp.error);
@@ -1453,7 +1627,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (Array.isArray(serviciosActualizados) && serviciosActualizados.length > 0) {
 
-                    console.log(`✅ ${serviciosActualizados.length} servicios actualizados`);
+//                    console.log(`✅ ${serviciosActualizados.length} servicios actualizados`);
 
                     serviciosActualizados.forEach(servicio => {
                         // Actualiza la tarjeta si existe
@@ -1476,6 +1650,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             }
                             // Debe actualizar los campos de inicio y fin de actividades
                             actualizarCeldaActividad(servicio);
+                            actualizarCeldaActividadGps(servicio);
                         } else {
                             // Si no existe, podrías insertarla, pero no es necesario
                         }
@@ -1662,12 +1837,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const replanificados = Array(crews.length).fill(0);
             const cancelados = Array(crews.length).fill(0);
             const totales = Array(crews.length).fill(0);
+            const totalServicios = servicios.length;
 
             const trResume = document.createElement('tr');
             const thResume = document.createElement('th');
             thResume.style.cssText = 'background: #bbdefb; font-weight: bold; text-align: center; height: 40px; font-size: 1.1em;';
             thResume.innerHTML = `<div style="font-size: 1.1em;">RESUME</div>
-                                  <div style="font-size: 0.8em; margin-top: 4px; color: #555;">P: Processed, R: Rescheduled, C: Cancelled, T: Total</div>`;
+                                  <div style="font-size: 0.8em; margin-top: 4px; color: #555;">P: Processed, R: Rescheduled, C: Cancelled, T: Total</div>
+                                  <div>Total services for the day: ${totalServicios}<div>`;
             trResume.appendChild(thResume);
 
             crews.forEach((crew, idx) => {
@@ -1745,29 +1922,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // === AQUÍ agregas esta línea ===
     esperarYcargarCarrusel();
 
-
     // === SEGUIMIENTO MÚLTIPLE DE VEHÍCULOS – Emulado con datos reales ===
     window.gpsMarkers = {};
     window.gpsPolylines = {};
     window.gpsPositions = {};
 
-
-    // ✅ Iniciar seguimiento solo cuando los servicios estén listos
-    document.addEventListener('serviciosCargados', () => {
-        console.log("✅ Evento: serviciosCargados → iniciando GPS");
-        //iniciarSeguimientoGPS();
-    });
-
     // O si no usas eventos, inicia después de esperarYcargarCarrusel()
-    setTimeout(() => {
-        if (window.serviciosData && window.serviciosData.length > 0) {
-            console.log("✅ serviciosData listo → iniciando GPS");
-            //iniciarSeguimientoGPS();
-        } else {
-            console.warn("❌ serviciosData aún no disponible");
-        }
-    }, 3000);
-
     // === SISTEMA DE FLECHA HACIA MAPA ===
     // Variables globales para el sistema de flecha
     window.mousePosition = { x: 0, y: 0 };
@@ -1997,9 +2157,113 @@ document.addEventListener('DOMContentLoaded', async () => {
     // === INICIAR SISTEMA DE FLECHA ===
     // Iniciar rastreo de flecha
     iniciarRastreoFlecha();
+
+
+    console.log('🟢 script.js cargado');
+
+    // === 1. Función para obtener vehículos únicos ===
+    function obtenerVehiclesUnicos() {
+        if (!window.serviciosData || !Array.isArray(window.serviciosData)) return [];
+        const seen = new Set();
+        const vehicles = [];
+        window.serviciosData.forEach(s => {
+            const id = s.truck;
+            const color = s.crew_color_principal || '#2196F3';
+            if (id && !seen.has(id)) {
+                seen.add(id);
+                vehicles.push({ id, color });
+            }
+        });
+        return vehicles;
+    }
+
+    // === 2. Función para llenar el panel con botones ===
+    function actualizarPanelFlotante(vehicles) {
+        const contenedor = document.getElementById('contenedor-vehiculos-historico');
+        if (!contenedor) return;
+        contenedor.innerHTML = '';
+        vehicles.forEach(v => {
+            const btn = document.createElement('button');
+            btn.textContent = v.id;
+            btn.style.background = v.color;
+            btn.style.color = getColorContraste(v.color); // ← Esta función viene de motor2.js
+            btn.style.border = 'none';
+            btn.style.borderRadius = '4px';
+            btn.style.padding = '2px 6px';
+            btn.style.fontSize = '0.8em';
+            btn.style.fontWeight = 'bold';
+            btn.style.cursor = 'pointer';
+            btn.style.minWidth = '60px';
+            btn.style.textAlign = 'center';
+            btn.title = `Show ${v.id} on map`;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                abrirPopupVehiculo(v.id); // ← Viene de motor2.js
+            };
+            contenedor.appendChild(btn);
+        });
+    }
+
+    // === 3. Inicializar panel al cargar ===
+    setTimeout(() => {
+        const vehicles = obtenerVehiclesUnicos();
+        if (vehicles.length > 0) {
+            actualizarPanelFlotante(vehicles);
+        } else {
+            console.log('🟡 Aún no hay servicios para mostrar en el panel');
+        }
+    }, 1000);
+
+    // === 4. Escuchar si los servicios se actualizan más tarde ===
+    window.addEventListener('serviciosActualizados', () => {
+        const vehicles = obtenerVehiclesUnicos();
+        actualizarPanelFlotante(vehicles);
+    });
+
+    // === 5. Si usas polling o eventos personalizados, dispara este evento cuando haya datos ===
+    // Ejemplo: cuando asignes window.serviciosData, haz:
+    // window.dispatchEvent(new Event('serviciosActualizados'));
+
+
     console.log("🚀 Sistema de flecha hacia mapa iniciado");
 
 }); // Cierre del DOMContentLoaded
+
+// === Función para llenar el panel flotante con vehículos activos ===
+function actualizarPanelFlotante(vehicles) {
+    const contenedor = document.getElementById('contenedor-vehiculos-historico');
+    if (!contenedor) return;
+
+    // Limpiar contenido anterior
+    contenedor.innerHTML = '';
+
+    // Crear botón para cada vehículo
+    vehicles.forEach(v => {
+        const btn = document.createElement('button');
+        btn.textContent = v.id;
+        btn.style.background = v.color;
+        btn.style.color = getColorContraste(v.color); // Usa la función que ya tienes
+        btn.style.border = 'none';
+        btn.style.borderRadius = '4px';
+        btn.style.padding = '2px 6px';
+        btn.style.fontSize = '0.8em';
+        btn.style.fontWeight = 'bold';
+        btn.style.cursor = 'pointer';
+        btn.style.minWidth = '60px';
+        btn.style.textAlign = 'center';
+
+        // 🔥 Asignar evento onClick
+        btn.onclick = (e) => {
+            e.stopPropagation(); // Evita interferencia si el contenedor es "draggable"
+            abrirPopupVehiculo(v.id);
+        };
+
+        // Opcional: tooltip
+        btn.title = `Show ${v.id} on map`;
+
+        contenedor.appendChild(btn);
+    });
+}
 
 // ———————————————————————————————————————
 // Función: actualizarCeldaActividad
@@ -2045,20 +2309,94 @@ function actualizarCeldaActividad(servicio) {
     }
 
     // --- Duration ---
-    let durationText = 'Impossible to calculate';
+    let durationText = 'Waiting for data to calculate';
 
     if (inicio && !fin) {
         durationText = 'In progress';
     } else if (inicio && fin) {
-        const inicioMs = new Date(inicio).getTime();
-        const finMs = new Date(fin).getTime();
-        if (!isNaN(inicioMs) && !isNaN(finMs)) {
-            const diffMin = Math.round((finMs - inicioMs) / 60000);
-            durationText = `${diffMin} min`;
-        }
+        const start = new Date(inicio).getTime();
+        const end = new Date(fin).getTime();
+        const diff = end - start;
+        const h = String(Math.floor(diff / 3600000)).padStart(2, '0');
+        const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
+        const s = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+        durationText = `${h}:${m}:${s}`;
     }
 
     durationSpan.innerHTML = `<b>Duration:</b> ${durationText}`;
+}
+
+// ———————————————————————————————————————
+// Función: actualizarCeldaActividadGps
+// Actualiza los elementos visuales de Activity GPS (hora_inicio_gps, hora_fin_gps, tiempo_servicio)
+// ———————————————————————————————————————
+function actualizarCeldaActividadGps(servicio) {
+    const id = servicio.id_servicio;
+    const gpsCell = document.querySelector(`.gps-cell[data-id='${id}']`);
+    if (!gpsCell) return;
+
+    // Buscar o crear los elementos
+    let startGps = gpsCell.querySelector('.gps-start');
+    let endGps = gpsCell.querySelector('.gps-end');
+    let durationGps = gpsCell.querySelector('.gps-duration');
+    if (!startGps) {
+        startGps = document.createElement('span');
+        startGps.className = 'gps-start';
+        gpsCell.appendChild(startGps);
+    }
+    if (!endGps) {
+        endGps = document.createElement('span');
+        endGps.className = 'gps-end';
+        gpsCell.appendChild(endGps);
+    }
+    if (!durationGps) {
+        durationGps = document.createElement('span');
+        durationGps.className = 'gps-duration';
+        gpsCell.appendChild(durationGps);
+    }
+
+    // Formatear hora
+    const formatTime = (datetime) => {
+        if (!datetime) return '';
+        const date = new Date(datetime);
+        return isNaN(date.getTime())
+            ? ''
+            : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const inicioGps = formatTime(servicio.hora_inicio_gps);
+    const finGps = formatTime(servicio.hora_fin_gps);
+
+    // --- Start GPS ---
+    if (inicioGps) {
+        startGps.innerHTML = `<b>Start GPS:</b> ${inicioGps}`;
+        startGps.style.display = 'block';
+    } else {
+        startGps.style.display = 'none';
+    }
+
+    // --- End GPS ---
+    if (finGps) {
+        endGps.innerHTML = `<b>End GPS:</b> ${finGps}`;
+        endGps.style.display = 'block';
+    } else {
+        endGps.style.display = 'none';
+    }
+
+    // --- Duration GPS ---
+    let durationText = 'Waiting for data to calculate';
+    if (servicio.hora_inicio_gps && !servicio.hora_fin_gps) {
+        durationText = 'In progress';
+    } else if (servicio.hora_inicio_gps && servicio.hora_fin_gps) {
+        const start = new Date(servicio.hora_inicio_gps).getTime();
+        const end = new Date(servicio.hora_fin_gps).getTime();
+        const diff = end - start;
+        const h = String(Math.floor(diff / 3600000)).padStart(2, '0');
+        const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
+        const s = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+        durationText = `${h}:${m}:${s}`;
+    }
+    durationGps.innerHTML = `<b>Duration GPS:</b> ${durationText}`;
 }
 
 // ———————————————————————————————————————

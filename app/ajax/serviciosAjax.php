@@ -1,4 +1,5 @@
 <?php
+// SERVICIOSAJAX.PHP
 // === 1. Iniciar buffer y sesión (lo primero) ===
 ob_start();
 require_once "../views/inc/session_start.php";
@@ -63,7 +64,25 @@ $controller = new serviciosController();
 // === 9. Enrutar según el módulo ===
 switch ($modulo) {
     case 'listar':
-        $controller->listarServiciosConEstado();
+        // Permitir filtrar por fecha y vehículo si se reciben
+        $fecha = $inputData['fecha'] ?? null;
+        $truck = $inputData['truck'] ?? null;
+        if ($fecha || $truck) {
+            $controller->listarServiciosConEstado($fecha, $truck);
+        } else {
+            $controller->listarServiciosConEstado();
+        }
+        break;
+
+    case 'listar_individual';
+        // Permitir filtrar por fecha y vehículo si se reciben
+        $fecha = $inputData['fecha'] ?? null;
+        $truck = $inputData['truck'] ?? null;
+        if ($fecha || $truck) {
+            $controller->listarServicioshistorico($fecha, $truck);
+        } else {
+
+        }
         break;
 
     case 'listar_modal':
@@ -144,6 +163,16 @@ switch ($modulo) {
         }
         break;
 
+    case 'actualizar_hora_inicio_gps':
+        // Recibe id_servicio, hora_inicio_gps
+        $controller->actualizarHoraInicioGps($inputData);
+        break;
+    
+    case 'actualizar_hora_fin_gps':
+        // Recibe id_servicio, hora_fin_gps, tiempo_servicio
+        $controller->actualizarHoraFinGps($inputData);
+        break;
+
     case 'actualizar_estado':
         $id_servicio = $inputData['id_servicio'] ?? null;
         $nuevo_estado = $inputData['estado'] ?? null;
@@ -163,7 +192,43 @@ switch ($modulo) {
 
         $controller->buscar_actualizacion($ultimo_tiempo);
         break;
-                
+
+    case 'obtener_vehicles_por_fecha':
+        $fecha_ctrl = $inputData['fecha'] ?? null;
+        if (!$fecha_ctrl || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_ctrl)) {
+            echo json_encode(['trucks' => []]);
+            break;
+        }        
+
+        if ($fecha_ctrl) {
+            $controller->obtenerVehiclesPorFecha($fecha_ctrl);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Fecha es requerida']);
+        }
+        break;
+
+    case 'actualizar_hora_gps':
+        $id_servicio = $inputData['id_servicio'] ?? null;
+        if (in_array('hora_inicio_gps', $inputData)){
+            $hora_inicio_gps = $inputData['hora_inicio_gps'];
+            $hora_fin_gps = null;
+            $tiempo_servicio = null;
+        } else {
+            $hora_inicio_gps = null;
+            $hora_fin_gps = $inputData['hora_fin_gps'];
+            $tiempo_servicio = $inputData['tiempo_servicio'];
+        }
+
+        if (!$id_servicio) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Faltan datos requeridos']);
+            exit();
+        }
+
+        $controller->actualizarServicio($id_servicio, $hora_inicio_gps, $hora_fin_gps, $tiempo_servicio);
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);

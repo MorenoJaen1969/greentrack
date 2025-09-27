@@ -30,3 +30,4 @@ define('VERIZON_PLOTS_URL', 'https://fim.api.us.fleetmatics.com/fim/v1/plots/sea
 
 // === TIEMPO ENTRE LECTURAS DE GPS (en segundos) ===
 define('GPS_POLLING_INTERVAL', 5); // Cada 5 segundos
+

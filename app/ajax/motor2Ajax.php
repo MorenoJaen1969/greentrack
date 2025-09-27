@@ -1,4 +1,5 @@
 <?php
+// MOTOR2AJAX.PHP
 // === 1. Iniciar buffer y sesión (lo primero) ===
 ob_start();
 require_once "../views/inc/session_start.php";
@@ -89,6 +90,20 @@ switch ($modulo) {
         echo json_encode(['success' => true, 'message' => 'Histórico procesado']);
         break;        
 
+    case 'obtener_historico_bd':
+        $vehicle_id = $inputData['vehicle_id'] ?? '';
+        $from_time = $inputData['from_time'] ?? null;
+        $to_time = $inputData['to_time'] ?? null;
+
+        if (!$vehicle_id) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Falta vehicle_id']);
+            break;
+        }
+
+        $controller->obtenerHistorialGPS_bd($vehicle_id, $from_time, $to_time);
+        break;        
+
     case 'obtener_trucks_activos_hoy':
         $trucks = $controller->obtenerTrucksActivosHoy();
         
@@ -98,6 +113,28 @@ switch ($modulo) {
             'count' => count($trucks)
         ]);
         break;                
+
+    case 'obtener_historial_gps':
+        $vehicle_id = $inputData['vehicle_id'] ?? '';
+        
+        if (!$vehicle_id) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Falta vehicle_id']);
+            break;
+        }
+
+        $controller->obtenerHistorialGPS($vehicle_id);
+        break;
+
+    case 'obtener_ultima_posicion':
+        $vehicle_id = $_POST['vehicle_id'] ?? null;
+        if (!$vehicle_id) {
+            echo json_encode(['error' => 'ID requerido']);
+            break;
+        }
+
+        $controller->obtenerUP($vehicle_id);
+        break;
 
     default:
         http_response_code(400);
