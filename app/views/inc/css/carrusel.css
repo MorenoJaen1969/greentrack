@@ -320,3 +320,25 @@
     padding-top: 3px;
     padding-bottom: 3px;
 }
+
+.tit_status{
+    font-size: 1.10em;
+    font-weight: 600;
+    background-color: rgba(24, 57, 6, 1);
+    color: rgb(219, 201, 201);
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.tit_status2{
+    font-size: 1.10em;
+    font-weight: 600;
+    background-color: rgba(59, 29, 3, 1);
+    color: rgb(219, 201, 201);
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}

@@ -796,7 +796,7 @@ $this->log("Paquete: " . print_r($response,true));
 			}
 
 			// Extraer solo los nombres
-			$activos = array_column($result, 'vehicle_id');
+			$activos = array_column($result, 'vehicle_id', );
 			$this->log("Trucks activos hoy: " . implode(', ', $activos));
 			return $activos;
 
@@ -805,6 +805,46 @@ $this->log("Paquete: " . print_r($response,true));
 			return [];
 		}
 	}	
+
+	public function obtenerTrucksActivosHoy_Color() {
+		$this->log("Solicitando lista de trucks activos hoy");
+
+		$sql = "
+			SELECT DISTINCT 
+				t.id_truck, t.nombre AS vehicle_id, t.color
+			FROM truck t
+			INNER JOIN servicios s ON t.id_truck = s.id_truck
+			WHERE 
+				DATE(s.fecha_programada) = CURDATE()
+				AND s.id_status != 39
+				AND t.id_status = 26
+			ORDER BY t.nombre
+		";
+
+		try {
+			$result = $this->ejecutarConsulta($sql, '', [], 'fetchAll');
+			
+			if (!$result || !is_array($result)) {
+				$this->log("INFO: No se encontraron trucks activos hoy");
+				return [];
+			}
+
+			// Extraer solo los nombres
+			$activos = array_map(function($fila){
+				return [
+					'truck' => $fila['vehicle_id'],
+					'color' => $fila['color']
+				];
+			}, $result);
+			$this->log("Trucks activos hoy: " . implode(', ', $activos));
+			return $activos;
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error al obtener trucks activos: " . $e->getMessage(), true);
+			return [];
+		}
+	}	
+
 
 	public function obtenerHistorialGPS($vehicle_id) {
 		//$this->log("Solicitando historial GPS para: $vehicle_id");
@@ -857,7 +897,7 @@ $this->log("Paquete: " . print_r($response,true));
 				'truck' => $vehicle_id,
 				'historial' => [],
 				'error' => 'Internal server error'
-			]);
+			]); 
 		}
 	}	
 
@@ -890,5 +930,25 @@ $this->log("Paquete: " . print_r($response,true));
 			]);
 			exit();
 		}	
+	}
+
+    public function obtener_UH($vehicle_id, $limit){
+        $sql = "SELECT lat, lng, timestamp 
+					FROM gps_tracker 
+					WHERE vehicle_id = :v_vehicle_id 
+					ORDER BY timestamp DESC 
+					LIMIT :v_limit";
+        $param = [
+			':v_vehicle_id' => $vehicle_id,
+			':v_limit' => $limit
+		];
+
+        $historial = $this->ejecutarConsulta($sql, "", [], 'fetchAll');
+
+        // Revertir orden para tener [antiguo, ..., reciente]
+        $historial = array_reverse($historial);
+
+        echo json_encode(['historial' => $historial]);
+        exit();        
 	}
 }

@@ -5,7 +5,7 @@
 // En el futuro: session_start.php + validación de hardware
 ?>
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

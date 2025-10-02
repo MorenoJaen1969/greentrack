@@ -114,7 +114,7 @@ async function iniciarMotorGPS() {
         // Cargar y dibujar historial completo para cada truck
         let var_veces = 1;
         for (const truck of trucks) {
-            console.log('Inicio de Ruta de truck: ', truck, " Vuelta N°:", var_veces);
+            //console.log('Inicio de Ruta de truck: ', truck, " Vuelta N°:", var_veces);
             var_veces++;
             await dibujarRutaCompleta(truck);
         }
@@ -243,9 +243,10 @@ async function dibujarRutaCompleta(truck) {
 
         // SVG original intacto (como lo tenías antes)
         const svgHtml = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="22" viewBox="0 0 122.88 57.75">
-            <path d="M55.2,0.01h-2c-4.58,0-10.98-0.3-14.66,2.81C32.26,7.29,27.4,15.21,22.1,20.38 c-4.3,0.56-14.26,2.03-16.55,4.07C2.9,26.81,2.93,34.4,2.97,37.62c-4.92-0.1-2.93,11.81,0.26,12.49h6.85 c-4.4-26.18,32.92-22.94,27.3,0h38.19c-5.76-21.96,31.01-27.57,27.47-0.21c6.53-0.02,10.06-0.1,16.89,0 c2.71-0.62,2.97-2.13,2.97-5.75l-2.66-0.33l0.08-1.5c0.03-0.89,0.06-1.77,0.09-2.65c0.16-5.81,0.14-11.43-0.19-16.74H59.77V5.58 C59.87,1.86,58.24,0.12,55.2,0.01L55.2,0.01z M89.87,41.17c3.02,0,5.46,2.45,5.46,5.46c0,3.02-2.45,5.46-5.46,5.46 c-3.02,0-5.46-2.45-5.46-5.46C84.41,43.62,86.85,41.17,89.87,41.17L89.87,41.17z" fill="${color}" />
-        </svg>`;
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="22" viewBox="0 0 122.88 57.75">
+                <path d="M55.2,0.01h-2c-4.58,0-10.98-0.3-14.66,2.81C32.26,7.29,27.4,15.21,22.1,20.38 c-4.3,0.56-14.26,2.03-16.55,4.07C2.9,26.81,2.93,34.4,2.97,37.62c-4.92-0.1-2.93,11.81,0.26,12.49h6.85 c-4.4-26.18,32.92-22.94,27.3,0h38.19c-5.76-21.96,31.01-27.57,27.47-0.21c6.53-0.02,10.06-0.1,16.89,0 c2.71-0.62,2.97-2.13,2.97-5.75l-2.66-0.33l0.08-1.5c0.03-0.89,0.06-1.77,0.09-2.65c0.16-5.81,0.14-11.43-0.19-16.74H59.77V5.58 C59.87,1.86,58.24,0.12,55.2,0.01L55.2,0.01z M89.87,41.17c3.02,0,5.46,2.45,5.46,5.46s-2.45,5.46-5.46,5.46 c-3.02,0-5.46-2.45-5.46-5.46S86.85,41.17,89.87,41.17L89.87,41.17z M54.4,4.74h-8.8c-4.54,0-10.59,6.56-14.02,13.01 c-0.35,0.65-3.08,5.18-1.25,5.18H54.4v-0.69V5.44V4.74L54.4,4.74z M23.5,41.17c3.02,0,5.46,2.45,5.46,5.46s-2.45,5.46-5.46,5.46 c-3.02,0-5.46-2.45-5.46-5.46S20.48,41.17,23.5,41.17L23.5,41.17z M23.5,35.52c6.14,0,11.11,4.98,11.11,11.11 S29.64,57.75,23.5,57.75c-6.14,0-11.11-4.98-11.11-11.11S17.36,35.52,23.5,35.52L23.5,35.52z M89.87,35.52 c6.14,0,11.11,4.98,11.11,11.11s-4.98,11.11-11.11,11.11c-6.14,0-11.11-4.98-11.11-11.11S83.73,35.52,89.87,35.52L89.87,35.52z"
+                    fill="${color}" />
+            </svg>`;
 
         let marker;
         if (window.gpsMarkers[truck]) {
@@ -269,6 +270,7 @@ async function dibujarRutaCompleta(truck) {
         // Variables de estado
         let indice = 0;
         let ultimoPunto = null;
+        let inicioDetencion = null; // Momento en que comenzó a estar detenido
         let ultimaDeteccionCliente = false;
         let ultimaDeteccionSede = false;
         let servicioIniciado = false;
@@ -288,8 +290,14 @@ async function dibujarRutaCompleta(truck) {
 
             // === Verificar si está detenido (comparación aproximada) ===
             const estaDetenido = ultimoPunto &&
-                Math.abs(punto.lat - ultimoPunto.lat) < 0.00001 &&
-                Math.abs(punto.lng - ultimoPunto.lng) < 0.00001;
+                calcularDistanciaMetros(punto.lat, punto.lng, ultimoPunto.lat, ultimoPunto.lng) <= 10;
+
+            // Actualizar momento de detención
+            if (estaDetenido && !inicioDetencion) {
+                inicioDetencion = new Date();
+            } else if (!estaDetenido) {
+                inicioDetencion = null;
+            }
 
             // === Obtener servicio asignado ===
             const servicio = window.serviciosData?.find(s => s.truck === truck);
@@ -381,10 +389,15 @@ async function dibujarRutaCompleta(truck) {
 
             // Estado general
             if (!popupMsg.includes('Servicing client') && !popupMsg.includes('Stopped at headquarters')) {
-                if (estaDetenido) {
-                    popupMsg += `<br>⏸️ Detenido en (${punto.lat.toFixed(6)}, ${punto.lng.toFixed(6)})`;
-                } else {
-                    popupMsg += `<br>🚚 In transit`;
+                if (estaDetenido && inicioDetencion) {
+                    const diffSeg = Math.floor((new Date() - inicioDetencion) / 1000);
+                    const mins = Math.floor(diffSeg / 60);
+                    const segs = diffSeg % 60;
+                    popupMsg += `<br>⏸️ Stopped.<br>Time: <b>${mins} min ${segs}s</b> in (${punto.lat.toFixed(6)}, ${punto.lng.toFixed(6)})`;
+                } else if (estaDetenido){
+                    popupMsg += `<br>⏸️ Stopped.<br>Time: in (${punto.lat.toFixed(6)}, ${punto.lng.toFixed(6)})`;
+                } else {    
+                    popupMsg += `<br>🚚 In transit...`;
                 }
             }
 
@@ -439,7 +452,7 @@ async function dibujarRutaCompleta(truck) {
 
         // === INICIAR MONITOREO CONTINUO DE GEOFERENCIA ===
         if (typeof iniciarGeoferenciaContinua === 'function') {
-            console.log(`🟢 Geoferencia continua activada para ${truck}`);
+            //console.log(`🟢 Geoferencia continua activada para ${truck}`);
             iniciarGeoferenciaContinua(truck, marker);
         } else {
             console.warn('🟡 iniciarGeoferenciaContinua no está definida');
@@ -1166,9 +1179,53 @@ function iniciarGeoferenciaContinua(truck, marker) {
     let ultimaDeteccionSede = false;
     let servicioIniciado = false;
 
+    // === NUEVO: Al iniciar, intentar reconstruir estado ===
+    async function inicializarEstado() {
+        try {
+            // Obtener últimos 2 puntos para ver si estaba detenido
+            const res = await fetch('/app/ajax/motor2Ajax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    modulo_motor2: 'obtener_ultimo_historial',
+                    vehicle_id: truck,
+                    limit: 2
+                })
+            });
+
+            if (!res.ok) return;
+
+            const data = await res.json();
+            if (!Array.isArray(data.historial) || data.historial.length < 2) return;
+
+            const [actual, anterior] = data.historial; // Último y penúltimo
+
+            const lat = parseFloat(actual.lat);
+            const lng = parseFloat(actual.lng);
+            const dist = calcularDistanciaMetros(lat, lng, parseFloat(anterior.lat), parseFloat(anterior.lng));
+
+            // Si no se movió → considerar que ya está detenido
+            if (dist <= 10) {
+                console.log(`🟢 ${truck} detectado como DETENIDO al iniciar`);
+                ultimaPosicion = { lat: parseFloat(anterior.lat), lng: parseFloat(anterior.lng) };
+                inicioDetencion = new Date(anterior.timestamp); // Usar timestamp real
+            } else {
+                ultimaPosicion = { lat, lng };
+            }
+        } catch (err) {
+            console.warn(`No se pudo reconstruir estado para ${truck}`, err);
+        }
+    }
+
     // Iniciar monitoreo periódico
     setInterval(async () => {
         try {
+            // Primera ejecución: inicializar estado
+            if (!ultimaPosicion) {
+                await inicializarEstado();
+                return; // Saltar resto, se reinicia en próximo ciclo
+            }            
+
             // === Obtener última posición real del vehículo ===
             const formData = new FormData();
             formData.append('modulo_motor2', 'obtener_ultima_posicion');
@@ -1217,8 +1274,7 @@ function iniciarGeoferenciaContinua(truck, marker) {
 
             // === Verificar si está detenido ===
             const detenidoPorPosicion = ultimaPosicion &&
-                Math.abs(lat - ultimaPosicion.lat) < 0.00001 &&
-                Math.abs(lng - ultimaPosicion.lng) < 0.00001;
+                calcularDistanciaMetros(lat, lng, ultimaPosicion.lat, ultimaPosicion.lng) <= 10;
 
             // Actualizar momento de detención
             if (detenidoPorPosicion && !inicioDetencion) {
@@ -1265,6 +1321,7 @@ function iniciarGeoferenciaContinua(truck, marker) {
 
             // Construir mensaje del popup
             let popupMsg = `<b>${truck}</b><br>`;
+
             popupMsg += `<div style="margin-top:6px; font-size:0.85em;"><b>Crew:</b></div><div style="margin-top:2px;">${crewHtml}</div>`;
 
             // === 1. DETECCIÓN DE CLIENTE (Inicio de servicio) ===
@@ -1368,13 +1425,22 @@ function iniciarGeoferenciaContinua(truck, marker) {
             }
 
             // === 5. ESTADO GENERAL EN POPUP (solo si no tiene estado específico) ===
-            if (!popupMsg.includes('Servicing client') && !popupMsg.includes('Stopped at headquarters')) {
-                if (detenidoPorPosicion) {
-                    const min = tiempoDetenidoMin.toFixed(1);
-                    popupMsg += `<br>⏸️ Detenido (${min} min) en (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
-                } else {
-                    popupMsg += `<br>🚚 In transit`;
-                }
+            // if (!popupMsg.includes('Servicing client') && !popupMsg.includes('Stopped at headquarters')) {
+            //     if (detenidoPorPosicion) {
+            //         const min = tiempoDetenidoMin.toFixed(1);
+            //         popupMsg += `<br>⏸️ Detenido (${min} min) en (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+            //     } else {
+            //         popupMsg += `<br>🚚 In transit`;
+            //     }
+            // }
+
+            if (detenidoPorPosicion && inicioDetencion) {
+                const diffSeg = Math.floor((new Date() - inicioDetencion) / 1000);
+                const mins = Math.floor(diffSeg / 60);
+                const segs = diffSeg % 60;
+                popupMsg += `Stopped.<br>Time: <b>${mins} min ${segs}s</b>`;
+            } else {
+                popupMsg += "In transit...";
             }
 
             // Actualizar popup del marcador

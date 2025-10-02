@@ -1,0 +1,231 @@
+/* mobile.css - Dashboard Ejecutivo Móvil */
+/* Optimizado para iPhone 11+ • Sin duplicados • Alto rendimiento */
+
+/* === Reset básico === */
+body,
+html {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* === Encabezado compacto === */
+.header {
+    background: #2196F3;
+    color: white;
+    text-align: center;
+    padding: 8px 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header h2 {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 500;
+}
+
+.header p {
+    margin: 2px 0 0 0;
+    font-size: 0.85em;
+    opacity: 0.9;
+}
+
+/* === Layout principal: columna única en móvil === */
+.container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 60px);
+}
+
+/* === Lista de camionetas (izquierda) === */
+#lista-camionetas {
+    width: 100%;
+    max-height: 50vh;
+    overflow-y: auto;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    padding: 8px 0;
+}
+
+/* Scroll suave y discreto */
+#lista-camionetas::-webkit-scrollbar {
+    width: 4px;
+}
+
+#lista-camionetas::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#lista-camionetas::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 2px;
+}
+
+/* === Item de camioneta === */
+.camioneta-item {
+    padding: 10px 12px;
+    margin: 4px 0;
+    background: #f1f1f1;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    font-weight: bold;
+    font-size: 0.95em;
+    transition: all 0.2s ease;
+}
+
+.camioneta-item.selected {
+    background: #2196F3;
+    color: white;
+}
+
+.dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    margin-right: 12px;
+}
+
+/* === Panel derecho: estado detallado === */
+#estado-detallado {
+    flex: 1;
+    overflow-y: auto;
+    background: #fafafa;
+    padding: 15px;
+}
+
+/* === Estado actual del camión === */
+.status-box {
+    background: #333;
+    color: white;
+    padding: 12px;
+    border-radius: 8px;
+    margin: 12px 0;
+    font-size: 0.95em;
+}
+
+/* === Crew asignado === */
+.crew-item {
+    display: block;
+    background: #444;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin: 4px 0;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* === Servicios como botones táctiles grandes === */
+.servicio-boton {
+    position: relative;
+    border-left: 4px solid #2196F3;
+    margin: 10px 0;
+    padding: 14px;
+    background: #f9f9f9;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.servicio-boton:hover,
+.servicio-boton:active {
+    background: #e3f2fd;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.servicio-boton h4 {
+    margin: 0 0 6px 0;
+    font-size: 1em;
+    color: #1565C0;
+}
+
+.servicio-boton small {
+    color: #555;
+    font-size: 0.85em;
+}
+
+.servicio-boton::after {
+    content: '⚙️';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.2em;
+    opacity: 0.7;
+}
+
+.header-container {
+    background: #0066FF;   /* Azul corporativo */
+    color: white;
+    padding: 8px 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.header-left {
+    flex: 1;
+    text-align: left;
+}
+
+.header-center {
+    flex: 1;
+    text-align: center;
+}
+
+.logo {
+    height: 40px;            /* Ajusta según necesidad */
+    width: auto;
+    max-width: 100%;
+    border-radius: 4px;
+}
+/* === BARRA DE ESTADO: Active Fleet + Calendario === */
+.fleet-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background: #f0f2f5;
+    font-weight: bold;
+    color: #333;
+    font-size: 0.95em;
+    border-bottom: 1px solid #ddd;
+}
+
+#btn-calendar {
+    background: transparent;
+    border: none;
+    font-size: 1.4em;
+    cursor: pointer;
+    color: #0066FF;
+    padding: 0 4px;
+    margin-left: 10px;       /* Espacio entre texto y botón */
+}
+
+#btn-calendar:hover {
+    transform: scale(1.1);
+}
+
+/* === Diseño responsivo final === */
+@media (min-width: 1024px) {
+    .container {
+        flex-direction: row;
+    }
+
+    #lista-camionetas,
+    #estado-detallado {
+        width: 50%;
+        max-height: none;
+        height: auto;
+    }
+}

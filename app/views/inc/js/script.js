@@ -525,43 +525,46 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.addEventListener('servicioIniciado', function(e) {
         const { id_servicio, hora } = e.detail;
-        sincronizarEstadoGPS(id_servicio, 'inicio', hora);
-    });
 
-    window.addEventListener('servicioCerrado', function(e) {
-        const { id_servicio, hora } = e.detail;
-        sincronizarEstadoGPS(id_servicio, 'fin', hora);
-    });
-    // === Escuchar eventos de geofencing desde motor2.js ===
-    window.addEventListener('servicioIniciado', function(e) {
-        const { id_servicio, hora } = e.detail;
-        // Actualizar datos globales
+        // 1. Sincronizar con el backend
+        sincronizarEstadoGPS(id_servicio, 'inicio', hora);
+
+        // 2. Actualizar estado local
         const servicio = carrusel.datos.find(s => s.id_servicio == id_servicio);
         if (servicio) {
             servicio.hora_aviso_usuario = hora;
             servicio.estado_servicio = 'inicio_actividades';
             servicio.finalizado = false;
+
             actualizarTarjeta(servicio);
             actualizarCeldaActividad(servicio);
             actualizarCeldaActividadGps(servicio);
+
             console.log(`🟢 Servicio iniciado por geofencing: ${id_servicio}`);
         }
     });
 
     window.addEventListener('servicioCerrado', function(e) {
         const { id_servicio, hora } = e.detail;
-        // Actualizar datos globales
+
+        // 1. Sincronizar con el backend
+        sincronizarEstadoGPS(id_servicio, 'fin', hora);
+
+        // 2. Actualizar estado local
         const servicio = carrusel.datos.find(s => s.id_servicio == id_servicio);
         if (servicio) {
             servicio.hora_finalizado = hora;
             servicio.estado_servicio = 'finalizado';
             servicio.finalizado = true;
+
             actualizarTarjeta(servicio);
             actualizarCeldaActividad(servicio);
             actualizarCeldaActividadGps(servicio);
+
             console.log(`🔴 Servicio cerrado por geofencing: ${id_servicio}`);
         }
     });
+
     console.log("🟢 GreenTrack Live: Iniciando dashboard");
     let servicioTemporal = null;
 
@@ -774,9 +777,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <!-- 2,2: GPS -->
                     <div class="cell gps-cell" data-id="${servicio.id_servicio}">
                         <div class="tit_d_grid">Activity GPS</div>
-                        <span class="hora">${servicio.hora_inicio_gps ? new Date(servicio.hora_inicio_gps).toLocaleTimeString() : '—'}</span>
-                        <br>
-                        <span class="diff"></span>
+                        <div class="hora" style="line-height: 1.2;">
+                            <span class="time-start">${servicio.hora_inicio_gps ? new Date(servicio.hora_inicio_gps).toLocaleTimeString() : '—'}</span>
+                            <br>
+                            <span class="diff"></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1041,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         });
                     }
 
-                    // === Crear marcador (tu lógica actual) ===
+                    // === Crear marcador ===
                     const marker = L.marker([s.lat, s.lng], {
                         icon: L.divIcon({
                             html: `<div style="background:${s.crew_color_principal};width:16px;height:16px;border-radius:50%;border:2px solid black;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`,
@@ -1063,14 +1068,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                     });
 
+                    // === Generar HTML del crew ===
+                    const crewHtml = Array.isArray(s.crew_integrantes) && s.crew_integrantes.length > 0
+                        ? s.crew_integrantes
+                            .map(member => {
+                                const rolIcono = member.responsabilidad === 'D'
+                                    ? '<span title="Driver" style="color:#FFD700;">🚚</span>'
+                                    : '<span title="Operator" style="color:#87CEEB;">🛠️</span>';
+                                return `<span style="
+                                    display: inline-block;
+                                    background: #333;
+                                    color: white;
+                                    padding: 2px 6px;
+                                    border-radius: 4px;
+                                    font-size: 0.8em;
+                                    margin: 2px 4px 2px 0;
+                                    line-height: 1.2;
+                                ">${rolIcono} ${member.nombre_completo}</span>`;
+                            })
+                            .join('')
+                        : '<span style="color:#aaa; font-style:italic; font-size:0.8em;">No crew assigned</span>';
+
                     marker.addTo(window.map);
                     marker.bindPopup(`
                         <b>${s.cliente}</b><br>
                         ${s.direccion || 'No address'}<br>
-                        <div class="tit_d_grid"><b>Crew:</b> ${s.truck || 'N/A'}</div>
+                        <div class="tit_status"><b>Status M1:</b> ${s.s_status}</div><br>
+                        <div class="tit_status2"><b>Status M2:</b> ${s.status_m2}</div><br>
+                        <div class="tit_d_grid"><b>Crew:</b>
+                        <div style="margin-top:4px;">${crewHtml}</div></div>
                     `);
                 }
-            });            
+            });
             
             // ✅ Disparar evento para GPS
             const event = new Event('serviciosCargados');
@@ -1093,6 +1122,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 btn.style.cursor = 'pointer';
                 btn.style.fontWeight = 'bold';
                 btn.style.minWidth = '60px';
+                btn.style.width = '31%';
                 btn.style.textAlign = 'center';
 
                 // Opcional: tooltip
@@ -2194,6 +2224,7 @@ console.log("Cerrando modal");
             btn.style.fontWeight = 'bold';
             btn.style.cursor = 'pointer';
             btn.style.minWidth = '60px';
+            btn.style.width = '31%';
             btn.style.textAlign = 'center';
             btn.title = `Show ${v.id} on map`;
             btn.onclick = (e) => {
@@ -2218,6 +2249,35 @@ console.log("Cerrando modal");
     window.addEventListener('serviciosActualizados', () => {
         const vehicles = obtenerVehiclesUnicos();
         actualizarPanelFlotante(vehicles);
+    });
+
+    // Escuchar clic en botón de reconciliación
+    document.getElementById('btn-reconciliar-historico')?.addEventListener('click', async () => {
+        const confirmado = await suiteConfirm(
+            "Reconciliar Datos",
+            "¿Ejecutar reconciliación histórica para los últimos 7 días?\n\nSe procesarán servicios sin hora GPS."
+        );
+        
+        if (!confirmado) return;
+        try {
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ modulo_servicios: 'reconciliar_datos_historicos' })
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                await suiteAlertSuccess("Éxito", data.message);
+                console.log("📊 Detalles:", data.detalles);
+            } else {
+                await suiteAlertError("Error", data.error || "No se pudo completar");
+            }
+        } catch (err) {
+            await suiteAlertError("Error", "Fallo de conexión en btn-reconciliar-historico: " + err.message);
+            console.error(err);
+        }
     });
 
     // === 5. Si usas polling o eventos personalizados, dispara este evento cuando haya datos ===
@@ -2250,6 +2310,7 @@ function actualizarPanelFlotante(vehicles) {
         btn.style.fontWeight = 'bold';
         btn.style.cursor = 'pointer';
         btn.style.minWidth = '60px';
+        btn.style.width = '31%';
         btn.style.textAlign = 'center';
 
         // 🔥 Asignar evento onClick
@@ -2258,7 +2319,7 @@ function actualizarPanelFlotante(vehicles) {
             abrirPopupVehiculo(v.id);
         };
 
-        // Opcional: tooltip
+        // Opcional: tooltip%
         btn.title = `Show ${v.id} on map`;
 
         contenedor.appendChild(btn);

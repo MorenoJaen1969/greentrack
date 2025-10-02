@@ -96,6 +96,7 @@
                        padding: 6px 12px; cursor: pointer; font-size: 0.95em;">
             View
         </button>
+        <!-- <button id="btn-reconciliar-historico">🔄 Reconcile Historical Data</button>         -->
     </div>
 
     <!-- Línea divisoria con margen -->
@@ -104,7 +105,7 @@
     </div>
 
     <!-- Contenedor de botones de vehículos -->
-    <div id="contenedor-vehiculos-historico" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;">
+    <div id="contenedor-vehiculos-historico" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; width: 100%;">
         <!-- Los botones se insertarán aquí dinámicamente desde JS -->
         <!-- Ejemplo: -->
         <!-- <button class="btn-vehiculo-hist" style="background:#FF0000;">TRUCK 15</button> -->

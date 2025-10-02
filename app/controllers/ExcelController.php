@@ -159,10 +159,11 @@ class ExcelController extends mainModel{
 							// Agrega aquí cualquier otro campo que necesites para el PDF
 							'notas' => $s['Notes'] ?? '',
 							'tipo_servicio' => $s['Service_Type'] ?? '',
-							// Puedes agregar más campos según tus necesidades
 						];						
 					} else {
 						$errores[] = $resultado['error'];
+						$this->logWithBacktrace("Error fila $index: " . print_r($errores,true), true);
+						$this->logWithBacktrace("Registro con problema:" . print_r($s,true), true);
 					}
 				} catch (Exception $e) {
 					$errores[] = "Fila $index: " . $e->getMessage();
@@ -221,6 +222,9 @@ class ExcelController extends mainModel{
 		if (count($nombres_crew) < 1 || count($nombres_crew) > 4) {
 			return ['success' => false, 'error' => "Fila $index: Crew debe tener entre 1 y 4 integrantes"];
 		}
+		if ($s['truck'] == 10){
+			$this->log("Arreglo de Crew actual: " . json_encode($nombres_crew));
+		}
 
 		// Buscar cada integrante en la tabla `crew` por `nombre_completo`
 		$ids_crew = [];
@@ -231,10 +235,13 @@ class ExcelController extends mainModel{
 
 		for ($i = 0; $i < count($nombres_crew); $i++) {
 			$nombre = $nombres_crew[$i];
-			$query = "SELECT id_crew, color FROM crew WHERE nombre_completo = :nombre AND id_status = 32";
+			$query = "SELECT id_crew, color 
+				FROM crew 
+				WHERE nombre_completo = :nombre 
+					AND id_status = 32";
+			
 			$params = [':nombre' => $nombre];
 			$result = $this->ejecutarConsulta($query, '', $params);
-
 			if (!$result) {
 				http_response_code(404);
 				echo json_encode(['error' => 'Servicio no encontrado']);
@@ -325,7 +332,13 @@ class ExcelController extends mainModel{
 			4 => '#00BCD4',
 			5 => '#9C27B0',
 			6 => '#4CAF50',
+			7 => '#CDDC39',
+			8 => '#FF5722',
+			9 => '#abf52c',
+			10 => '#8BC34A',
 			11 => '#FFC107',
+			12 => '#6b2e02',
+			13 => '#9730db',
 			15 => '#3F51B5'
 		];
 		return $colores[$id_truck] ?? '#666666';

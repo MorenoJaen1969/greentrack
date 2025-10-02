@@ -486,6 +486,8 @@ class mainModel
     /*----------  Funcion para ejecutar una consulta INSERT preparada  ----------*/
     protected function guardarDatos($tabla, $datos)
     {
+        $this->log("=== INICIO DE INGRESO DE DATOS ===");
+
         $query = "INSERT INTO $tabla (";
 
         $C = 0;
@@ -497,7 +499,7 @@ class mainModel
             $C++;
         }
 
-        $query .= ") VALUES(";
+        $query .= ") VALUES (";
 
         $C = 0;
         foreach ($datos as $clave) {
@@ -509,6 +511,8 @@ class mainModel
         }
 
         $query .= ")";
+
+        $this->log("Proceso de armado de consulta: " . $query);
 
         if ($tabla == "administrators" || $tabla == "clients" || $tabla == "dbs" || $tabla == "recetas" || $tabla == "recetas_partidas") {
             $sql = $this->conectar("principal");
@@ -527,6 +531,8 @@ class mainModel
 
         $consulta->closeCursor();
         $consulta = null;
+
+        $this->log("Registro incorporado a la tabla " . $tabla . " Ultimo ID: " . $id_resulta);
 
         return $id_resulta;
     }
@@ -581,26 +587,33 @@ class mainModel
             $query .= " WHERE ";
 
             // === CONSTRUCCIÓN DE MÚLTIPLES CONDICIONES ===
-            $where_parts = [];
-            foreach ($condicion as $cond) {
-                $where_parts[] = $cond['condicion_campo'] . " = " . $cond['condicion_marcador'];
-            }
-            $query .= implode(" AND ", $where_parts);
-                        
+error_log("Arreglo de condicion " . json_encode($condicion));            
+//            $where_parts = [];
+//            foreach ($condicion as $cond) {
+//                $where_parts[] = $cond['campo_nombre'] . " = " . $cond['condicion_marcador'];
+//            }
+//            $query .= implode(" AND ", $where_parts);
+
+            $query .= $condicion['campo_nombre'] . " = " . $condicion['campo_marcador'];
+
             // 3. Ejecutar con DEBUG profundo
             $stmt = $conn->prepare($query);
             
             // Vincular parámetros 
             foreach ($datos_final as $clave) {
-                $stmt->bindValue($clave['campo_marcador'], $clave['campo_valor']);
-                $this->log("Vinculado: " . $clave['campo_marcador'] . " = " . $clave['campo_valor']);
+                $stmt->bindValue($clave['campo_nombre'], $clave['campo_valor']);
+                $this->log("Vinculado: " . $clave['campo_nombre'] . " = " . $clave['campo_valor']);
             }
 
             // Vincular cada condición
-            foreach ($condicion as $cond) {
-                $stmt->bindValue($cond['condicion_marcador'], $cond['condicion_valor']);
-                $this->log("Vinculado WHERE: " . $cond['condicion_marcador'] . " = " . $cond['condicion_valor']);
-            }
+//            foreach ($condicion as $cond) {
+//                $stmt->bindValue($cond['campo_nombre'], $cond['campo_valor']);
+//                $this->log("Vinculado WHERE: " . $cond['campo_nombre'] . " = " . $cond['campo_valor']);
+//            }
+
+            $stmt->bindValue($condicion['campo_nombre'], $condicion['campo_valor']);
+            $this->log("Vinculado WHERE: " . $condicion['campo_nombre'] . " = " . $condicion['campo_valor']);
+
 
             $this->log("Consulta final: $query");
             
@@ -628,8 +641,8 @@ class mainModel
                 $conn->rollBack();
             }
             $this->logWithBacktrace("ERROR: " . $e->getMessage(), true);
-            $mensaje = $this->generarHtmlError(1, $e, $query, $datos, $condicion);
-            return $mensaje;
+//$mensaje = $this->generarHtmlError(1, $e, $query, $datos, $condicion);
+            return 0;
         }
     }
 
@@ -693,10 +706,18 @@ $this->log("Palabras: ", json_encode($palabras));
 
     private function verificarRegistroExistente($conn, $tabla, $condicion)
     {
-        $query = "SELECT * FROM $tabla WHERE " . $condicion['condicion_campo'] . " = ? LIMIT 1";
-        $stmt = $conn->prepare($query);
-        $stmt->execute([$condicion['condicion_valor']]);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        error_log("Consulta de la condicion: " . json_encode($condicion));
+        $cond = $condicion['campo_nombre'] . " = " . $condicion['campo_marcador'];
+        $query = "SELECT * FROM $tabla WHERE " . $cond . " LIMIT 1";
+
+        error_log("Consulta armada: " . $query);
+
+        $params = [
+            $condicion['campo_marcador'] => $condicion['campo_valor']
+        ];
+		$result = $this->ejecutarConsulta($query, '', $params);
+
+        return $result;
     }
 
     private function verificarConstraints($conn, $tabla)

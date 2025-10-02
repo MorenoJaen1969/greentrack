@@ -1,8 +1,10 @@
 <?php
 namespace app\controllers;
 require_once APP_R_PROY . 'app/models/mainModel.php';
+require_once APP_R_PROY . 'app/models/datosGenerales.php';
 
 use app\models\mainModel;
+use app\models\datosGenerales;
 
 use \Exception;
 class serviciosController extends mainModel
@@ -11,6 +13,10 @@ class serviciosController extends mainModel
 	private $logFile;
 	private $errorLogFile;
 
+	private $mapa_base;
+	private $umbral_metros;
+	private $umbral_minutos;
+
 	private $id_status_cancelado;
 	private $id_status_activo;
 	private $id_status_historico;
@@ -18,6 +24,8 @@ class serviciosController extends mainModel
 	private $id_status_replanificado;
 
 	private $o_f;
+
+	private $DGcontroller;
 
 	public function __construct()
 	{
@@ -52,6 +60,13 @@ class serviciosController extends mainModel
 		$this->id_status_historico = 39;
 		$this->id_status_activo = 37;
 		$this->id_status_replanificado = 40;
+
+		$this->DGcontroller = new datosGenerales();
+		$arre_DG = $this->DGcontroller->datos_para_gps();
+
+		$this->mapa_base = $arre_DG['config']['mapa_base'] ?? 'OSM';
+		$this->umbral_metros = (int) ($arre_DG['config']['umbral_metros'] ?? 150);
+		$this->umbral_minutos = (int) ($arre_DG['config']['umbral_minutos'] ?? 5);
 
 		// if (isset($_COOKIE['clang'])) {
 		// 	$this->idioma_act = $_COOKIE['clang'];
@@ -292,14 +307,40 @@ class serviciosController extends mainModel
 						d.geofence_id, 
 						d.lat, 
 						d.lng, 
-						t.nombre as truck
+						t.nombre as truck,
+						CASE 
+							WHEN s.id_status = 37 AND s.hora_aviso_usuario IS NOT NULL THEN 'Service started'
+							WHEN s.id_status = 38 
+								AND s.hora_aviso_usuario IS NOT NULL 
+								AND s.hora_finalizado IS NOT NULL THEN 
+								CONCAT('Processed (', 
+									TIME_FORMAT(TIMEDIFF(s.hora_finalizado, s.hora_aviso_usuario), '%H:%i:%s'),
+									')'
+								)
+							WHEN s.id_status = 38 
+								AND s.hora_aviso_usuario IS NULL 
+								AND s.hora_finalizado IS NOT NULL THEN 'Not started, finished'
+							WHEN s.id_status = 40 THEN 'Rescheduled'
+							WHEN s.id_status = 47 THEN 'Cancelled'
+							ELSE 'Pendiente'
+						END AS s_status,
+						CASE
+						    WHEN s.hora_inicio_gps IS NOT NULL AND s.hora_fin_gps IS NOT NULL THEN 
+						        CONCAT('Service Performed (', TIME_FORMAT(TIMEDIFF(s.hora_fin_gps, s.hora_inicio_gps), '%H:%i:%s'), ')')
+						    WHEN s.hora_inicio_gps IS NOT NULL AND s.hora_fin_gps IS NULL THEN 
+						        CONCAT('Started (', TIMESTAMPDIFF(MINUTE, s.hora_inicio_gps, NOW()), ' min ago)')
+						    WHEN s.hora_inicio_gps IS NULL AND s.hora_fin_gps IS NOT NULL THEN 
+						        'Finished'
+						    WHEN s.hora_inicio_gps IS NULL AND s.hora_fin_gps IS NULL THEN 
+						        'Not yet attended'
+						END AS status_m2
 					FROM servicios AS s
 					LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
 					LEFT JOIN direcciones AS d ON c.id_cliente = d.id_cliente
 					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
 					WHERE s.id_status != $this->id_status_historico";
 
-// quite esta linea por que contratos esta vacio:
+			// quite esta linea por que contratos esta vacio:
 // ct.day_work AS dia_servicio_ct 
 // 					LEFT JOIN contratos AS ct ON s.id_cliente = ct.id_cliente
 
@@ -368,6 +409,8 @@ class serviciosController extends mainModel
 					'tipo_dia' => $s['tipo_dia'],
 					'hora_aviso_usuario' => $s['hora_aviso_usuario'],
 					'hora_finalizado' => $s['hora_finalizado'],
+					's_status' => $s['s_status'],
+					'status_m2' => $s['status_m2'],
 					'evidencias' => []
 				];
 
@@ -459,7 +502,7 @@ class serviciosController extends mainModel
 
 			$servicios = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
 			$this->log("Resultado de la consulta Historicos Indivudual: " . print_r($servicios, true));
-			
+
 			$resultado = [];
 			foreach ($servicios as $s) {
 				// === Obtener integrantes del crew ===
@@ -578,7 +621,7 @@ class serviciosController extends mainModel
 					WHERE DATE(s.fecha_programada) = :v_fecha_programada AND s.id_status != $this->id_status_historico
 					ORDER BY c.nombre ASC";
 
-// quite esta linea por que contratos esta vacio:
+			// quite esta linea por que contratos esta vacio:
 // ct.day_work AS dia_servicio_ct 
 // 					LEFT JOIN contratos AS ct ON s.id_cliente = ct.id_cliente
 
@@ -920,7 +963,7 @@ class serviciosController extends mainModel
 		return $result ? $result['id_cliente'] : false;
 	}
 
-	private function validarTruck($truck)
+	private function validarTruck($truck): mixed
 	{
 		$query = "SELECT id_truck FROM truck WHERE nombre = :nombre AND id_status = 26";
 		$params = [':nombre' => $truck];
@@ -1048,7 +1091,8 @@ class serviciosController extends mainModel
 		}
 	}
 
-	private function obtenerNotasHist($id_servicio){
+	private function obtenerNotasHist($id_servicio)
+	{
 		try {
 			$query = "SELECT 
 						h.valor_nuevo
@@ -1197,7 +1241,7 @@ class serviciosController extends mainModel
 		$this->log("Latitud normalizada: " . $latitud_cliente);
 		$this->log("Longitud normalizada: " . $longitud_cliente);
 
-		$this->log("Procesando cliente desde Motor1: " . print_r($datos, true))	;
+		$this->log("Procesando cliente desde Motor1: " . print_r($datos, true));
 
 		if (empty($id_cliente) || empty($nombre_cliente)) {
 			http_response_code(400);
@@ -1275,7 +1319,7 @@ class serviciosController extends mainModel
 						'message' => 'Cliente y Direccion creados'
 					];
 				} else {
-					$this->logWithBacktrace("Error crítico en Nuevo Clientes: " . print_r($id_cliente_new,true), true);
+					$this->logWithBacktrace("Error crítico en Nuevo Clientes: " . print_r($id_cliente_new, true), true);
 					return ['error' => 'No se pudo crear al Cliente'];
 				}
 			}
@@ -1285,7 +1329,8 @@ class serviciosController extends mainModel
 		}
 	}
 
-	function normalizarCoordenada($coord_str, $nombre_campo = "Coordenada") {
+	function normalizarCoordenada($coord_str, $nombre_campo = "Coordenada")
+	{
 		// 1. Trim: Eliminar espacios iniciales/finales
 		$coord_str = trim($coord_str);
 
@@ -1308,7 +1353,7 @@ class serviciosController extends mainModel
 		}
 
 		// 5. Convertir a float
-		$coord_float = (float)$coord_normalizada_str;
+		$coord_float = (float) $coord_normalizada_str;
 
 		// 6. (Opcional) Validaciones de rango básicas
 		// Latitud válida: -90 a 90
@@ -1521,6 +1566,7 @@ class serviciosController extends mainModel
 			echo json_encode(['error' => 'Error crítico al actualizar GPS']);
 		}
 	}
+
 	/**
 	 * Actualiza solo la hora de inicio GPS para un servicio
 	 * Espera: id_servicio, hora_inicio_gps
@@ -1578,24 +1624,24 @@ class serviciosController extends mainModel
 
 		$parems = [
 			':v_fecha_ctrl' => $fecha_ctrl
-		];				
+		];
 
 		try {
 			$resultado = $this->ejecutarConsulta($query, '', $parems, 'fetchAll');
-			$trucks = array_map(function($row) {
+			$trucks = array_map(function ($row) {
 				return [
 					'vehicle_id' => $row['vehicle_id'],
-					'color'      => $row['color'] // Asegúrate de que este campo no sea null
+					'color' => $row['color'] // Asegúrate de que este campo no sea null
 				];
 			}, $resultado);
 
-        	echo json_encode(['trucks' => $trucks]);
+			echo json_encode(['trucks' => $trucks]);
 
 			//return $trucks;
 
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error crítico en obtenerVehiclesPorFecha: " . $e->getMessage(), true);
-	        echo json_encode(['trucks' => []]);
+			echo json_encode(['trucks' => []]);
 		}
 	}
 
@@ -1656,32 +1702,32 @@ class serviciosController extends mainModel
 			echo json_encode(['error' => 'ID de servicio inválido']);
 			return;
 		}
-		
-        $sql = "SELECT hora_inicio_gps, hora_fin_gps, tiempo_servicio 
+
+		$sql = "SELECT hora_inicio_gps, hora_fin_gps, tiempo_servicio 
 			FROM servicios 
 			WHERE id_servicio = :v_id_servicio";
-        $param = [
+		$param = [
 			':v_id_servicio' => $id_servicio
 		];
-        
+
 		$resultado = $this->ejecutarConsulta($sql, '', $param);
-		$this->log("Procesando el Servicio: " . print_r($resultado, true))	;
+		$this->log("Procesando el Servicio: " . print_r($resultado, true));
 
 		$message = '';
-        $sql = '';
-        $param = [];
+		$sql = '';
+		$param = [];
 
 		if ($hora_inicio_gps && !$hora_fin_gps && !$tiempo_servicio) {
 			// Verificar si ya fue iniciado
-            if (!empty($resultado['hora_inicio_gps'])) {
-                http_response_code(204); // Conflict
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'El servicio ya fue iniciado anteriormente',
-                    'hora_inicio_existente' => $resultado['hora_inicio_gps']
-                ]);
-                return;
-            }
+			if (!empty($resultado['hora_inicio_gps'])) {
+				http_response_code(204); // Conflict
+				echo json_encode([
+					'success' => false,
+					'error' => 'El servicio ya fue iniciado anteriormente',
+					'hora_inicio_existente' => $resultado['hora_inicio_gps']
+				]);
+				return;
+			}
 
 			$sql = "UPDATE servicios 
 				SET hora_inicio_gps = :v_hora_inicio_gps
@@ -1694,16 +1740,16 @@ class serviciosController extends mainModel
 			$message = 'Servicio iniciado';
 		} elseif (!$hora_inicio_gps && $hora_fin_gps && $tiempo_servicio) {
 
-            // Verificar si ya fue cerrado
-            if (!empty($resultado['hora_fin_gps'])) {
-                http_response_code(204); // Conflict
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'El servicio ya fue cerrado anteriormente',
-                    'hora_fin_existente' => $resultado['hora_fin_gps']
-                ]);
-                return;
-            }
+			// Verificar si ya fue cerrado
+			if (!empty($resultado['hora_fin_gps'])) {
+				http_response_code(204); // Conflict
+				echo json_encode([
+					'success' => false,
+					'error' => 'El servicio ya fue cerrado anteriormente',
+					'hora_fin_existente' => $resultado['hora_fin_gps']
+				]);
+				return;
+			}
 
 			$sql = "UPDATE servicios 
 				SET hora_fin_gps = :v_hora_fin_gps, tiempo_servicio = :v_tiempo_servicio
@@ -1727,5 +1773,594 @@ class serviciosController extends mainModel
 			echo json_encode(['error' => 'No se pudo actualizar el servicio']);
 		}
 	}
+
+	public function reconciliarDatosHistoricos()
+	{
+		try {
+			// === 1. Obtener servicios sin hora_inicio_gps (últimos 7 días) ===
+			$sql_servicios = "
+				SELECT 
+					s.id_servicio,
+					s.id_cliente,
+					s.id_truck,
+					s.fecha_programada,
+					d.lat AS lat_cliente,
+					d.lng AS lng_cliente,
+					t.nombre AS vehicle_id
+				FROM servicios s
+				JOIN direcciones d ON s.id_cliente = d.id_cliente
+				JOIN truck t ON s.id_truck = t.id_truck
+				WHERE s.id_status != 39
+					AND s.fecha_programada >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
+					AND s.hora_inicio_gps IS NULL
+					AND d.lat != 0
+					AND d.lng != 0
+				ORDER BY s.fecha_programada, t.nombre
+			";
+
+			$servicios = $this->ejecutarConsulta($sql_servicios, '', [], 'fetchAll');
+			$this->log("Servicios a procesar para reconciliación: " . print_r($servicios, true));
+
+			$procesados = 0;
+			$actualizados = 0;
+
+			foreach ($servicios as $servicio) {
+				$procesados++;
+				$vehicle_id = $servicio['vehicle_id'];
+				$fecha = $servicio['fecha_programada'];
+
+				// === 2. Obtener puntos GPS NO procesados ===
+				$sql_puntos = "
+					SELECT lat, lng, timestamp 
+						FROM gps_tracker 
+						WHERE vehicle_id = :v_vehicle_id 
+							AND DATE(timestamp) = :v_fecha
+							AND (procesado IS NULL OR procesado = 0)
+						ORDER BY timestamp ASC
+				";
+				$param = [
+					':v_vehicle_id' => $vehicle_id,
+					':v_fecha' => $fecha
+				];
+				$puntos = $this->ejecutarConsulta($sql_puntos, '', $param, 'fetchAll');
+
+				if (empty($puntos))
+					continue;
+
+				// === 3. Detectar inicio por geofencing ===
+				$inicio = $this->detectarInicioConGeofencing(
+					$puntos,
+					$servicio['lat_cliente'],
+					$servicio['lng_cliente']
+				);
+
+				if ($inicio) {
+					// Actualizar servicio
+					$exito = $this->actualizarInicioServicioBD(
+						$servicio['id_servicio'],
+						$inicio['timestamp'],
+						$inicio['lat'],
+						$inicio['lng']
+					);
+
+					if ($exito) {
+						// Marcar puntos usados como procesados
+						$this->marcarPuntosComoProcesados($inicio['puntos_usados']);
+						$actualizados++;
+					}
+				}
+			}
+			// === 4. Ahora detectar paradas operativas con puntos RESTANTES ===
+			$this->detectarParadasOperativasPostReconciliation();
+
+			return [
+				'success' => true,
+				'message' => "✅ Reconciliación completa.\n$actualizados servicios actualizados de $procesados procesados.",
+				'detalles' => compact('procesados', 'actualizados')
+			];
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en reconciliación: " . $e->getMessage());
+			return [
+				'success' => false,
+				'error' => 'Error interno al procesar la reconciliación.'
+			];
+		}
+	}
+
+	private function detectarParadasOperativasPostReconciliation()
+	{
+		$sql_vehiculos = "SELECT DISTINCT nombre 
+								FROM truck
+								ORDER BY nombre";
+		$vehiculos = $this->ejecutarConsulta($sql_vehiculos, '', [], 'fetchAll');
+
+		foreach ($vehiculos as $v) {
+			$vehicle_id = $v['nombre'];
+			$sql = "
+				SELECT lat, lng, timestamp 
+					FROM gps_tracker 
+					WHERE vehicle_id = :v_vehicle_id 
+						AND (procesado IS NULL OR procesado = 0)
+					ORDER BY timestamp ASC
+			";
+
+			$param = [
+				':v_vehicle_id' => $vehicle_id
+			];
+			$puntos = $this->ejecutarConsulta($sql, '', $param, 'fetchAll');
+			error_log("Pocesando Vehiculos #: " . $vehicle_id);
+			$this->registrarParadasDeVehiculo($vehicle_id, $puntos);
+		}
+	}
+
+	private function calcularDistanciaMetros($lat1, $lng1, $lat2, $lng2)
+	{
+		$R = 6371e3;
+		$φ1 = deg2rad($lat1);
+		$φ2 = deg2rad($lat2);
+		$Δφ = deg2rad($lat2 - $lat1);
+		$Δλ = deg2rad($lng2 - $lng1);
+		$a = sin($Δφ / 2) * sin($Δφ / 2) + cos($φ1) * cos($φ2) * sin($Δλ / 2) * sin($Δλ / 2);
+		$c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+		return $R * $c;
+	}
+
+	private function obtenerPuntosGPS($vehicle_id, $fecha)
+	{
+		$sql = "
+			SELECT lat, lng, timestamp 
+				FROM gps_tracker 
+				WHERE vehicle_id = :v_vehicle_id 
+					AND (procesado IS NULL OR procesado = 0)
+					AND DATE(timestamp) = :v_fecha 
+				ORDER BY timestamp ASC";
+		$param = [
+			':v_vehicle_id' => $vehicle_id,
+			'v_fecha' => $fecha
+		];
+		return $this->ejecutarConsulta($sql, '', $param, 'fetchAll');
+	}
+
+	private function marcarPuntosComoProcesados($puntos)
+	{
+		if (empty($puntos))
+			return;
+
+		$vehicle_id = $puntos[0]['vehicle_id'] ?? null;
+		if (!$vehicle_id)
+			return;
+
+		// === Generar placeholders con nombre para cada timestamp ===
+		$timestamp_placeholders = [];
+		$params = [':v_vehicle_id' => $vehicle_id];
+
+		foreach ($puntos as $i => $punto) {
+			$placeholder = ":ts_$i";
+			$timestamp_placeholders[] = $placeholder;
+			$params[$placeholder] = $punto['timestamp']; // Asociar valor
+		}
+
+		// Unir los placeholders: :ts_0, :ts_1, :ts_2, ...
+		$in_clause = implode(',', $timestamp_placeholders);
+
+		// === Consulta SQL con marcadores nombrados ===
+		$sql = "UPDATE gps_tracker 
+				SET procesado = 1 
+				WHERE vehicle_id = :v_vehicle_id 
+				AND timestamp IN ($in_clause)";
+
+		// === Ejecutar con mainModel ===
+		try {
+			$this->ejecutarConsulta($sql, "", $params);
+			$this->log("✅ Marcados " . count($puntos) . " puntos como procesados para $vehicle_id");
+		} catch (Exception $e) {
+			$this->logWithBacktrace("❌ Error al marcar puntos como procesados: " . $e->getMessage(), true);
+		}
+	}
+
+	private function detectarInicioConGeofencing($puntos, $lat_cliente, $lng_cliente)
+	{
+
+		$min_puntos_detencion = $this->umbral_minutos; // ~5 minutos si hay punto cada 30 seg
+		$umbral_metros_loc = $this->umbral_metros; // 100 metros del cliente
+		$min_segundos_detencion = $min_puntos_detencion * 60;
+
+		$ventana_actual = [];
+		$inicio_ventana = null;
+
+		$total_puntos = count((array) $puntos);
+
+		if ($total_puntos > 0) {
+			foreach ($puntos as $i => $punto) {
+				$lat = (float) $punto['lat'];
+				$lng = (float) $punto['lng'];
+
+				// Calcular distancia al cliente
+				$distancia = $this->calcularDistanciaMetros($lat, $lng, $lat_cliente, $lng_cliente);
+
+				if ($distancia <= $umbral_metros_loc) {
+					// Agregar a ventana si está cerca
+					$ventana_actual[] = $punto;
+					if (!$inicio_ventana)
+						$inicio_ventana = $punto['timestamp'];
+
+					// Verificar si hay suficiente tiempo acumulado
+					$primer_punto = $ventana_actual[0];
+					$t_inicio = new \DateTime($primer_punto['timestamp']);
+					$t_fin = new \DateTime($punto['timestamp']);
+					$segundos_transcurridos = $t_inicio->diff($t_fin, true)->s;
+
+					if ($segundos_transcurridos >= $min_segundos_detencion) {
+						// Calcular velocidad media en este bloque
+						$velocidad_media = $this->calcularVelocidadMedia($ventana_actual);
+
+						// Si fue efectivamente detenido
+						if ($velocidad_media < 0.5) { // < 0.5 m/s → considerado detenido
+							return [
+								'timestamp' => $inicio_ventana,
+								'lat' => $lat,
+								'lng' => $lng,
+								'puntos_usados' => $ventana_actual
+							];
+						}
+					}
+
+				} else {
+					// Fuera del radio → reiniciar ventana
+					$ventana_actual = [];
+					$inicio_ventana = null;
+				}
+			}
+		}
+		return null;
+	}
+
+	private function calcularVelocidadMedia($bloquePuntos)
+	{
+		if (count($bloquePuntos) < 2)
+			return INF; // No hay movimiento
+
+		$distanciaTotal = 0;
+		$tiempoTotalSeg = 0;
+
+		for ($i = 1; $i < count($bloquePuntos); $i++) {
+			$p1 = $bloquePuntos[$i - 1];
+			$p2 = $bloquePuntos[$i];
+
+			$dist = $this->calcularDistanciaMetros(
+				$p1['lat'],
+				$p1['lng'],
+				$p2['lat'],
+				$p2['lng']
+			);
+
+			$t1 = new \DateTime($p1['timestamp']);
+			$t2 = new \DateTime($p2['timestamp']);
+			$segundos = $t1->diff($t2, true)->s;
+
+			$distanciaTotal += $dist;
+			$tiempoTotalSeg += $segundos;
+		}
+
+		return $tiempoTotalSeg > 0 ? $distanciaTotal / $tiempoTotalSeg : 0; // m/s
+	}
+
+	private function estaDetenido($punto1, $punto2)
+	{
+		$distancia = $this->calcularDistanciaMetros(
+			$punto1['lat'],
+			$punto1['lng'],
+			$punto2['lat'],
+			$punto2['lng']
+		);
+		return $distancia <= 10; // ≤ 10 metros = considerado detenido
+	}
+
+	private function actualizarInicioServicioBD($id_servicio, $hora_inicio, $lat, $lng)
+	{
+		$sql = "UPDATE servicios SET 
+                hora_inicio_gps = :hora_inicio
+            WHERE id_servicio = :id_servicio";
+
+		$param = [
+			':hora_inicio' => $hora_inicio,
+			':id_servicio' => $id_servicio
+		];
+
+		return $this->ejecutarConsulta($sql, '', $param);
+	}
+
+	private function detectarParadasOperativas()
+	{
+		$sql_vehiculos = "SELECT DISTINCT nombre FROM truck";
+		$vehiculos = $this->ejecutarConsulta($sql_vehiculos);
+
+		foreach ($vehiculos as $v) {
+			$vehicle_id = $v['nombre'];
+			$puntos = $this->obtenerPuntosGPS($vehicle_id, date('Y-m-d', strtotime('-1 day')));
+			$this->registrarParadasDeVehiculo($vehicle_id, $puntos);
+		}
+	}
+
+	private function registrarParadasDeVehiculo($vehicle_id, $puntos)
+	{
+		$detencion_continua = 0;
+		$inicio_parada = null;
+		$lat_inicial = null;
+		$lng_inicial = null;
+		$ultimo_punto_detenido = null;
+
+		$total_puntos = 0;
+		$total_puntos = count((array) $puntos);
+
+		$van = 0;
+		if ($total_puntos > 0) {
+			for ($i = 0; $i < $total_puntos; $i++) {
+				$punto_actual = $puntos[$i];
+				$lat = (float) $punto_actual['lat'];
+				$lng = (float) $punto_actual['lng'];
+
+				$detenido = false;
+				if ($i > 0) {
+					$dist = $this->calcularDistanciaMetros(
+						$lat,
+						$lng,
+						(float) $puntos[$i - 1]['lat'],
+						(float) $puntos[$i - 1]['lng']
+					);
+					$detenido = $dist <= 5;
+				}
+
+				if ($detenido) {
+					$detencion_continua++;
+					if (!$inicio_parada) {
+						$inicio_parada = $punto_actual['timestamp'];
+						$lat_inicial = $lat;
+						$lng_inicial = $lng;
+					}
+					$ultimo_punto_detenido = $punto_actual;
+				} else {
+					// Fin de detención: verificar si fue una parada válida
+					if ($inicio_parada && $detencion_continua >= 10) { // ~5 min
+						// Buscar el primer punto NO detenido después (para lat/lon final)
+						$lat_final = $lat;
+						$lng_final = $lng;
+						$hora_fin_real = $punto_actual['timestamp'];
+
+						// Verificar que no esté cerca de cliente
+						if (!$this->estuvoCercaDeCliente($vehicle_id, $inicio_parada, $lat_inicial, $lng_inicial)) {
+							$id_parada = $this->guardarParadaOperativa(
+								$vehicle_id,
+								$inicio_parada,
+								$hora_fin_real,
+								$lat_inicial,
+								$lng_inicial
+							);
+
+							if ($id_parada && $lat_final !== $lat_inicial && $lng_final !== $lng_inicial) {
+								$this->actualizarParadaConMovimiento($id_parada, $lat_final, $lng_final, $hora_fin_real);
+								$this->log("✅ Parada ID=$id_parada actualizada con coordenadas finales desde movimiento");
+							}
+						}
+					}
+
+					// Resetear
+					$detencion_continua = 0;
+					$inicio_parada = null;
+					$lat_inicial = null;
+					$lng_inicial = null;
+					$ultimo_punto_detenido = null;
+				}
+
+				$van++;
+			}
+		}
+
+		// Caso: termina en detención
+		if ($inicio_parada && $detencion_continua >= 10) {
+			if (!$this->estuvoCercaDeCliente($vehicle_id, $inicio_parada, $lat_inicial, $lng_inicial)) {
+				// Usar el último punto detenido como final también
+				$this->guardarParadaOperativa(
+					$vehicle_id,
+					$inicio_parada,
+					$ultimo_punto_detenido['timestamp'], // Último punto estático
+					$lat_inicial,
+					$lng_inicial
+				);
+				$this->log("⚠️ Parada final sin movimiento posterior registrada sin lat_final exacta");
+			}
+		}
+	}
+
+	private function estuvoCercaDeCliente($vehicle_id, $timestamp, $lat, $lng)
+	{
+		$fecha = substr($timestamp, 0, 10);
+		$sql = "
+				SELECT d.lat, d.lng 
+					FROM servicios s
+					JOIN direcciones d ON s.id_cliente = d.id_cliente
+					JOIN truck t ON s.id_truck = t.id_truck
+					WHERE t.nombre = :v_nombre AND s.fecha_programada = :v_fecha
+			";
+		$param = [
+			':v_nombre' => $vehicle_id,
+			':v_fecha' => $fecha
+		];
+
+		$clientes = $this->ejecutarConsulta($sql, '', $param, 'fetchAll');
+
+		foreach ($clientes as $cliente) {
+			$lat2 = (float) $cliente['lat'];
+			$lng2 = (float) $cliente['lng'];
+			$dist = $this->calcularDistanciaMetros($lat, $lng, $lat2, $lng2);
+
+			if ($dist <= 150)
+				return true;
+		}
+		return false;
+	}
+
+	private function guardarParadaOperativa($vehicle_id, $inicio, $fin, $lat, $lng)
+	{
+		$sql_check = "
+			SELECT COUNT(*) 
+				FROM paradas_operativas 
+				WHERE vehicle_id = :v_vehicle_id AND hora_inicio = :v_hora_inicio";
+
+		$param = [
+			':v_vehicle_id' => $vehicle_id,
+			':v_hora_inicio' => $inicio
+		];
+
+		$existe = $this->ejecutarConsulta($sql_check, '', $param);
+
+		if ($existe['COUNT(*)'] > 0)
+			return;
+
+		$id_truck = $this->id_Truck($vehicle_id);
+
+		$datos = [
+			['campo_nombre' => 'id_truck', 'campo_marcador' => ':id_truck', 'campo_valor' => $id_truck],
+			['campo_nombre' => 'fecha_operacion', 'campo_marcador' => ':fecha_operacion', 'campo_valor' => substr($inicio, 0, 10)],
+			['campo_nombre' => 'vehicle_id', 'campo_marcador' => ':vehicle_id', 'campo_valor' => $vehicle_id],
+			['campo_nombre' => 'hora_inicio', 'campo_marcador' => ':hora_inicio', 'campo_valor' => $inicio],
+			['campo_nombre' => 'hora_fin', 'campo_marcador' => ':hora_fin', 'campo_valor' => $fin],
+			['campo_nombre' => 'lat_inicial', 'campo_marcador' => ':lat_inicial', 'campo_valor' => (float) $lat],
+			['campo_nombre' => 'lng_inicial', 'campo_marcador' => ':lng_inicial', 'campo_valor' => (float) $lng]
+		];
+		$id_registro = $this->guardarDatos('paradas_operativas', $datos);
+		return $id_registro; // Devuelve el ID para futuras actualizaciones
+	}
+
+	private function id_Truck($nombre): mixed
+	{
+		$query = "SELECT id_truck 
+			FROM truck 
+			WHERE nombre = :nombre";
+		$params = [
+			':nombre' => $nombre
+		];
+
+		$result = $this->ejecutarConsulta($query, '', $params);
+		return $result ? $result['id_truck'] : false;
+	}
+
+
+	private function actualizarParadaConMovimiento($id_parada, $lat_final, $lng_final, $hora_fin_real = null)
+	{
+		$datos = [
+			['campo_nombre' => 'lat_final', 'campo_marcador' => ':lat_final', 'campo_valor' => (float) $lat_final],
+			['campo_nombre' => 'lng_final', 'campo_marcador' => ':lng_final', 'campo_valor' => (float) $lng_final],
+			['campo_nombre' => 'estado', 'campo_marcador' => ':estado', 'campo_valor' => 'cerrda']
+		];
+
+		// Opcional: actualizar hora_fin si fue más larga de lo detectado
+		if ($hora_fin_real) {
+			$datos[] = ['campo_nombre' => 'hora_fin', 'campo_marcador' => ':hora_fin', 'campo_valor' => $hora_fin_real];
+		}
+
+		$condicion = [
+			'campo_nombre' => 'id_parada',
+			'campo_marcador' => ':id_parada',
+			'campo_valor' => (int) $id_parada
+		];
+
+		return $this->actualizarDatos('paradas_operativas', $datos, $condicion);
+	}
+
+	public function listar_activos($fecha)
+	{
+		$sql = "
+			SELECT 
+				s.id_servicio,
+				s.id_cliente,
+				s.id_truck,
+				s.id_status,
+				s.hora_inicio_gps,
+				s.hora_fin_gps,
+				s.estado_servicio,
+				s.estado_visita,
+				s.dia_servicio,
+				s.tipo_dia,
+				s.finalizado,
+				
+				s.id_crew_1,
+				s.id_crew_2,
+				s.id_crew_3,
+				s.id_crew_4,
+				 
+				c.nombre AS cliente,
+				
+				d.lat,
+				d.lng,
+				d.direccion,
+				
+				t.nombre AS truck,
+				t.color AS crew_color_principal
+				
+			FROM servicios s
+			LEFT JOIN clientes c ON s.id_cliente = c.id_cliente
+			LEFT JOIN direcciones d ON c.id_cliente = d.id_cliente
+			LEFT JOIN truck t ON s.id_truck = t.id_truck
+			
+			WHERE s.fecha_programada = :v_fecha
+			AND s.id_status != :v_id_status_historico
+			AND s.id_truck IS NOT NULL
+			AND d.lat IS NOT NULL
+			AND d.lng IS NOT NULL
+			
+			ORDER BY t.nombre, s.dia_servicio";
+
+		$param = [
+			':v_fecha' => $fecha,
+			':v_id_status_historico' => $this->id_status_historico
+		];
+
+		try {
+			$servicios = $this->ejecutarConsulta($sql, '', $param, 'fetchAll');
+			// === Ahora obtener crew_integrantes para cada servicio ===
+
+			foreach ($servicios as $servicio) {
+				$servicio['crew_integrantes'] = [];
+				$ids_crew = [
+					$servicio['id_crew_1'],
+					$servicio['id_crew_2'],
+					$servicio['id_crew_3'],
+					$servicio['id_crew_4']
+				];
+
+				foreach ($ids_crew as $id) {
+					if ($id) {
+						$query_crew = "SELECT id_crew, nombre_completo, nombre, apellido, color, crew as responsabilidad
+								FROM crew 
+								WHERE id_crew = :id AND id_status = 32";
+						$params_crew = [':id' => $id];
+						$result = $this->ejecutarConsulta($query_crew, '', $params_crew);
+						if ($result) {
+							$servicio['crew_integrantes'][] = $result[0];
+						}
+					}
+				}
+			}
+			unset($servicio);
+
+
+			echo json_encode([
+				'success' => true,
+				'data' => array_values($servicios)
+			]);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en listar_para_geoferencia: " . $e->getMessage());
+			echo json_encode([
+				'success' => false,
+				'error' => 'Error al cargar servicios'
+			]);
+		}
+		exit();
+
+	}
 }
+
 ?>

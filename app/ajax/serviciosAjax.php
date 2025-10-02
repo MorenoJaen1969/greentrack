@@ -210,14 +210,22 @@ switch ($modulo) {
 
     case 'actualizar_hora_gps':
         $id_servicio = $inputData['id_servicio'] ?? null;
-        if (in_array('hora_inicio_gps', $inputData)){
+
+        $hora_inicio_gps = null;
+        $hora_fin_gps = null;
+        $tiempo_servicio = null;
+
+        // Verifica si la clave 'hora_inicio_gps' existe en el arreglo
+        if (array_key_exists('hora_inicio_gps', $inputData)) {
             $hora_inicio_gps = $inputData['hora_inicio_gps'];
             $hora_fin_gps = null;
             $tiempo_servicio = null;
         } else {
-            $hora_inicio_gps = null;
-            $hora_fin_gps = $inputData['hora_fin_gps'];
-            $tiempo_servicio = $inputData['tiempo_servicio'];
+            if (array_key_exists('hora_fin_gps', $inputData) && array_key_exists('tiempo_servicio', $inputData)){
+                $hora_inicio_gps = null;
+                $hora_fin_gps = $inputData['hora_fin_gps'];
+                $tiempo_servicio = $inputData['tiempo_servicio'];
+            }
         }
 
         if (!$id_servicio) {
@@ -226,7 +234,24 @@ switch ($modulo) {
             exit();
         }
 
-        $controller->actualizarServicio($id_servicio, $hora_inicio_gps, $hora_fin_gps, $tiempo_servicio);
+        if (($hora_inicio_gps && !$hora_fin_gps && !$tiempo_servicio) || (!$hora_inicio_gps && $hora_fin_gps && $tiempo_servicio) ){
+            $controller->actualizarServicio($id_servicio, $hora_inicio_gps, $hora_fin_gps, $tiempo_servicio);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Faltan datos requeridos: ' . json_encode($inputData)]);
+            exit();
+        }
+        break;
+
+    case 'reconciliar_datos_historicos':
+        $resultado = $controller->reconciliarDatosHistoricos();
+        echo json_encode($resultado);
+        break;
+              
+    case 'listar_para_geoferencia':
+   		$fecha = $_POST['fecha'] ?? date('Y-m-d'); // Puede venir por POST o usar hoy
+
+        $controller->listarServiciosConEstado($fecha); 
         break;
 
     default:

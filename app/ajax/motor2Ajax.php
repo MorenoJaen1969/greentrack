@@ -113,6 +113,16 @@ switch ($modulo) {
             'count' => count($trucks)
         ]);
         break;                
+    
+    case 'obtener_trucks_activos_hoy_color':
+        $trucks = $controller->obtenerTrucksActivosHoy_Color();
+
+        echo json_encode([
+            'success' => true,
+            'trucks' => $trucks,
+            'count' => count($trucks)
+        ]);
+        break;                
 
     case 'obtener_historial_gps':
         $vehicle_id = $inputData['vehicle_id'] ?? '';
@@ -132,8 +142,19 @@ switch ($modulo) {
             echo json_encode(['error' => 'ID requerido']);
             break;
         }
-
         $controller->obtenerUP($vehicle_id);
+        break; 
+
+    case 'obtener_ultimo_historial':
+        $vehicle_id = $_POST['vehicle_id'] ?? '';
+        $limit = filter_var($_POST['limit'] ?? 1, FILTER_VALIDATE_INT);
+
+        if (!$vehicle_id) {
+            echo json_encode(['historial' => []]);
+            exit();
+        }
+
+        $controller->obtener_UH($vehicle_id, $limit);
         break;
 
     default:
