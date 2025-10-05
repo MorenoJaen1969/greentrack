@@ -249,7 +249,7 @@ switch ($modulo) {
         break;
               
     case 'listar_para_geoferencia':
-   		$fecha = $_POST['fecha'] ?? date('Y-m-d'); // Puede venir por POST o usar hoy
+   		$fecha = $inputData['fecha'] ?? date('Y-m-d'); // Puede venir por POST o usar hoy
 
         $controller->listarServiciosConEstado($fecha); 
         break;

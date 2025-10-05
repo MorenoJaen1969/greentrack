@@ -302,6 +302,8 @@ class serviciosController extends mainModel
 						s.hora_aviso_usuario,
 						s.hora_finalizado,
 						s.tipo_dia,
+						s.hora_inicio_gps,
+						s.hora_fin_gps,
 						c.nombre as cliente, 
 						d.direccion, 
 						d.geofence_id, 
@@ -411,6 +413,8 @@ class serviciosController extends mainModel
 					'hora_finalizado' => $s['hora_finalizado'],
 					's_status' => $s['s_status'],
 					'status_m2' => $s['status_m2'],
+					'hora_inicio_gps' => $s['hora_inicio_gps'],
+					'hora_fin_gps' => $s['hora_fin_gps'],
 					'evidencias' => []
 				];
 

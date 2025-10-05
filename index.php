@@ -15,6 +15,7 @@ require_once APP_R_PROY . 'app/views/inc/session_start.php';
 
 // === 1. Detectar si hay token en la URL ===
 $token = $_GET['access_key'] ?? null;
+$user_email = "";
 
 if ($token){
     require_once APP_R_PROY . 'app/controllers/usuariosController.php';
@@ -42,6 +43,9 @@ if ($token){
         $email = $validacion['email'];
         if (in_array($email, $usuarios_permitidos)) {
             $_SESSION['user_email'] = $email;
+            $_SESSION['user_name'] = $validacion['nombre'];
+
+            $user_email = $email;
             // Redirigir al dashboard ejecutivo
             header("Location: /app/views/mobile-view.php");
             //require_once 'app/views/mobile-view.php';

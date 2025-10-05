@@ -145,11 +145,12 @@ class datosgeneralesController extends mainModel
 
 	public function datos_para_gps()
 	{
-        $query = "SELECT valor FROM configuracion_sistema WHERE clave = :v_clave1 or clave = :v_clave2 OR clave = :v_clave3";
+        $query = "SELECT valor FROM configuracion_sistema WHERE clave = :v_clave1 or clave = :v_clave2 OR clave = :v_clave3 OR clave = :v_clave4";
         $parametros = [
 			'v_clave1' => "mapa_base",
 			'v_clave2' => "umbral_metros",
-			'v_clave3' => "umbral_minutos"
+			'v_clave3' => "umbral_minutos",
+			'v_clave4' => "umbral_course"
 		];
 
 		try {

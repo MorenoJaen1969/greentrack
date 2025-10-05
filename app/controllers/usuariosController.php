@@ -144,7 +144,7 @@ class usuariosController extends mainModel
     public function valida_usuario($paquete){
         $token = $paquete['token'];
 
-        $sql = "SELECT email 
+        $sql = "SELECT nombre, email
             FROM usuarios_ejecutivos 
             WHERE token = :v_token AND activo = 1";
 
@@ -153,16 +153,15 @@ class usuariosController extends mainModel
         ];
 
         $result = $this->ejecutarConsulta($sql, "", $parametro);
+		$this->log("Consulta de usuario Ejecutada". print_r($result, true));
 
         if (empty($result)) {
+			$result = [];
+			$this->logWithBacktrace("Hubo un error al validar el token",true);
             die('<h3>Token inválido o expirado.</h3>');
-            return [];
         }
 
         // ✅ Usuario autorizado
-        $_SESSION['user_email'] = $result['email'];
-        $user_email = $result['email'];
-
         return $result;
     }
 }

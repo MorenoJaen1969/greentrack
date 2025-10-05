@@ -1,7 +1,10 @@
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
 <title>GreenTrack Live | Executive</title>
+
 <link rel="manifest" href="/manifest.json"> <!-- Para PWA -->
+
 <meta name="theme-color" content="#2196F3">
 
 <link rel="shortcut icon" href="/app/views/img/track.png">

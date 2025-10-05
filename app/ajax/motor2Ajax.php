@@ -113,9 +113,10 @@ switch ($modulo) {
             'count' => count($trucks)
         ]);
         break;                
-    
+     
     case 'obtener_trucks_activos_hoy_color':
-        $trucks = $controller->obtenerTrucksActivosHoy_Color();
+        $fecha_proc = $inputData['fecha_proc'];
+        $trucks = $controller->obtenerTrucksActivosHoy_Color($fecha_proc);
 
         echo json_encode([
             'success' => true,
@@ -157,6 +158,17 @@ switch ($modulo) {
         $controller->obtener_UH($vehicle_id, $limit);
         break;
 
+    case 'obtener_ultimo_punto_truck':
+        $truck = trim($inputData['truck'] ?? '');
+        
+        if (empty($truck)) {
+            echo json_encode(['error' => 'Truck ID required']);
+            exit;
+        }
+
+        $controller->ultima_pos_truck($truck);
+        break;
+            
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);

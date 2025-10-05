@@ -640,8 +640,15 @@ $this->log("Paquete: " . print_r($response,true));
 	public function obtenerHistorialGPS_bd($vehicle_id, $fromTimeUtc = null, $toTimeUtc = null) {
 		$this->log("Solicitando historial GPS para: $vehicle_id desde $fromTimeUtc hasta $toTimeUtc");
 
+		$timestamp1 = $fromTimeUtc ?? date('Y-m-d');
+		$timestamp1 .= ' 00:00:00';
+		$timestamp2 = $toTimeUtc ?? date('Y-m-d');
+		$timestamp2 .= ' 23:59:59';
+
+		$this->log("Parametros de Fechas del vehiculo $vehicle_id entre $timestamp1 y $timestamp2");
+
 		$sql = "
-			SELECT lat, lng, speed, course, timestamp
+			SELECT lat, lng, timestamp, speed, course
 				FROM gps_tracker 
 				WHERE vehicle_id = :v_vehicle_id 
 				AND timestamp BETWEEN :v_timestamp1 AND :v_timestamp2
@@ -649,8 +656,8 @@ $this->log("Paquete: " . print_r($response,true));
 
 		$param = [
 			':v_vehicle_id' => $vehicle_id,
-			':v_timestamp1' => $fromTimeUtc ?? date('Y-m-d') . ' 00:00:00',
-			':v_timestamp2' => $toTimeUtc ?? date('Y-m-d') . ' 23:59:59'
+			':v_timestamp1' => $timestamp1,
+			':v_timestamp2' => $timestamp2
 		];
 
 		try {
@@ -806,8 +813,14 @@ $this->log("Paquete: " . print_r($response,true));
 		}
 	}	
 
-	public function obtenerTrucksActivosHoy_Color() {
+	public function obtenerTrucksActivosHoy_Color($fecha_cal = null) {
 		$this->log("Solicitando lista de trucks activos hoy");
+
+		if ($fecha_cal){
+			$fecha_programada = $fecha_cal;
+		} else {
+			$fecha_programada = date('Y-m-d');
+		}
 
 		$sql = "
 			SELECT DISTINCT 
@@ -815,18 +828,22 @@ $this->log("Paquete: " . print_r($response,true));
 			FROM truck t
 			INNER JOIN servicios s ON t.id_truck = s.id_truck
 			WHERE 
-				DATE(s.fecha_programada) = CURDATE()
+				DATE(s.fecha_programada) = :v_fecha_programada
 				AND s.id_status != 39
 				AND t.id_status = 26
 			ORDER BY t.nombre
 		";
 
+		$param = [
+			'v_fecha_programada' => $fecha_programada
+		];
+
 		try {
-			$result = $this->ejecutarConsulta($sql, '', [], 'fetchAll');
+			$result = $this->ejecutarConsulta($sql, '', $param, 'fetchAll');
 			
 			if (!$result || !is_array($result)) {
 				$this->log("INFO: No se encontraron trucks activos hoy");
-				return [];
+				return []; 
 			}
 
 			// Extraer solo los nombres
@@ -836,7 +853,7 @@ $this->log("Paquete: " . print_r($response,true));
 					'color' => $fila['color']
 				];
 			}, $result);
-			$this->log("Trucks activos hoy: " . implode(', ', $activos));
+			$this->log("Trucks activos hoy: " . json_encode($activos));
 			return $activos;
 
 		} catch (Exception $e) {
@@ -950,5 +967,54 @@ $this->log("Paquete: " . print_r($response,true));
 
         echo json_encode(['historial' => $historial]);
         exit();        
+	}
+
+    public function ultima_pos_truck($truck){
+        $sql = "
+            SELECT 
+                lat, 
+                lng, 
+                timestamp,
+                speed,
+                course
+            FROM gps_tracker 
+            WHERE vehicle_id = :v_vehicle_id 
+            AND origen = 'realtime'
+            ORDER BY timestamp DESC 
+            LIMIT 2
+        ";
+		$param = [
+			':v_vehicle_id' => $truck
+		];
+
+        $puntos = $this->ejecutarConsulta($sql, "", $param, 'fetchAll');
+		$this->log("Ultimos movimientos del vehiculo: " . $truck . " " . print_r($puntos,true));
+
+
+		// ✅ Añadir hora del servidor
+		$server_time = date('Y-m-d H:i:s');		
+		
+		if (count($puntos) === 0) {
+            // No hay registros
+            $param = [
+				'message' => 'No GPS data',
+				'cantidad' => count((array) $puntos),
+				'success' => false,
+				'puntos' => [],
+				'server_time' => $server_time  
+			];
+		} else {
+            $param = [
+				'message' => 'Good Data',
+				'cantidad' => count((array) $puntos),
+				'success' => true,
+				'puntos' => $puntos,
+				'server_time' => $server_time  
+			];
+		}
+
+		// Devolver ambos puntos (último y penúltimo)
+        echo json_encode($param);
+        exit;  
 	}
 }
