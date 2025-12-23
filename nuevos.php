@@ -13,22 +13,8 @@ use app\controllers\usuariosController;
 $controller = new usuariosController();
 
 $param = [
-    'nombre' => 'Mario Moreno',
-    'email' => 'morenojaen@gmail.com'
-];
-
-$controller->nuevo_usuario($param);
-
-$param = [
-    'nombre' => 'Oscar Parra',
-    'email' => 'oparra@mcka915.com'
-];
-
-$controller->nuevo_usuario($param);
-
-$param = [
-    'nombre' => 'Sergio Martinez',
-    'email' => 'sergio@sergioslandscape.com'
+    'nombre' => 'Adriana Cordoba',
+    'email' => 'adriana@sergioslandscape.com'
 ];
 
 $controller->nuevo_usuario($param);

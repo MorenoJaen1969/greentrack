@@ -60,9 +60,22 @@ require_once  '../controllers/motor2Controller.php';
 use app\controllers\motor2Controller;
 
 $controller = new motor2Controller();
+/* 
+    $token = $inputData['token'] ?? '';
+    if (!$controller->validarAcceso($token)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'No autorizado']);
+        exit;
+    }
+*/
 
 // === 9. Enrutar según el módulo ===
 switch ($modulo) {
+    case 'obtener_ultimo_punto_todos':
+        $gpsData = $controller->obtenerUltimoPuntoTodos(); // Devuelve array de [truck, lat, lng, timestamp]
+        echo json_encode(['success' => true, 'puntos' => $gpsData]);
+        break;
+
     case 'obtener_gps_verizon':
         $vehiculo_id = $inputData['vehicle_id'] ?? '';
         
@@ -113,9 +126,19 @@ switch ($modulo) {
             'count' => count($trucks)
         ]);
         break;                
-     
+            
+    case 'obtener_trucks_activos_hoy_excl':
+        $trucks = $controller->obtenerTrucksActivosHoy_excl();
+        
+        echo json_encode([
+            'success' => true,
+            'trucks' => $trucks,
+            'count' => count($trucks)
+        ]);
+        break;                
+
     case 'obtener_trucks_activos_hoy_color':
-        $fecha_proc = $inputData['fecha_proc'];
+        $fecha_proc = $inputData['fecha_proc']; 
         $trucks = $controller->obtenerTrucksActivosHoy_Color($fecha_proc);
 
         echo json_encode([
@@ -166,9 +189,35 @@ switch ($modulo) {
             exit;
         }
 
-        $controller->ultima_pos_truck($truck);
+        $controller->ultima_pos_truck($truck);  
         break;
-            
+    
+    case 'info_vehiculo':
+        $truck = trim($inputData['id_truck']);
+
+        $controller->obtenerGpsVerizonSoloConsulta($truck);
+        break;
+
+    case 'obtener_direccion':
+        $apikey = trim($inputData['apikey']);
+        $lat = trim($inputData['lat']);
+        $lng = trim($inputData['lng']);
+
+        $controller->obtenerGpsLocationIQSoloConsulta($apikey, $lat, $lng);
+        break;
+
+    case 'obtener_ruta_hoy':
+        $vehicle_id = $inputData['vehicle_id'] ?? '';
+        
+        if (!$vehicle_id) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Falta vehicle_id']);
+            break;
+        }
+
+        $controller->obtenerRutaHoy($vehicle_id);
+        break;
+        
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);

@@ -1,8 +1,9 @@
 <?php
 define('APP_URL', 'https://positron4tx.ddns.net');
+define('RUTA_APP', 'https://positron4tx.ddns.net:9990');
 
 // Ruta real desde la raíz
-define('RUTA_REAL', '');
+define('RUTA_REAL', 'https://positron4tx.ddns.net:9990'); 
 
 // Modo desarrollo
 define('DEBUG', true);
@@ -13,8 +14,10 @@ if (!defined('APP_R_PROY')) {
 
 define('APP_SESSION_NAME', "DIRECTORY");
 
-const RUTA_FONTAWESOME=APP_URL."node_modules/@fortawesome/fontawesome-free/";
-const RUTA_SWEETALERT=APP_URL."node_modules/sweetalert2/dist/";
+const RUTA_FONTAWESOME=RUTA_APP."/node_modules/@fortawesome/fontawesome-free/";
+const RUTA_SWEETALERT=RUTA_APP."/node_modules/sweetalert2/dist/";
+
+define('PROJECT_ROOT', dirname(__DIR__));
 
 // === CREDENCIALES VERIZON FLEETMANAGEMENT (FIM API) ===
 define('VERIZON_USERNAME', 'REST_IntengracionconGreenTrack_9217@1233691.com');

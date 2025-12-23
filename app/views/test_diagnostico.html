@@ -1,0 +1,63 @@
+<html>
+<body>
+<h2>Diagnóstico WebSocket</h2>
+<button onclick="probarConexion()">Probar Conexión</button>
+<div id="resultado"></div>
+
+<script>
+async function probarConexion() {
+    const resultado = document.getElementById('resultado');
+    resultado.innerHTML = '🔍 Probando...';
+    
+    const token = 'bd3933852ea0edd0321937344f2c5a2dcc446213857230954ce3dd58ac4810be';
+    
+    // Probar diferentes URLs
+    const urls = [
+        'wss://positron4tx.ddns.net:7070',
+        'ws://positron4tx.ddns.net:7070', 
+        'ws://localhost:7070'
+    ];
+    
+    for (let url of urls) {
+        resultado.innerHTML += `<br><br>🔗 Probando: ${url}`;
+        
+        try {
+            const ws = new WebSocket(url + '?token=' + token);
+            
+            await new Promise((resolve, reject) => {
+                ws.onopen = () => {
+                    resultado.innerHTML += '<br>✅ CONECTADO';
+                    ws.send(JSON.stringify({type: 'test', content: 'ping'}));
+                    setTimeout(() => ws.close(), 1000);
+                    resolve();
+                };
+                
+                ws.onerror = (e) => {
+                    resultado.innerHTML += '<br>❌ ERROR: ' + e.type;
+                    reject(e);
+                };
+                
+                ws.onclose = (e) => {
+                    resultado.innerHTML += '<br>🔌 Cerrado: ' + e.code;
+                };
+                
+                // Timeout después de 3 segundos
+                setTimeout(() => {
+                    if (ws.readyState !== WebSocket.OPEN) {
+                        resultado.innerHTML += '<br>⏰ TIMEOUT';
+                        ws.close();
+                        reject(new Error('Timeout'));
+                    }
+                }, 3000);
+            });
+            
+        } catch (e) {
+            resultado.innerHTML += '<br>❌ FALLÓ: ' + e.message;
+        }
+    }
+    
+    resultado.innerHTML += '<br><br>🎯 Diagnóstico completo';
+}
+</script>
+</body>
+</html>

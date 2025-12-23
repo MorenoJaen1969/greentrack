@@ -1,0 +1,66 @@
+.suite-loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    cursor: not-allowed;
+}
+
+/* INFINITO HORIZONTAL que realmente ocupa 80vw */
+/* INFINITO HORIZONTAL - TAMAÑO MONUMENTAL */
+.infinity-svg {
+    width: 80vmin !important;   /* 80% del menor lado de la pantalla */
+    height: 80vmin !important;  /* Igual que width → cuadrado proporcional */
+    min-width: 300px;
+    min-height: 300px;
+    max-width: 90vw;
+    max-height: 90vh;
+    filter: 
+        drop-shadow(0 0 20px rgba(0, 212, 170, 0.9))
+        drop-shadow(0 0 40px rgba(0, 153, 255, 0.7));
+}
+
+.infinity-path {
+    stroke-dasharray: 520;
+    stroke-dashoffset: 520;
+    animation: drawInfinity 2.8s ease-in-out infinite;
+}
+
+@keyframes drawInfinity {
+    0% {
+        stroke-dashoffset: 520;
+        opacity: 0.8;
+    }
+    45% {
+        stroke-dashoffset: 0;
+        opacity: 1;
+    }
+    55% {
+        stroke-dashoffset: 0;
+        opacity: 1;
+    }
+    100% {
+        stroke-dashoffset: -520;
+        opacity: 0.8;
+    }
+}
+
+/* Prevenir cualquier interacción */
+.suite-loading-overlay * {
+    pointer-events: none;
+    user-select: none;
+}
+
+body.suite-loading-active {
+    overflow: hidden !important;
+}
+
+.suite-loading-active *:not(.suite-loading-overlay *) {
+    pointer-events: none !important;
+}

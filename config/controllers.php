@@ -1,12 +1,53 @@
 <?php
-require_once APP_R_PROY . 'app/controllers/serviciosController.php';
-require_once APP_R_PROY . 'app/controllers/VerizonImportController.php';
+//require_once APP_R_PROY . 'app/controllers/serviciosController.php';
+//require_once APP_R_PROY . 'app/controllers/VerizonImportController.php';
 //require_once APP_R_PROY . 'app/controllers/gpsController.php';
                     
 //use app\controllers\gpsController;
+use app\models\mainModel;
+use app\controllers\address_clasController;
+use app\controllers\address_typeController;
+use app\controllers\clientesController; 
+use app\controllers\ciudadesController;
+use app\controllers\condadosController;
+use app\controllers\contratosController;
+use app\controllers\dias_no_actividadController;
+use app\controllers\direccionesController;
+use app\controllers\estadosController;
+use app\controllers\mobilesController;
+use app\controllers\rutas_mapaController;
 use app\controllers\serviciosController;
+use app\controllers\status_allController;
+use app\controllers\paisesController;
+use app\controllers\proveedoresController;
+use app\controllers\usuariosController;
+use app\controllers\vehiculosController;
 use app\controllers\VerizonImportController;
+use app\controllers\viewsController;
+use app\controllers\zipsController;
+use app\controllers\zonasController;
+
 
 //$gps = new gpsController();
+$modelo = new mainModel();
+$address_clas = new address_clasController();
+$address_type = new address_typeController();
+$clientes = new clientesController();
+$ciudades = new ciudadesController();
+$condados = new condadosController();
+$contratos = new contratosController();
+$dias_no_actividad = new dias_no_actividadController();
+$direcciones = new direccionesController();
+$estados = new estadosController();
+$mobiles = new mobilesController();
+$rutas = new rutas_mapaController();
 $servicios = new serviciosController();
+$status = new status_allController();
+$paises = new paisesController();
+$proveedores = new proveedoresController();
+$usuarios = new usuariosController();
+$vehiculos = new vehiculosController();
 $verizon = new VerizonImportController();
+$viewsController = new viewsController();
+$zips = new zipsController();
+$zonas = new zonasController();

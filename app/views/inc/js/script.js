@@ -17,145 +17,10 @@
 
 // Función para aplicar efecto visual al marcador
 // Al inicio de tu script, después de crear el mapa
-window.mapMarkers = {};
+window.mapMarkers = {}; 
 
 // === Estado de actividades en curso ===
 window.estadoActividades = {}; // truck → { tipo: 'servicio' | 'parada', id_registro: int, inicio: Date }
-
-// Funciones específicas para cada tipo de alerta
-function suiteAlertSuccess(titulo, mensaje) {
-    return mostrarSuiteAlert('success', titulo, mensaje);
-}
-
-function suiteAlertError(titulo, mensaje) {
-    return mostrarSuiteAlert('error', titulo, mensaje);
-}
-
-function suiteAlertWarning(titulo, mensaje) {
-    return mostrarSuiteAlert('warning', titulo, mensaje);
-}
-
-function suiteAlertInfo(titulo, mensaje) {
-    return mostrarSuiteAlert('info', titulo, mensaje);
-}
-
-// Modal de confirmación
-function suiteConfirm(titulo, mensaje, opcionesConfirm = {}) {
-    const opciones = {
-        botones: [
-            { texto: opcionesConfirm.cancelar || 'Cancelar', tipo: 'secondary', valor: false },
-            { texto: opcionesConfirm.aceptar || 'Aceptar', tipo: 'primary', valor: true }
-        ]
-    };
-    return mostrarSuiteAlert('warning', titulo, mensaje, opciones);
-}
-
-function mostrarSuiteAlert(tipo, titulo, mensaje, opciones = {}) {
-    return new Promise((resolve) => {
-        // Eliminar alerta existente
-        const alertaExistente = document.querySelector('.alerta-overlay');
-        if (alertaExistente) {
-            alertaExistente.remove();
-        }
-
-        // Crear elementos de la alerta
-        const overlay = document.createElement('div');
-        overlay.className = 'alerta-overlay';
-
-        const alerta = document.createElement('div');
-        alerta.className = 'suite-alerta-box';
-
-        const header = document.createElement('div');
-        header.className = `alerta-header ${tipo}`;
-
-        const icon = document.createElement('div');
-        icon.className = 'alerta-icon';
-
-        // Iconos según el tipo
-        const iconos = {
-            success: '✓',
-            error: '✕',
-            warning: '⚠',
-            info: 'ℹ'
-        };
-        icon.textContent = iconos[tipo] || 'ℹ';
-
-        const title = document.createElement('h2');
-        title.className = 'alerta-title';
-        title.textContent = titulo;
-
-        const body = document.createElement('div');
-        body.className = 'alerta-body';
-
-        const message = document.createElement('p');
-        message.className = 'alerta-message';
-        message.textContent = mensaje;
-
-        const actions = document.createElement('div');
-        actions.className = 'alerta-actions';
-
-        // Botones según opciones
-        const botones = opciones.botones || [{ texto: 'OK', tipo: 'primary' }];
-
-        botones.forEach((btn, index) => {
-            const button = document.createElement('button');
-            button.className = `btn-alerta btn-alerta-${btn.tipo}`;
-            button.textContent = btn.texto;
-            button.onclick = () => {
-                overlay.classList.remove('activo');
-                setTimeout(() => {
-                    overlay.remove();
-                    resolve(btn.valor || index);
-                }, 300);
-            };
-            actions.appendChild(button);
-        });
-
-        // Construir la alerta
-        header.appendChild(icon);
-        header.appendChild(title);
-        body.appendChild(message);
-        body.appendChild(actions);
-        alerta.appendChild(header);
-        alerta.appendChild(body);
-        overlay.appendChild(alerta);
-
-        // Añadir al documento
-        document.body.appendChild(overlay);
-
-        // Mostrar con animación
-        setTimeout(() => {
-            overlay.classList.add('activo');
-            alerta.classList.add('alerta-pulse');
-        }, 10);
-
-        // Cerrar con Escape
-        const teclaEscape = (e) => {
-            if (e.key === 'Escape') {
-                overlay.classList.remove('activo');
-                setTimeout(() => {
-                    overlay.remove();
-                    document.removeEventListener('keydown', teclaEscape);
-                    resolve(null);
-                }, 300);
-            }
-        };
-        document.addEventListener('keydown', teclaEscape);
-
-        // Cerrar haciendo clic fuera de la alerta
-        if (opciones.cerrarClickFuera !== false) {
-            overlay.onclick = (e) => {
-                if (e.target === overlay) {
-                    overlay.classList.remove('activo');
-                    setTimeout(() => {
-                        overlay.remove();
-                        resolve(null);
-                    }, 300);
-                }
-            };
-        }
-    });
-}
 
 // Función para encontrar el contenedor del mapa
 function encontrarContenedorMapa() {
@@ -439,10 +304,10 @@ function inicializarMapa() {
 
     const map = L.map(contenedor).setView([30.3204272, -95.4217815], 12);
 
-        // ✅ Asegurar que APP_CONFIG existe
+    // ✅ Asegurar que APP_CONFIG existe
     if (!window.APP_CONFIG || !window.APP_CONFIG.mapa_base) {
         console.warn('⚠️ APP_CONFIG o mapa_base no definido. Usando ESRI por defecto');
-        window.APP_CONFIG = window.APP_CONFIG || {};
+        window.APP_CONFIG = window.APP_CONFIG || {}; 
         window.APP_CONFIG.mapa_base = 'ESRI'; // valor por defecto
     }
 
@@ -481,6 +346,75 @@ function inicializarMapa() {
     console.log('✅ Mapa inicializado con éxito');
 }    
 
+function ajustarMarcadoresCercanos(serviciosValidos) {
+    const umbralMetros = 5; // Considerar "cercanos" si están a menos de 5m
+    const grupos = new Map(); // Clave: lat,lng redondeado → valor: array de servicios
+
+    // === 1. Agrupar servicios por posición similar ===
+    serviciosValidos.forEach(s => {
+        if (!s.lat || !s.lng) return;
+
+        // Redondear coordenadas para agrupar puntos similares (~10 cm)
+        const latKey = Math.round(s.lat * 1e6);
+        const lngKey = Math.round(s.lng * 1e6);
+        const key = `${latKey},${lngKey}`;
+
+        if (!grupos.has(key)) {
+            grupos.set(key, []);
+        }
+        grupos.get(key).push(s);
+    });
+
+    // === 2. Para cada grupo con múltiples vehículos, aplicar offset ===
+    grupos.forEach((grupo, key) => {
+        if (grupo.length <= 1) return; // No necesita ajuste
+
+        const [latKey, lngKey] = key.split(',').map(Number);
+        const latBase = latKey / 1e6;
+        const lngBase = lngKey / 1e6;
+
+        // Distribuir en un círculo pequeño (radio ~3 metros)
+        const radioMetros = 3;
+        const anguloPorVehiculo = (2 * Math.PI) / grupo.length;
+
+        grupo.forEach((servicio, index) => {
+            const angulo = index * anguloPorVehiculo;
+            const { lat, lng } = calcularOffset(latBase, lngBase, angulo, radioMetros);
+
+            // Actualizar temporalmente las coordenadas del marcador
+            servicio.lat_offset = lat;
+            servicio.lng_offset = lng;
+        });
+    });
+}
+
+// === Ayuda: Calcular nuevo punto a cierta distancia y ángulo ===
+function calcularOffset(lat, lng, bearing, distanceMeters) {
+    const R = 6371000; // Radio de la Tierra en metros
+    const δ = distanceMeters / R;
+    const θ = bearing;
+
+    const φ1 = lat * Math.PI / 180;
+    const λ1 = lng * Math.PI / 180;
+
+    const φ2 = Math.asin(
+        Math.sin(φ1) * Math.cos(δ) +
+        Math.cos(φ1) * Math.sin(δ) * Math.cos(θ)
+    );
+
+    let λ2 = λ1 + Math.atan2(
+        Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
+        Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2)
+    );
+
+    λ2 = (λ2 + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // Normalizar a -180..180
+
+    return {
+        lat: φ2 * 180 / Math.PI,
+        lng: λ2 * 180 / Math.PI
+    };
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // === Sincronizar cambios con backend cuando se detecta inicio/cierre por geofencing ===
     async function sincronizarEstadoGPS(id_servicio, tipo, hora) {
@@ -490,12 +424,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 modulo_servicios: 'actualizar_hora_gps',
                 id_servicio: id_servicio
             };
+            
             if (tipo === 'inicio') {
-                data.hora_inicio_gps = hora;
+                data.hora_inicio_gps = hora; 
             } else if (tipo === 'fin') {
                 data.hora_fin_gps = hora;
                 // Calcular duración y enviar tiempo_servicio
                 const servicio = window.serviciosData?.find(s => s.id_servicio == id_servicio);
+
                 let inicio = servicio?.hora_inicio_gps || servicio?.hora_aviso_usuario;
                 if (inicio && hora) {
                     const t1 = new Date(inicio);
@@ -512,11 +448,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
+
             const resp = await res.json();
             if (resp.success) {
                 console.log(`✅ GPS time updated (${tipo}) for service ${id_servicio}`);
+
+                // === ACTUALIZAR EL SERVICIO EN serviciosData ===
+                const servicio = window.serviciosData?.find(s => s.id_servicio == id_servicio);
+                if (servicio) {
+                    if (tipo === 'inicio') {
+                        servicio.hora_inicio_gps = hora;
+                    } else if (tipo === 'fin') {
+                        servicio.hora_fin_gps = hora;
+                        servicio.tiempo_servicio = data.tiempo_servicio;
+                    }
+                }
+
+                // === ACTUALIZAR STATUS M2 EN EL MARCADOR ===
+                actualizarStatusM2(id_servicio);                
+
             } else {
-                console.warn(`⚠️ Error updating GPS time: ${resp.error}`);
+                console.warn(`⚠️ Error updating GPS time: ${resp.message}`);
             }
         } catch (err) {
             console.error('Error updating GPS time with backend:', err);
@@ -548,6 +500,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { id_servicio, hora } = e.detail;
 
         // 1. Sincronizar con el backend
+console.log("Proceso para finalizar el servicio");        
         sincronizarEstadoGPS(id_servicio, 'fin', hora);
 
         // 2. Actualizar estado local
@@ -578,7 +531,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // === 2. Estructura del carrusel ===
     const carrusel = {
         contenedor: document.getElementById('servicio-carrusel'),
-        datos: [],
+        datos: [], 
         elementos: [],
         TOTAL_DISPLAY: 0,
         espacioUsado: 0,
@@ -911,13 +864,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const res = await fetch('/app/ajax/serviciosAjax.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ modulo_servicios: 'listar' })
         });
 
         if (!res.ok) throw new Error('HTTP ' + res.status);
 
-        const serviciosRaw = await res.json();
+        const respuesta = await res.json();
+        const serviciosRaw = respuesta.servicios || [];
+        const vehiculosSinServicio = respuesta.vehiculosSinServicio || [];
 
         if (!Array.isArray(serviciosRaw) || serviciosRaw.length === 0) {
             console.warn("⚠️ No hay servicios programados para hoy. Iniciando polling...");
@@ -965,7 +920,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         return;
                     }
 
-                    const nuevosServicios = await res.json();
+                    const respuesta = await res.json();
+                    const nuevosServicios = respuesta.servicios || [];
+                    const vehiculosSinServicio = respuesta.vehiculosSinServicio || [];
 
                     if (Array.isArray(nuevosServicios) && nuevosServicios.length > 0) {
                         console.log("✅ Servicios detectados, recargando sistema");
@@ -1007,7 +964,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (serviciosValidos.length === 0) {
                 console.error("🔴 No hay servicios con coordenadas válidas después de conversión");
             } else {
-                console.log(`✅ ${serviciosValidos.length} servicios con coordenadas válidas`);
+                console.log(`✅ ${serviciosValidos.length} servicios con coordenadas válidas: `, serviciosValidos);
             }
 
             // Asignar al contexto global
@@ -1029,9 +986,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 indiceCarruselGlobal = (indiceCarruselGlobal + 1) % serviciosValidos.length;
             }, config.intervaloCarrusel);
 
-            // === 10. Marcadores fijos ===
+            // === 10. Ajustar posiciones de marcadores cercanos ===
+            ajustarMarcadoresCercanos(serviciosValidos);
+
+            // === 11. Marcadores fijos ===
             const vehicles = [];
+            const vehicles1 = [];
             const seenTrucks = new Set();
+            const seenTrucks1 = new Set();
 
             serviciosValidos.forEach(s => {
                 if (s.lat && s.lng && s.truck && s.crew_color_principal) {
@@ -1047,7 +1009,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
 
                     // === Crear marcador ===
-                    const marker = L.marker([s.lat, s.lng], {
+                    const useOffset = s.lat_offset && s.lng_offset;
+
+                    // === USAR COORDENADAS AJUSTADAS SI EXISTEN ===
+                    const lat = s.lat_offset !== undefined ? s.lat_offset : s.lat;
+                    const lng = s.lng_offset !== undefined ? s.lng_offset : s.lng;
+
+                    const marker = L.marker([lat, lng], {
                         icon: L.divIcon({
                             html: `<div style="background:${s.crew_color_principal};width:16px;height:16px;border-radius:50%;border:2px solid black;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`,
                             className: '',
@@ -1065,8 +1033,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         if (iconElement) {
                             iconElement.id = `marker-${s.id_servicio}`;
                             iconElement.style.transition = 'all 0.3s ease';
+                            
+                            // Opcional: Tooltip pequeño para identificar rápido
+                            iconElement.title = `Truck: ${s.truck}`;
                         }
-                    });
+                    });                    
 
                     // === Generar HTML del crew ===
                     const crewHtml = Array.isArray(s.crew_integrantes) && s.crew_integrantes.length > 0
@@ -1099,12 +1070,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div style="margin-top:4px;">${crewHtml}</div></div>
                     `);
                 }
+                
+            });
+
+            vehiculosSinServicio.forEach(s => {
+                if (!seenTrucks1.has(s.truck)) {
+                    seenTrucks1.add(s.truck);
+
+                    vehicles1.push({
+                        id: s.truck,
+                        color: s.color_truck,
+                    });
+                }                        
             });
             
             // ✅ Disparar evento para GPS
             const event = new Event('serviciosCargados');
             document.dispatchEvent(event);
             console.log("✅ Evento 'serviciosCargados' lanzado");
+
+            // === Iniciar monitoreo GPS cada 60 segundos ===
+            if (window.monitoreoGPSInterval) clearInterval(window.monitoreoGPSInterval);
+            window.monitoreoGPSInterval = setInterval(() => {
+                iniciarMonitoreoGPSContinuo().catch(err => {
+                    console.error("Error no capturado en monitoreo GPS:", err);
+                });
+            }, 5000); // Cada minuto
+
+            console.log("🔁 Monitoreo GPS programado cada 60 segundos");
 
             // Insertar botones
             const container = document.getElementById('contenedor-vehiculos-historico');
@@ -1129,7 +1122,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                 btn.title = `Vehicle: ${v.id}`;
 
                 container.appendChild(btn);
-            });            
+            });
+            
+            const container1 = document.getElementById('contenedor-vehiculos-sin-servicio');
+            container1.innerHTML = ''; // Limpiar antes
+
+            vehicles1.forEach(v => {
+                const btn = document.createElement('button');
+                btn.textContent = v.id;
+                btn.style.background = v.color;
+                btn.style.color = getColorContraste(v.color); // Blanco o negro según contraste
+                btn.style.border = 'none';
+                btn.style.borderRadius = '4px';
+                btn.style.padding = '2px 6px';
+                btn.style.fontSize = '0.8em';
+                btn.style.cursor = 'pointer';
+                btn.style.fontWeight = 'bold';
+                btn.style.minWidth = '60px';
+                btn.style.width = '31%';
+                btn.style.textAlign = 'center';
+
+                // Opcional: tooltip
+                btn.title = `Vehicle: ${v.id}`;
+
+                container1.appendChild(btn);
+            });
+
         }
 
     } catch (error) {
@@ -1138,285 +1156,153 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // === 12. MODAL DE DETALLES ===
     async function abrirModalDetalles(servicio, mantenerCarrusel = false) {
-        servicioTemporal = servicio;
+        const modal = document.getElementById('modal-servicio');
+        if (!modal) {
+            console.error("❌ No se encontró el modal con id 'modal-servicio'");
+            return;
+        }
 
-        // === Pausar carrusel solo si no se indica lo contrario ===
+        window.estadoTemporal = null;
+        window.servicioTemporal = servicio;
+        window.servicioTemporalId = servicio.id_servicio;
+
+        // Pausar carrusel solo si no se indica lo contrario
         if (!mantenerCarrusel && carrusel.intervalo) {
             clearInterval(carrusel.intervalo);
             carrusel.intervalo = null;
         }
 
-        try {
-            // === 1. Cargar datos del servicio (obligatorio) ===
-            const response = await fetch('/app/ajax/serviciosAjax.php', {
+        // 1. Cargar datos actualizados del servicio
+        const response = await fetch('/app/ajax/serviciosAjax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                modulo_servicios: 'obtener_servicio_detalle',
+                id_servicio: servicio.id_servicio
+            })
+        });
+        const servicioActualizado = await response.json();
+        let servicioHistorico = null;
+        
+        let con_historia = null;
+        if (!servicioActualizado) {
+            await suiteAlertError("Error", "Could not load service");
+            reanudarCarrusel();
+            return;
+        } else {
+            const historico = await fetch('/app/ajax/serviciosAjax.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    modulo_servicios: 'obtener_servicio_detalle',
-                    id_servicio: servicio.id_servicio
+                    modulo_servicios: 'historial_cliente',
+                    id_cliente: servicioActualizado.id_cliente
                 })
             });
-
-            const data = await response.json();
-
-            if (!data) {
-                await suiteAlertError("Error", "Could not load service");
-                reanudarCarrusel();
-                return;
-            }
-
-            const servicioActualizado = data;
-
-            // === 2. Decidir si se carga el historial según el campo 'historial' del cliente ===
-            let historialServicio = [];
-
-            // ✅ Verificamos si el cliente tiene historial habilitado
-            if (servicioActualizado.historial === 1) {
-                try {
-                    const historialResponse = await fetch('/app/ajax/serviciosAjax.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            modulo_servicios: 'obtener_historial_servicio',
-                            id_cliente: servicioActualizado.id_cliente
-                        })
-                    });
-
-                    if (historialResponse.ok) {
-                        const historialData = await historialResponse.json();
-                        if (Array.isArray(historialData)) {
-                            historialServicio = historialData; // ← Asume que devuelve el array directo
-                        } else if (historialData?.historial && Array.isArray(historialData.historial)) {
-                            historialServicio = historialData.historial;
-                        }
-                    }
-                } catch (err) {
-                    console.warn("Historial no disponible (error de red o timeout)", err);
-                    // No rompe → historial queda como []
-                }
+            servicioHistorico = await historico.json();
+            if (!servicioHistorico) {
+                con_historia = false;
             } else {
-                console.log("Historial deshabilitado para este cliente");
+                con_historia = true;
             }
+        }
 
-            // ✅ === CORRECCIÓN CLAVE: Asignar el historial al objeto para que esté disponible después ===
-            servicioActualizado.historial = historialServicio;
+        // 2. Mostrar el modal
+        modal.style.display = 'flex';
 
-            // === Continuamos con la lógica de normalización y renderizado ===
-            const tieneInicio = !!servicioActualizado.hora_aviso_usuario;
-            const estaFinalizado = !!servicioActualizado.finalizado;
-            const estadoServicio = servicioActualizado.estado_servicio;
+        // 3. Llenar información principal
+        document.getElementById('tabla-detalles-servicio').innerHTML = `
+            <tr><th>Client</th><td>${servicioActualizado.cliente}</td></tr>
+            <tr><th>Truck</th><td>${servicioActualizado.truck}</td></tr>
+            <tr><th>Scheduled Day</th><td>${servicioActualizado.dia_servicio}</td></tr>
+            <tr><th>Status</th><td>${servicioActualizado.estado_servicio}</td></tr>
+            <tr><th>Coordinates</th><td>${servicioActualizado.lat}, ${servicioActualizado.lng}</td></tr>
+            <tr><th>Address</th><td>${servicioActualizado.direccion}</td></tr>
+            <tr><th>Start</th><td>${servicioActualizado.hora_aviso_usuario || '—'}</td></tr>
+            <tr><th>End</th><td>${servicioActualizado.hora_finalizado || '—'}</td></tr>
+        `;
+        document.getElementById('crew-detalle-lista').innerHTML = (servicioActualizado.crew_integrantes || []).map(p =>
+            `<div class="crew-item" style="background:${p.color};">${p.nombre} ${p.apellido}</div>`
+        ).join('') || 'Not available';
 
-            const puedeAcciones = !estaFinalizado && estadoServicio !== 'finalizado';
+        // 4. Estado de los botones
+        const tieneInicio = !!servicioActualizado.hora_aviso_usuario;
+        const estaFinalizado = !!servicioActualizado.finalizado;
 
-            const notasHistorial = servicioActualizado.historial?.filter(h => h.campo_afectado === 'notas') || [];
-            const ultimaNota = notasHistorial.length > 0 ? notasHistorial[notasHistorial.length - 1] : { valor_nuevo: '' };
+        // Todos los botones activos por defecto
+        document.getElementById('btn-inicio-actividades').disabled = false;
+        document.getElementById('btn-finalizar-servicio').disabled = false;
+        document.getElementById('btn-replanificar-servicio').disabled = false;
+        document.getElementById('btn-cancelar-servicio').disabled = false;
 
-            const carac_serv = !servicioActualizado.estado_servicio ||
-                servicioActualizado.estado_servicio === 'pendiente' ||
-                servicioActualizado.estado_servicio === 'inicio_actividades';
+        // Si ya inició, deshabilita solo el de inicio
+        if (tieneInicio && !estaFinalizado) {
+            document.getElementById('btn-inicio-actividades').disabled = true;
+        }
+        // Si está finalizado, deshabilita todos
+        if (estaFinalizado) {
+            document.getElementById('btn-inicio-actividades').disabled = true;
+            document.getElementById('btn-finalizar-servicio').disabled = true;
+            document.getElementById('btn-replanificar-servicio').disabled = true;
+            document.getElementById('btn-cancelar-servicio').disabled = true;
+        }
 
-            const sin_nota = servicioActualizado.estado_servicio === 'finalizado' ||
-                servicioActualizado.estado_servicio === 'cancelado' ||
-                servicioActualizado.estado_servicio === 'replanificado';
+        // 5. Ocultar todos los campos de hora y notas al abrir
+        ['bloque-hora-inicio', 'bloque-nota-inicio', 'bloque-hora-fin', 'bloque-nota-final', 'acciones-notas'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
 
-            const contenido = `
-            <div class="modal-overlay_gps">
-                <div class="modal-contenedor">
-                    <button id="close_modal" class="modal-cerrar1">✕</button>
-                    <div class="modal-grid-3x2">
-                        <!-- 1,1 + 2,1: Información principal -->
-                        <div class="modal-info" style="grid-column: 1; grid-row: 1 / 3;">
-                            <h3>Service Details</h3>
-                            <table class="tabla-detalles">
-                                <tr><th>Client</th><td>${servicioActualizado.cliente}</td></tr>
-                                <tr><th>Truck</th><td>${servicioActualizado.truck}</td></tr>
-                                <tr><th>Scheduled Day</th><td>${servicioActualizado.dia_servicio}</td></tr>
-                                <tr><th>Operational Status</th><td><span class="estado-badge" style="background:${getEstadoColor(servicioActualizado.estado_servicio)}">${getEstadoMessage(servicioActualizado.estado_servicio)}</span></td></tr>
-                                <tr><th>Visit Status</th><td><span class="estado-badge" style="background:${getEstadoColor(servicioActualizado.estado_visita)}">${servicioActualizado.estado_visita || '—'}</span></td></tr>
-                                <tr><th>Coordinates</th><td>${servicioActualizado.lat}, ${servicioActualizado.lng}</td></tr>
-                                <tr><th>Address</th><td>${servicioActualizado.direccion}</td></tr>
-                                <tr><th>Start</th><td>${formatoHora(servicioActualizado.hora_aviso_usuario)}</td></tr>
-                                <tr><th>End</th><td>${formatoHora(servicioActualizado.hora_finalizado)}</td></tr>
-                            </table>
+        // 6. Mostrar última nota previa (readonly)
+        const ultimaNota = servicioActualizado.nota_final || servicioActualizado.nota_inicio || '';
+        const textareaUltima = document.getElementById('input-nota-previa');
+        if (textareaUltima) {
+            textareaUltima.value = ultimaNota;
+            textareaUltima.style.display = ultimaNota ? 'block' : 'none';
+        }
 
-                            <h4>Crew Members</h4>
-                            <div class="crew-detalle-lista">
-                                ${servicioActualizado.crew_integrantes?.map(p => `
-                                    <div class="crew-item" style="background:${p.color};">
-                                        ${p.nombre} ${p.apellido}
-                                    </div>
-                                `).join('') || 'Not available'}
-                            </div>
+        // 7. Limpiar y deshabilitar campos de hora y nota
+        document.getElementById('input-hora-inicio').value = '';
+        document.getElementById('input-hora-inicio').disabled = true;
+        document.getElementById('input-hora-fin').value = '';
+        document.getElementById('input-hora-fin').disabled = true;
+        document.getElementById('input-nota-final').value = '';
+        document.getElementById('input-nota-final').disabled = true;
 
-                            ${ultimaNota.valor_nuevo && servicioActualizado.estado_servicio !== 'usuario_alerto' ? `
-                            <div class="ultima-nota" style="margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 6px; font-size: 0.9em;">
-                                <strong>Last Note:</strong> "${ultimaNota.valor_nuevo}"
-                            </div>` : ''}
-                        </div>
+        // 8. Botón cerrar
+        document.getElementById('close_modal_servicio').onclick = () => {
+            modal.style.display = 'none';
+            if (!mantenerCarrusel) reanudarCarrusel();
+            window.servicioTemporalId = null;
+            window.estadoTemporal = null;
+        };
 
-                        <!-- 1,2: Acciones -->
-                        <div class="modal-acciones" style="grid-column: 2; grid-row: 1;">
-                            <h4>Actions</h4>
-                            <button class="btn-accion inicio" 
-                                    onclick="prepararAccion(${servicioActualizado.id_servicio}, 'inicio_actividades')"
-                                    ${tieneInicio || estaFinalizado ? 'disabled' : ''}>
-                                Start of activities
-                            </button>
-                            <button class="btn-accion procesado" 
-                                    onclick="prepararAccion(${servicioActualizado.id_servicio}, 'finalizado')"
-                                    ${puedeAcciones ? '' : 'disabled'}>
-                                Processed
-                            </button>
-                            <button class="btn-accion replanificado" 
-                                    onclick="prepararAccion(${servicioActualizado.id_servicio}, 'replanificado')"
-                                    ${puedeAcciones ? '' : 'disabled'}>
-                                Rescheduled
-                            </button>
-                            <button class="btn-accion cancelado" 
-                                    onclick="prepararAccion(${servicioActualizado.id_servicio}, 'cancelado')"
-                                    ${puedeAcciones ? '' : 'disabled'}>
-                                Cancelled
-                            </button>
-                        </div>
+        // 9. Historial
+        const historialBody = document.getElementById('historial-servicio');
+        historialBody.innerHTML = '';
 
-                        <!-- 2,2: Notas o Tiempo Activo -->
-                        <div class="modal-notas" style="grid-column: 2; grid-row: 2;">
-
-                        ${(() => {
-                    if (!sin_nota) {
-                        return `
-                                    <h4>Notes</h4>
-                                    <textarea placeholder="Add notes..." class="input-notas" 
-                                            ${estaFinalizado ? 'disabled' : ''}></textarea>
-                                    <div class="acciones-notas" style="display: none;">
-                                        <button class="btn-guardar-notas" onclick="guardarNotas(${servicioActualizado.id_servicio}, '${servicioActualizado.estado_servicio}')">Save</button>
-                                        <button class="btn-cancelar-notas" onclick="cancelarNotas()">Cancel</button>
-                                    </div>
-                                            `;
-                    } else {
-                        return `
-                                    <h4>Preview Notes</h4>
-                                    <textarea placeholder="Add notes..." class="input-notas" disabled>${servicioActualizado.notas_anteriores}</textarea>`;
-                    }
-                })()}
-
-
-                        ${(() => {
-                    const estadoInicial = !servicioActualizado.estado_servicio ||
-                        servicioActualizado.estado_servicio === 'pendiente' ||
-                        servicioActualizado.estado_servicio === 'usuario_alerto';
-
-                    if (estadoInicial) {
-                        return `
-                                            `;
-                    } else {
-                        const mostrarTiempoTotal = estaFinalizado && servicioActualizado.hora_aviso_usuario && servicioActualizado.hora_finalizado;
-                        const duracion = mostrarTiempoTotal
-                            ? calcularDuracion(servicioActualizado.hora_aviso_usuario, servicioActualizado.hora_finalizado)
-                            : '00:00:00';
-
-                        return `
-                                        <h4>${mostrarTiempoTotal ? 'Total Time' : 'Active Time'}</h4>
-                                        <span class="contador-modal" style="font-size: 1.2em; font-weight: bold; color: ${mostrarTiempoTotal ? '#4CAF50' : '#2196F3'};">
-                                            ${mostrarTiempoTotal ? duracion : '00:00:00'}
-                                        </span>
-                                        <p style="font-size: 0.8em; color: #666; margin-top: 5px;">
-                                            ${mostrarTiempoTotal ? 'Duration of service' : 'Time since start'}
-                                        </p>
-                                    `;
-                    }
-                })()}
-
-
-                        </div>
-
-                        <!-- 3,1 + 3,2: Historial -->
-                        <div class="modal-historial" style="grid-column: 1 / 3; grid-row: 3; height: 200px; overflow-y: auto;">
-                            <h4>Service History</h4>
-                            <table class="tabla-historial">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Truck</th>
-                                        <th>Status</th>
-                                        <th>Duration</th>
-                                    </tr>                                    
-                                </thead>
-                                <tbody id="historial-${servicioActualizado.id_servicio}">
-                                    <tr><td colspan="4">Loading...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = contenido;
-            document.body.appendChild(tempDiv.firstElementChild);
-
-            // === Iniciar contador si corresponde ===
-            if (tieneInicio && !estaFinalizado && !puedeAcciones) {
-                const contador = document.querySelector('.contador-modal');
-                if (contador) {
-                    iniciarContador(contador, servicioActualizado.hora_aviso_usuario);
-                }
-            }
-
-            // === Llenar historial del servicio ===
-            const historialBody = document.getElementById(`historial-${servicioActualizado.id_servicio}`);
-            if (historialBody) {
-                historialBody.innerHTML = '';
-                if (historialServicio.length > 0) {
-                    historialServicio.forEach(h => {
-                        const tr = document.createElement('tr');
-                        const duracion = h.tiempo_duracion ? h.tiempo_duracion : '—';
-                        tr.innerHTML = `
+        if (con_historia){
+            if (Array.isArray(servicioHistorico.historial) && servicioHistorico.historial.length > 0) {
+                servicioHistorico.historial.forEach(h => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
                         <td>${h.fecha_programada}</td>
                         <td>${h.truck}</td>
-                        <td>${h.estado_visita ? `<span class="estado-badge" style="background:${getEstadoColor(h.estado_visita)}">${h.estado_visita}</span>` : '—'}</td>
-                        <td><span style="font-size: 0.9em; color: #555;">${duracion}</span></td>
+                        <td>${h.estado_visita}</td>
+                        <td>${h.tiempo_duracion || '—'}</td>
                     `;
-                        historialBody.appendChild(tr);
-                    });
-                } else {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = '<td colspan="4">No history available</td>';
                     historialBody.appendChild(tr);
-                }
+                });
+            } else {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="4">No history available</td>';
+                historialBody.appendChild(tr);
             }
-
-            // === Cerrar modal ===
-            const modalOverlay = document.querySelector('.modal-overlay_gps');
-
-            const btnCerrar = document.getElementById('close_modal');
-            btnCerrar.addEventListener('click', () => {
-console.log("Cerrando modal");                
-                modalOverlay.remove();
-                if (!mantenerCarrusel) {
-                    reanudarCarrusel();
-                }
-                servicioTemporal = null;
-            });
-
-            modalOverlay.addEventListener('click', (e) => {
-                if (e.target === modalOverlay) {
-                    modalOverlay.remove();
-                    if (!mantenerCarrusel) {
-                        reanudarCarrusel();
-                    }
-                    servicioTemporal = null;
-                }
-            });
-
-        } catch (err) {
-            console.error("Error crítico en modal:", err);
-            await suiteAlertError("Error", "No se pudo cargar el servicio");
-
-            reanudarCarrusel();
+        } else {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="4">No history available</td>';
+            historialBody.appendChild(tr);
         }
     }
-
 
     // === Función auxiliar: color por estado ===
     function getEstadoColor(estado) {
@@ -1499,62 +1385,97 @@ console.log("Cerrando modal");
 
     // === Habilitar edición por botón ===
     window.prepararAccion = function (id_servicio, nuevoEstado) {
-        const textarea = document.querySelector('.input-notas');
-        const acciones = document.querySelector('.acciones-notas');
+        const acciones = document.getElementById('acciones-notas');
+        const campoHoraInicio = document.getElementById('bloque-hora-inicio');
+        const campoHoraFin = document.getElementById('bloque-hora-fin');
+        const labelHoraInicio = campoHoraInicio ? campoHoraInicio.querySelector('label') : null;
+        const labelHoraFin = campoHoraFin ? campoHoraFin.querySelector('label') : null;
+        const textareaNotaFinal = document.getElementById('input-nota-final');
+        const inputHoraInicio = document.getElementById('input-hora-inicio');
+        const inputHoraFin = document.getElementById('input-hora-fin');
+        const bloqueNotaFinal = document.getElementById('bloque-nota-final');
 
-        const servicio = carrusel.datos.find(s => s.id_servicio == id_servicio);
-        if (!servicio) return;
+        // Ocultar todos los campos primero
+        if (campoHoraInicio) campoHoraInicio.style.display = 'none';
+        if (campoHoraFin) campoHoraFin.style.display = 'none';
+        if (bloqueNotaFinal) bloqueNotaFinal.style.display = 'none';
 
-        const tieneInicio = !!servicio.hora_aviso_usuario;
-        const esFinalizado = !!servicio.finalizado;
-
-        if (esFinalizado) {
-            suiteAlertInfo("Info", "This service is already completed. No further actions allowed.")
-            return;
+        // Mostrar y configurar según acción
+        if (nuevoEstado === 'inicio_actividades') {
+            if (campoHoraInicio) {
+                campoHoraInicio.style.display = 'block';
+                if (labelHoraInicio) labelHoraInicio.textContent = 'Start Service:';
+            }
+            if (bloqueNotaFinal) bloqueNotaFinal.style.display = 'block';
+            if (textareaNotaFinal) {
+                textareaNotaFinal.placeholder = 'Add start note...';
+                textareaNotaFinal.value = '';
+                textareaNotaFinal.disabled = false;
+                textareaNotaFinal.readOnly = false;
+                textareaNotaFinal.style.backgroundColor = '#e3f2fd';
+                textareaNotaFinal.style.color = '#1565c0';
+            }
+            if (inputHoraInicio) {
+                inputHoraInicio.disabled = false;
+                const now = new Date();
+                inputHoraInicio.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            }
+        } else if (nuevoEstado === 'finalizado') {
+            if (campoHoraFin) {
+                campoHoraFin.style.display = 'block';
+                if (labelHoraFin) labelHoraFin.textContent = 'End Service:';
+            }
+            if (bloqueNotaFinal) bloqueNotaFinal.style.display = 'block';
+            if (textareaNotaFinal) {
+                textareaNotaFinal.placeholder = 'Add final note...';
+                textareaNotaFinal.value = '';
+                textareaNotaFinal.disabled = false;
+                textareaNotaFinal.readOnly = false;
+                textareaNotaFinal.style.backgroundColor = '#e8f5e8';
+                textareaNotaFinal.style.color = '#2e7d32';
+            }
+            if (inputHoraFin) {
+                inputHoraFin.disabled = false;
+                const now = new Date();
+                inputHoraFin.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            }
+        } else if (nuevoEstado === 'replanificado' || nuevoEstado === 'cancelado') {
+            if (bloqueNotaFinal) bloqueNotaFinal.style.display = 'block';
+            if (textareaNotaFinal) {
+                textareaNotaFinal.placeholder = nuevoEstado === 'replanificado' ? 'Add reschedule note...' : 'Add cancel note...';
+                textareaNotaFinal.value = '';
+                textareaNotaFinal.disabled = false;
+                textareaNotaFinal.readOnly = false;
+                textareaNotaFinal.style.backgroundColor = nuevoEstado === 'replanificado' ? '#fff8e1' : '#ffcdd2';
+                textareaNotaFinal.style.color = nuevoEstado === 'replanificado' ? '#f57c00' : '#c62828';
+            }
         }
 
-        if (nuevoEstado === 'inicio_actividades' && tieneInicio) {
-            suiteAlertInfo("Info", "Start of activities has already been registered.")
-            return;
-        }
+        // Mostrar botones aceptar/cancelar
+        if (acciones) acciones.style.display = 'flex';
 
+        // Guardar estado temporal
+        window.estadoTemporal = nuevoEstado;
         window.servicioTemporalId = id_servicio;
-
-        textarea.style.backgroundColor = '';
-        textarea.style.color = '';
-
-        if (nuevoEstado === 'finalizado') {
-            textarea.style.backgroundColor = '#e8f5e8';
-            textarea.style.color = '#2e7d32';
-        } else if (nuevoEstado === 'replanificado') {
-            textarea.style.backgroundColor = '#fff8e1';
-            textarea.style.color = '#f57c00';
-        } else if (nuevoEstado === 'cancelado') {
-            textarea.style.backgroundColor = '#ffcdd2';
-            textarea.style.color = '#c62828';
-        } else if (nuevoEstado === 'inicio_actividades') {
-            textarea.style.backgroundColor = '#e3f2fd';
-            textarea.style.color = '#1565c0';
-        }
-
-        textarea.disabled = false;
-        textarea.focus();
-        acciones.style.display = 'flex';
-        estadoTemporal = nuevoEstado;
     };
 
     // === Guardar notas ===
     window.guardarNotas = function (id_servicio, estadoActual) {
         const textarea = document.querySelector('.input-notas');
         const notas = textarea.value.trim();
-        const nuevoEstado = estadoTemporal;
+        const nuevoEstado = window.estadoTemporal;
+
+        const inputHoraInicio = document.querySelector('.input-hora-inicio');
+        const inputHoraFin = document.querySelector('.input-hora-fin');
+        const hora_aviso_usuario = inputHoraInicio ? inputHoraInicio.value : '';
+        const hora_finalizado_usuario = inputHoraFin ? inputHoraFin.value : '';
 
         if (!nuevoEstado) {
             suiteAlertWarning("Warning", "No action selected")
             return;
         }
 
-        if (!servicioTemporal) {
+        if (!window.servicioTemporal) {
             suiteAlertError("Error", "Service not found. Reload the page.");
             return;
         }
@@ -1564,9 +1485,11 @@ console.log("Cerrando modal");
             id_servicio: id_servicio,
             estado: nuevoEstado,
             notas: notas,
+            hora_aviso_usuario: hora_aviso_usuario,
+            hora_finalizado_usuario: hora_finalizado_usuario,
             estado_actual: estadoActual,
-            cliente: servicioTemporal.cliente,
-            truck: servicioTemporal.truck
+            cliente: window.servicioTemporal.cliente,
+            truck: window.servicioTemporal.truck
         };
 
         fetch('/app/ajax/serviciosAjax.php', {
@@ -1583,18 +1506,29 @@ console.log("Cerrando modal");
                         servicio.estado_servicio = (nuevoEstado === 'inicio_actividades') ? 'usuario_alerto' : servicio.estado_servicio;
                         servicio.finalizado = (nuevoEstado === 'finalizado');
 
+                        const now = new Date();
+                        const localDate = now.getFullYear() + '-' +
+                            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                            String(now.getDate()).padStart(2, '0') + ' ' +
+                            String(now.getHours()).padStart(2, '0') + ':' +
+                            String(now.getMinutes()).padStart(2, '0') + ':' +
+                            String(now.getSeconds()).padStart(2, '0');                            
+
                         if (nuevoEstado === 'inicio_actividades' && !servicio.hora_aviso_usuario) {
-                            servicio.hora_aviso_usuario = new Date().toISOString();
+                            // ✅ Fecha en formato local "Y-m-d H:i:s"
+                            servicio.hora_aviso_usuario = localDate;
                         }
 
                         if (nuevoEstado === 'finalizado' && !servicio.hora_finalizado) {
-                            servicio.hora_finalizado = new Date().toISOString();
+                            servicio.hora_finalizado = localDate;
                         }
 
                         actualizarTarjeta(servicio);
                     }
 
-                    document.querySelector('.modal-overlay_gps')?.remove();
+                    const modal = document.getElementById('modal-servicio');
+                    if (modal) modal.style.display = 'none';
+
                     reanudarCarrusel();
                 } else {
                     suiteAlertError("Error", resp.error);
@@ -1608,19 +1542,18 @@ console.log("Cerrando modal");
 
     // === Cancelar proceso ===
     window.cancelarNotas = function () {
-        const textarea = document.querySelector('.input-notas');
-        const acciones = document.querySelector('.acciones-notas');
-
-        textarea.disabled = true;
-        textarea.style.backgroundColor = '#f9f9f9';
-        textarea.style.opacity = '0.7';
-        textarea.style.color = '';
-        textarea.value = '';
-        acciones.style.display = 'none';
-
-        estadoTemporal = null;
-        window.servicioTemporalId = null;
-        servicioTemporal = null;
+        // Ocultar y limpiar campos
+        ['bloque-hora-inicio', 'bloque-hora-fin', 'bloque-nota-final', 'acciones-notas'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        document.getElementById('input-hora-inicio').value = '';
+        document.getElementById('input-hora-inicio').disabled = true;
+        document.getElementById('input-hora-fin').value = '';
+        document.getElementById('input-hora-fin').disabled = true;
+        document.getElementById('input-nota-final').value = '';
+        document.getElementById('input-nota-final').disabled = true;
+        window.estadoTemporal = null;
     };
 
     // === Reanudar carrusel al cerrar modal ===
@@ -1635,7 +1568,15 @@ console.log("Cerrando modal");
     };
 
     // === 13. POLLING INTELIGENTE: Actualización en tiempo real del carrusel ===
-    let ultimoTiempo = new Date().toISOString();
+    const now = new Date();
+    const localDate = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0') + ' ' +
+        String(now.getHours()).padStart(2, '0') + ':' +
+        String(now.getMinutes()).padStart(2, '0') + ':' +
+        String(now.getSeconds()).padStart(2, '0');                            
+
+    let ultimoTiempo = localDate;
 
     // Verificar si el polling ya está activo para evitar duplicados
     if (!window.__pollingActivo) {
@@ -1686,7 +1627,7 @@ console.log("Cerrando modal");
                         }
                     });
                     // Actualiza la marca de tiempo
-                    ultimoTiempo = new Date().toISOString();
+                    ultimoTiempo = localDate;
                 }
             } catch (err) {
                 console.error("Error en polling de actualización:", err);
@@ -1711,7 +1652,6 @@ console.log("Cerrando modal");
         }
         modalSelectClient.style.display = 'flex';
         await cargarListaClientes();
-
     });
 
     const listaClientes = document.getElementById('lista-clientes');
@@ -1725,7 +1665,10 @@ console.log("Cerrando modal");
             });
 
             if (!res.ok) throw new Error('HTTP ' + res.status);
-            const servicios = await res.json();
+
+            const respuesta = await res.json();
+            const servicios = respuesta.servicios || [];
+            const vehiculosSinServicio = respuesta.vehiculosSinServicio || [];
 
             if (!Array.isArray(servicios) || servicios.length === 0) {
                 listaClientes.innerHTML = '<p>No services scheduled for today</p>';
@@ -1740,7 +1683,10 @@ console.log("Cerrando modal");
                         });
 
                         if (!res.ok) return;
-                        const nuevosServicios = await res.json();
+
+                        const respuesta = await res.json();
+                        const nuevosServicios = respuesta.servicios || [];
+                        const vehiculosSinServicio = respuesta.vehiculosSinServicio || [];
 
                         if (Array.isArray(nuevosServicios) && nuevosServicios.length > 0) {
                             // ✅ Servicios llegaron → detener polling y recargar
@@ -1795,6 +1741,323 @@ console.log("Cerrando modal");
         }
     }
 
+    // Función para formatear fecha como "YYYY-MM-DD"
+    function formatearFechaInput(fecha) {
+        const año = fecha.getFullYear();
+        const mes = String(fecha.getMonth() + 1).padStart(2, '0'); // getMonth() es 0-11
+        const dia = String(fecha.getDate()).padStart(2, '0');
+        return `${año}-${mes}-${dia}`;
+    }
+
+    // Escuchar cambios en el input de búsqueda
+    document.getElementById('buscar-no-asignados')?.addEventListener('input', function(e) {
+        const texto = e.target.value.trim().toLowerCase();
+        const contenedor = document.getElementById('lista-no-asignados');
+        const items = contenedor.querySelectorAll('.item-despacho');
+
+        // Remover resaltado previo
+        items.forEach(item => {
+            item.classList.remove('resaltado');
+            // También podrías quitar resaltado de texto interno si usas <mark>, pero con clase es suficiente
+        });
+
+        if (texto === '') return;
+
+        // Resaltar ítems que coincidan
+        let primero = true;
+
+        items.forEach(item => {
+            // Extraer texto visible del ítem (todo el contenido de texto)
+            const textoItem = item.textContent.toLowerCase();
+            if (textoItem.includes(texto)) {
+                item.classList.add('resaltado');
+                if (primero) {
+                    item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    primero = false;
+                }                
+            }
+        });
+    });
+
+    // === Control botón "Select Despacho" ===
+    document.getElementById('btn-select-despacho').addEventListener('click', async () => {
+        let formFlotante = document.getElementById('form-flotante-historico');
+        if (formFlotante) {
+            formFlotante.style.display = 'none'; // Oculta el panel
+        }
+
+        const modalSelectDespacho = document.getElementById('modal-select-despacho');
+        modalSelectDespacho.style.display = 'flex';
+
+        const btnCerrar_lista = document.getElementById('close-select-despacho');
+
+        const fecha_next = sumarUnDiaYEvitarSabado(new Date());
+
+        // ✅ CORRECTO: usa .value y formatea la fecha
+        const inputFecha = document.getElementById('fecha-despacho');
+        if (inputFecha) {
+            inputFecha.value = formatearFechaInput(fecha_next);
+        }
+
+        btnCerrar_lista.addEventListener('click', () => {
+            if (modalSelectDespacho) modalSelectDespacho.style.display = 'none';
+            if (formFlotante) {
+            formFlotante.style.display = 'flex'; // O 'block' / 'inline-flex', según diseño
+        }
+
+        });
+
+        if (!modalSelectDespacho) {
+            console.error("❌ No se encontró el modal #modal-select-despacho");
+            return;
+        }
+
+        // 👇 OBSERVADOR DEL PANEL DERECHO
+        const panelDerecho = document.getElementById('lista-no-asignados');
+        if (panelDerecho) {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'childList') {
+                        // Si el panel queda vacío después de un cambio
+                        if (panelDerecho.children.length === 0) {
+                            console.warn("🚨 El panel derecho fue vaciado en este momento.");
+                            console.trace("Pila de llamadas que llevó al vaciado:");
+                        }
+                    }
+                });
+            });
+
+            // Observar solo cambios en los hijos (no atributos ni subárboles profundos)
+            observer.observe(panelDerecho, { childList: true });
+        }
+
+        await cargarListaDespacho();
+    });
+
+    document.getElementById('fecha-despacho')?.addEventListener('change', async (e) => {
+        // Opcional: guardar en una variable global o recargar
+        window.fechaDespachoSeleccionada = e.target.value;
+        await cargarListaDespacho();
+    });
+
+    async function cargarListaDespacho() {
+        try {
+            const fecha_despacho = document.getElementById('fecha-despacho')?.value || formatearFechaInput(new Date());
+
+            const listaAsignados = document.getElementById('lista-asignados');
+            const listaNoAsignados = document.getElementById('lista-no-asignados');
+            let editable = true;
+
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(
+                    { 
+                        modulo_servicios: 'listar_despacho',
+                        fecha_despacho: fecha_despacho
+                    }
+                )
+            });
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+
+            const respuesta = await res.json();
+
+            listaNoAsignados.innerHTML = respuesta.html_no_asignados;
+            listaAsignados.innerHTML = respuesta.html_asignados;
+            editable = respuesta.editable;  
+
+            const tit_tipo_servcio = document.getElementById('tit_tipo_servcio');
+            if (!editable){
+                tit_tipo_servcio.innerHTML = "Assigned Services"
+            } else {
+                tit_tipo_servcio.innerHTML = "Pre-Assigned"
+            }
+
+            // ... después de asignar innerHTML
+            actualizarContadorPanel(listaAsignados, 'pie_panel_izquierdo');
+            actualizarContadorPanel(listaNoAsignados, 'pie_panel_derecho');            
+
+            // Re-vincular eventos en AMBOS paneles
+            [listaNoAsignados, listaAsignados].forEach(contenedor => {
+                contenedor.querySelectorAll('.item-despacho').forEach(el => {
+                    el.addEventListener('click', () => seleccionarItem(el));
+
+                    el.addEventListener('dragstart', (e) => {
+                        e.dataTransfer.setData('text/plain', el.dataset.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        el.classList.add('dragging');
+                    });
+
+                    el.addEventListener('dragend', () => {
+                        el.classList.remove('dragging');
+                    });
+                });
+            });
+
+        } catch (err) {
+            console.error("Error al cargar lista de Despacho:", err);
+            const la = document.getElementById('lista-asignados');
+            const lna = document.getElementById('lista-no-asignados');
+            if (la) la.innerHTML = '<p>❌ Error loading assigned services</p>';
+            if (lna) lna.innerHTML = '<p>❌ Error loading available services</p>';
+        }
+    }
+    
+    let coincidencias = [];
+    let indiceActual = -1;
+
+    function resaltarCoincidencias(texto) {
+        const contenedor = document.getElementById('lista-no-asignados');
+        const items = contenedor.querySelectorAll('.item-despacho');
+        
+        // Reset
+        coincidencias = [];
+        indiceActual = -1;
+        items.forEach(item => {
+            item.classList.remove('resaltado', 'resaltado-activo');
+        });
+
+        if (!texto.trim()) {
+            document.getElementById('btn-next-coincidencia').style.display = 'none';
+            return;
+        }
+
+        const busqueda = texto.trim().toLowerCase();
+        
+        items.forEach(item => {
+            const textoItem = item.textContent.toLowerCase();
+            if (textoItem.includes(busqueda)) {
+                item.classList.add('resaltado');
+                coincidencias.push(item);
+            }
+        });
+
+        if (coincidencias.length > 0) {
+            document.getElementById('btn-next-coincidencia').style.display = 'inline-block';
+            // Ir al primer coincidente automáticamente
+            irAlSiguienteCoincidente();
+        } else {
+            document.getElementById('btn-next-coincidencia').style.display = 'none';
+        }
+    }
+
+    function actualizarContadorPanel(contenedor, pieId) {
+        const count = contenedor.querySelectorAll('.item-despacho').length;
+        document.getElementById(pieId).textContent = `${count} item${count !== 1 ? 's' : ''}`;
+    }
+
+    function irAlSiguienteCoincidente() {
+        if (coincidencias.length === 0) return;
+
+        // Quitar resaltado activo anterior
+        coincidencias.forEach(item => item.classList.remove('resaltado-activo'));
+
+        // Avanzar al siguiente
+        indiceActual = (indiceActual + 1) % coincidencias.length;
+        const itemActual = coincidencias[indiceActual];
+
+        // Resaltar activo
+        itemActual.classList.add('resaltado-activo');
+
+        // Hacer scroll suave al ítem
+        itemActual.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+            inline: 'nearest'
+        });
+    }
+
+    // Evento: escribir en el input
+    document.getElementById('buscar-no-asignados')?.addEventListener('input', function(e) {
+        resaltarCoincidencias(e.target.value);
+    });
+
+    // Evento: clic en "Next"
+    document.getElementById('btn-next-coincidencia')?.addEventListener('click', function() {
+        irAlSiguienteCoincidente();
+    });
+
+    let itemSeleccionado = null;
+
+    function seleccionarItem(item) {
+        // Quitar selección previa
+        if (itemSeleccionado) {
+            itemSeleccionado.classList.remove('seleccionado');
+        }
+
+        // Seleccionar nuevo
+        item.classList.add('seleccionado');
+        itemSeleccionado = item;
+
+        // Habilitar botón correspondiente
+        const tipo = item.dataset.tipo;
+        document.getElementById('btn-mover-a-asignados').disabled = (tipo !== 'no-asignado');
+        document.getElementById('btn-mover-a-no-asignados').disabled = (tipo !== 'asignado');
+    }
+
+    function moverItem(elemento, origen) {
+        const destino = origen === 'asignado' ? 'no-asignado' : 'asignado';
+        const contenedorDestino = destino === 'asignado' ? listaAsignados : listaNoAsignados;
+        const contenedorOrigen = origen === 'asignado' ? listaAsignados : listaNoAsignados;
+
+        // Quitar selección
+        elemento.classList.remove('seleccionado');
+
+        // Mover visualmente
+        contenedorDestino.insertAdjacentElement('beforeend', elemento);
+        elemento.dataset.tipo = destino;
+
+        // Actualizar color de fondo si usas estilo por panel
+        elemento.style.backgroundColor = destino === 'asignado' ? '#f0fff0' : '';
+
+        // ✅ Actualizar contadores
+        actualizarContadorPanel(listaAsignados, 'pie_panel_izquierdo');
+        actualizarContadorPanel(listaNoAsignados, 'pie_panel_derecho');
+
+        // Deshabilitar botones
+        document.getElementById('btn-mover-a-asignados').disabled = true;
+        document.getElementById('btn-mover-a-no-asignados').disabled = true;
+    }
+
+    // Eventos para botones centrales (si quieres usarlos en lugar del clic directo)
+    document.getElementById('btn-mover-a-asignados')?.addEventListener('click', () => {
+        if (itemSeleccionado && itemSeleccionado.dataset.tipo === 'no-asignado') {
+            moverItem(itemSeleccionado, 'no-asignado');
+            itemSeleccionado = null;
+            // Deshabilitar botones
+            document.getElementById('btn-mover-a-asignados').disabled = true;
+            document.getElementById('btn-mover-a-no-asignados').disabled = true;
+        }
+    });
+
+    document.getElementById('btn-mover-a-no-asignados')?.addEventListener('click', () => {
+        if (itemSeleccionado && itemSeleccionado.dataset.tipo === 'asignado') {
+            moverItem(itemSeleccionado, 'asignado');
+            itemSeleccionado = null;
+            document.getElementById('btn-mover-a-asignados').disabled = true;
+            document.getElementById('btn-mover-a-no-asignados').disabled = true;
+        }
+    });
+
+    // === Control botón "Select Despacho" ===
+    // document.getElementById('btn-zona_c').addEventListener('click', async () => {
+    //     try {
+    //         const res = await fetch('/app/ajax/zonasAjax.php', {
+    //             method: 'POST',
+    //             headers: { 'Content-Type': 'application/json' },
+    //             body: JSON.stringify({ modulo_zonas: 'registrar_zonas' })
+    //         });
+
+    //         if (!res.ok) throw new Error('HTTP ' + res.status);
+
+
+    //     } catch (err) {
+    //         console.error("Error al cargar lista de Despacho:", err);
+    //         listaDespacho.innerHTML = '<p>Error loading clients</p>';
+    //     }
+    // });
+
     window.abrirModalDesdeSeleccion = function (id_servicio) {
         const servicio = carrusel.datos.find(s => s.id_servicio == id_servicio);
         if (servicio) {
@@ -1815,6 +2078,7 @@ console.log("Cerrando modal");
             return;
         }
         modal.style.display = 'flex';
+console.log("Llego al la captura del click");        
         await cargarMatrizDiaria();
     });
 
@@ -1847,7 +2111,10 @@ console.log("Cerrando modal");
             });
 
             if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-            const servicios = await res.json();
+
+            const respuesta = await res.json();
+            const servicios = respuesta.servicios || [];
+            const vehiculosSinServicio = respuesta.vehiculosSinServicio || [];
 
             if (!Array.isArray(servicios)) {
                 throw new Error('La respuesta no es un array');
@@ -1890,6 +2157,7 @@ console.log("Cerrando modal");
             });
             tbody.appendChild(trResume);
 
+console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
             clientes.forEach(cliente => {
                 const tr = document.createElement('tr');
                 const tdCliente = document.createElement('td');
@@ -1950,7 +2218,156 @@ console.log("Cerrando modal");
     }
 
     // === AQUÍ agregas esta línea ===
-    esperarYcargarCarrusel();
+    //esperarYcargarCarrusel();
+
+    function actualizarStatusM2(id_servicio) {
+        // Buscar el servicio actualizado
+        const servicio = window.serviciosData?.find(s => s.id_servicio == id_servicio);
+        if (!servicio) return;
+
+        // Obtener el elemento del popup si está abierto
+        const marker = window.mapMarkers?.[id_servicio];
+        if (!marker) return;
+
+        const popup = marker.getPopup();
+        if (!popup || !popup._content) return;
+
+        // === Lógica equivalente al CASE SQL ===
+        const { hora_inicio_gps, hora_fin_gps } = servicio;
+        let statusText = 'Not yet attended';
+
+        if (hora_inicio_gps && hora_fin_gps) {
+            // Service Performed
+            const inicio = new Date(hora_inicio_gps);
+            const fin = new Date(hora_fin_gps);
+            const diffSec = (fin - inicio) / 1000;
+            const h = String(Math.floor(diffSec / 3600)).padStart(2, '0');
+            const m = String(Math.floor((diffSec % 3600) / 60)).padStart(2, '0');
+            const s = String(Math.floor(diffSec % 60)).padStart(2, '0');
+            statusText = `Service Performed (${h}:${m}:${s})`;
+        }
+        else if (hora_inicio_gps && !hora_fin_gps) {
+            // Started
+            const inicio = new Date(hora_inicio_gps);
+            const ahora = new Date();
+            const diffMin = Math.floor((ahora - inicio) / 60000); // minutos
+            statusText = `Started (${diffMin} min ago)`;
+        }
+        else if (!hora_inicio_gps && hora_fin_gps) {
+            // Finished
+            statusText = 'Finished';
+        }
+
+        // === Actualizar solo el div con class "tit_status2" ===
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = popup.getContent();
+
+        const status2El = tempDiv.querySelector('.tit_status2');
+        if (status2El) {
+            status2El.innerHTML = `<b>Status M2:</b> ${statusText}`;
+        }
+
+        // Reemplazar contenido del popup
+        popup.setContent(tempDiv.innerHTML);
+
+        // Si el popup está abierto, se actualiza visualmente
+        if (popup.isOpen()) {
+            popup.update();
+        }
+
+        // ✅ Actualizar automáticamente cada minuto para "Started"
+        if (hora_inicio_gps && !hora_fin_gps) {
+            // Limpiar temporizador previo si existe
+            if (window.statusM2Timers?.[id_servicio]) {
+                clearInterval(window.statusM2Timers[id_servicio]);
+            }
+
+            const timer = setInterval(() => {
+                actualizarStatusM2(id_servicio);
+            }, 10000); // Cada minuto
+
+            // Guardar referencia
+            if (!window.statusM2Timers) window.statusM2Timers = {};
+            window.statusM2Timers[id_servicio] = timer;
+        }
+        else {
+            // Limpiar si ya no es "Started"
+            if (window.statusM2Timers?.[id_servicio]) {
+                clearInterval(window.statusM2Timers[id_servicio]);
+                delete window.statusM2Timers[id_servicio];
+            }
+        }        
+    }
+
+    // === MONITOREO CONTINUO DEL GPS PARA SINCRONIZAR ESTADO AUTOMÁTICAMENTE ===
+    async function iniciarMonitoreoGPSContinuo() {
+        //console.log("🚀 Iniciando monitoreo continuo del GPS...");
+
+        // Solo proceder si existe window.serviciosData
+        if (!Array.isArray(window.serviciosData)) {
+            console.warn("⚠️ window.serviciosData no disponible aún. Reintentando...");
+            return;
+        }
+
+        try {
+            const res = await fetch('/app/ajax/motor2Ajax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    modulo_motor2: 'obtener_ultimo_punto_todos'
+                })
+            });
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            const data = await res.json();
+            if (!data?.puntos || !Array.isArray(data.puntos)) return;
+
+            const umbralMetros = window.APP_CONFIG?.umbral_metros || 150;
+
+            // Procesar cada punto GPS recibido
+            for (const punto of data.puntos) {
+                const truck = punto.truck;
+                const lat = parseFloat(punto.lat);
+                const lng = parseFloat(punto.lng);
+
+                if (isNaN(lat) || isNaN(lng)) continue;
+
+                // Buscar servicios asociados a este camión
+                const serviciosCamion = window.serviciosData.filter(s => s.truck === truck);
+
+                for (const servicio of serviciosCamion) {
+                    if (!servicio.lat || !servicio.lng) continue;
+
+                    const distancia = calcularDistanciaMetros(lat, lng, servicio.lat, servicio.lng);
+                    const estaCerca = distancia <= umbralMetros;
+
+                    const inicioMarcado = !!servicio.hora_inicio_gps;
+                    const finMarcado = !!servicio.hora_fin_gps;
+
+                    // Caso 1: Detectar INICIO del servicio
+                    if (estaCerca && !inicioMarcado) {
+                        console.log(`📍 GPS detecta inicio para servicio ${servicio.id_servicio} (${servicio.cliente})`);
+                        await sincronizarEstadoGPS(servicio.id_servicio, 'inicio', punto.timestamp);
+                        
+                        // Opcional: Actualizar localmente
+                        servicio.hora_inicio_gps = punto.timestamp;
+                    }
+
+                    // Caso 2: Detectar FIN del servicio
+                    else if (!estaCerca && inicioMarcado && !finMarcado) {
+                        console.log(`🏁 GPS detecta fin para servicio ${servicio.id_servicio} (${servicio.cliente})`);
+                        await sincronizarEstadoGPS(servicio.id_servicio, 'fin', punto.timestamp);
+                        
+                        // Opcional: Actualizar localmente
+                        servicio.hora_fin_gps = punto.timestamp;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('❌ Error en monitoreo GPS continuo:', err);
+        }
+    }
 
     // === SEGUIMIENTO MÚLTIPLE DE VEHÍCULOS – Emulado con datos reales ===
     window.gpsMarkers = {};
@@ -2280,14 +2697,365 @@ console.log("Cerrando modal");
         }
     });
 
+    document.getElementById('btn-reconciliar-historico-completo')?.addEventListener('click', async () => {
+        const confirmado = await suiteConfirm(
+            "Reconciliar Datos",
+            "¿Ejecutar reconciliación histórica?\n\nSe procesarán servicios sin hora GPS."
+        );
+        
+        if (!confirmado) return;
+        try {
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ modulo_servicios: 'reconciliar_datos_historicos_final' })
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                await suiteAlertSuccess("Éxito", data.message);
+                console.log("📊 Detalles:", data.detalles);
+            } else {
+                await suiteAlertError("Error", data.error || "No se pudo completar");
+            }
+        } catch (err) {
+            await suiteAlertError("Error", "Fallo de conexión en btn-reconciliar-historico: " + err.message);
+            console.error(err);
+        }
+    });
+
+    // === LISTENERS PARA BOTONES DEL MODAL DE SERVICIO ===
+    document.getElementById('btn-inicio-actividades').onclick = () => {
+        prepararAccion(window.servicioTemporalId, 'inicio_actividades');
+    };
+    document.getElementById('btn-finalizar-servicio').onclick = () => {
+        prepararAccion(window.servicioTemporalId, 'finalizado');
+    };
+    document.getElementById('btn-replanificar-servicio').onclick = () => {
+        prepararAccion(window.servicioTemporalId, 'replanificado');
+    };
+    document.getElementById('btn-cancelar-servicio').onclick = () => {
+        prepararAccion(window.servicioTemporalId, 'cancelado');
+    };
+    document.getElementById('btn-guardar-notas').onclick = () => {
+        guardarNotas(window.servicioTemporalId, window.estadoTemporal);
+    };
+    document.getElementById('btn-cancelar-notas').onclick = () => {
+        cancelarNotas();
+    };
+
+    //if (window.location.href.includes('dashboard-view')) {
+
+    // 1. Abrir modal al hacer click en "Where is it?"
+    const menuDondeEsta = document.getElementById('menu-donde-esta');
+    const modalDondeEsta = document.getElementById('modal-donde-esta');
+    const selectVehiculo = document.getElementById('select-vehiculo-donde-esta');
+    const closeModalDondeEsta = document.getElementById('close_modal_donde_esta');
+    const infoVehiculo = document.getElementById('info-vehiculo-donde-esta');
+
+    if (menuDondeEsta && modalDondeEsta && selectVehiculo && closeModalDondeEsta && infoVehiculo) {
+        menuDondeEsta.onclick = async function(e) {
+            e.preventDefault();
+            document.getElementById('menu-lateral').style.display = 'none';
+            document.getElementById('menu-overlay').style.display = 'none';
+            infoVehiculo.innerHTML = '';
+            modalDondeEsta.style.display = 'flex';
+
+            // Cargar vehículos del día
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ modulo_servicios: 'listar_vehiculos' })
+            });
+
+            const resp = await res.json();
+
+            if (resp.success) {
+                console.log(`✅ Vehiculos encontrados (${resp.data.length}):`, resp.data);
+
+                const vehiculos = resp.data;
+                
+                selectVehiculo.innerHTML = '';
+
+                const optDefault = document.createElement('option');
+                optDefault.value = '';
+                optDefault.textContent = 'Select a vehicle';
+                optDefault.disabled = true;
+                optDefault.selected = true;
+                selectVehiculo.appendChild(optDefault);
+                
+                if (vehiculos && vehiculos.length) {
+                    vehiculos.forEach(v => {
+                        const opt = document.createElement('option');
+                        opt.value = v.id_truck;
+                        opt.textContent = v.nombre + (v.placa ? ' (' + v.placa + ')' : '');
+                        opt.setAttribute('data-nombre', v.nombre); // <--- Aquí
+                        opt.setAttribute('data-color', v.color); // <--- Aquí
+                        selectVehiculo.appendChild(opt);
+                    });
+                } else {
+                    selectVehiculo.innerHTML = '<option>No vehicles found</option>';
+                }
+            } else {
+                console.warn(`⚠️ Error updating GPS time: ${resp.error}`);
+            }
+
+        };
+    }
+    
+    // 2. Al seleccionar un vehículo, mostrar info y marker
+    document.getElementById('select-vehiculo-donde-esta').onchange = async function() {
+        const select = this;
+        const selectedOption = select.options[select.selectedIndex];
+        const nombreVehiculo = selectedOption.getAttribute('data-nombre');
+        const colorVehiculo = selectedOption.getAttribute('data-color') || '#2196F3';
+        // Ahora puedes usar nombreVehiculo
+        console.log('Nombre del vehículo:', nombreVehiculo);
+
+        const idtruck = this.value;
+        const infoDiv = document.getElementById('info-vehiculo-donde-esta');
+        infoDiv.innerHTML = 'Loading...';
+
+        const data = {
+            modulo_motor2: 'info_vehiculo', 
+            id_truck: nombreVehiculo
+        };
+
+        // Consultar si el vehículo tiene servicio activo
+        const resp = await fetch('/app/ajax/motor2Ajax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        const vdata = await resp.json();
+
+        // Si no está en servicio, consultar a verizon
+        if (vdata && vdata.lat && vdata.lng) {
+
+            // Suponiendo que ya tienes lat y lng del vehículo
+            const latVehiculo = vdata.lat;
+            const lngVehiculo = vdata.lng;
+
+            // 1. Verificar si está en la sede
+            const sedeLat = 30.3204272;
+            const sedeLng = -95.4217815;
+            const distanciaSede = calcularDistanciaMetros(latVehiculo, lngVehiculo, sedeLat, sedeLng);
+
+            let html = `
+                <div style="
+                    background: ${colorVehiculo};
+                    color: #fff;
+                    font-size: 1.2em;
+                    font-weight: bold;
+                    padding: 12px 18px;
+                    border-radius: 8px 8px 0 0;
+                    margin-bottom: 18px;
+                    letter-spacing: 1px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+                ">
+                    Vehicle: ${nombreVehiculo}
+                </div>
+                <div style="padding: 18px 12px 12px 12px; background: #f9f9f9; border-radius: 0 0 8px 8px;">
+                    <div style="margin-bottom: 12px;">
+                        <b>Location:</b> <span style="color:#0066cc">${vdata.lat}, ${vdata.lng}</span>
+                    </div>
+            `;
+
+            if (distanciaSede <= window.APP_CONFIG.umbral_metros) {
+                html += `
+                    <div style="margin-bottom: 12px;">
+                        <b>Location:</b> <span style="color:#388e3c;">At headquarters</span>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <b>Distance:</b> ${Math.round(distanciaSede)} meters
+                    </div>
+                `;
+            } else {
+                // 1. Consultar propiedades
+                const resProps = await fetch('/app/ajax/serviciosAjax.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ modulo_servicios: 'listar_propiedades' })
+                });
+                const propsResp = await resProps.json();
+                let propiedadEncontrada = null;
+
+                let dist = null;
+
+                if (propsResp.success && Array.isArray(propsResp.data)) {
+                    for (const prop of propsResp.data) {
+                        dist = calcularDistanciaMetros(
+                            latVehiculo, lngVehiculo,
+                            parseFloat(prop.lat), parseFloat(prop.lng)
+                        );
+                        if (dist <= window.APP_CONFIG.umbral_metros) {
+                            propiedadEncontrada = prop;
+                            break;
+                        }
+                    }
+                }
+
+                if (propiedadEncontrada) {
+                    html += `
+                        <div style="margin-bottom: 12px;">
+                            <b>Property:</b> <span style="color:#1565c0;">${propiedadEncontrada.cliente}</span>
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <b>Address:</b> ${propiedadEncontrada.direccion}
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <b>Distance:</b> ${Math.round(dist)} meters
+                        </div>
+                    `;
+                } else {
+                    $apiKey = "pk.1472af9e389d1d577738a28c25b3e620"
+                    $lat = latVehiculo;
+                    $lng = lngVehiculo;
+
+                    const data = {
+                        modulo_motor2: 'obtener_direccion', 
+                        apikey: $apiKey,
+                        lat: $lat,
+                        lng: $lng
+                    };
+
+                    const resp = await fetch('/app/ajax/motor2Ajax.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    const locationIQ = await resp.json();
+
+                    if (locationIQ && locationIQ.direccion && locationIQ.data) {
+                        html += `
+                            <div style="margin-bottom: 12px;">
+                                <b>Address:</b> <span style="color:#388e3c;">${locationIQ.direccion}</span>
+                            </div>
+                        `;
+                    } else {
+                        html += `
+                            <div style="margin-bottom: 12px;">
+                                <b>Location:</b> <span style="color:#c62828;">Not at any registered Location</span>
+                            </div>
+                        `;
+                    }
+                }
+            }
+            html += `</div>`;
+            infoDiv.innerHTML = html;                
+
+            if (window.mapa) {
+                if (window.markerDondeEsta) window.mapa.removeLayer(window.markerDondeEsta);
+                window.markerDondeEsta = L.marker([vdata.lat, vdata.lng], {icon: L.icon({iconUrl:'/img/marker-donde-esta.png', iconSize:[32,32]})}).addTo(window.mapa);
+                window.mapa.setView([vdata.lat, vdata.lng], 16);
+                setTimeout(() => {
+                    if (window.markerDondeEsta) window.mapa.removeLayer(window.markerDondeEsta);
+                }, 10 * 60 * 1000);
+            }
+        } else {
+            infoDiv.innerHTML = 'No location found for this vehicle.';
+        }
+    };
+
+    // Inicializar comportamiento de submenús (hover + focus)
+    (function initSubmenuBehaviour(){
+        const submenuToggles = document.querySelectorAll('.has-submenu');
+    
+        submenuToggles.forEach(container => {
+            const toggleLink = container.querySelector('.submenu-toggle');
+    
+            // mouse enter / leave
+            container.addEventListener('mouseenter', () => {
+                container.classList.add('open');
+                container.setAttribute('aria-expanded', 'true');
+            });
+            container.addEventListener('mouseleave', () => {
+                container.classList.remove('open');
+                container.setAttribute('aria-expanded', 'false');
+            });
+    
+            // keyboard accessibility: focusin / focusout
+            container.addEventListener('focusin', () => {
+                container.classList.add('open');
+                container.setAttribute('aria-expanded', 'true');
+            });
+            container.addEventListener('focusout', (ev) => {
+                // si el foco sale completamente del contenedor, cerramos
+                if (!container.contains(ev.relatedTarget)) {
+                    container.classList.remove('open');
+                    container.setAttribute('aria-expanded', 'false');
+                }
+            });
+    
+            // permitir toggle con tecla Enter / Space sobre el enlace
+            if (toggleLink) {
+                toggleLink.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        const isOpen = container.classList.toggle('open');
+                        container.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                        // mover foco al primer elemento del submenu si se abre
+                        if (isOpen) {
+                            const first = container.querySelector('.submenu a');
+                            if (first) first.focus();
+                        }
+                    }
+                });
+            }
+        });
+    })(); 
+
+    // 3. Botón cerrar modal
+    document.getElementById('close_modal_donde_esta').onclick = function() {
+        document.getElementById('modal-donde-esta').style.display = 'none';
+        if (window.markerDondeEsta && window.mapa) {
+            window.mapa.removeLayer(window.markerDondeEsta);
+        }
+        document.getElementById('menu-lateral').style.display = '';
+        document.getElementById('menu-overlay').style.display = '';
+    };
+    //}    
+    
     // === 5. Si usas polling o eventos personalizados, dispara este evento cuando haya datos ===
     // Ejemplo: cuando asignes window.serviciosData, haz:
     // window.dispatchEvent(new Event('serviciosActualizados'));
 
 
-    console.log("🚀 Sistema de flecha hacia mapa iniciado");
+    document.getElementById('lista-asignados').addEventListener('dragover', (e) => {
+        e.preventDefault(); // permite soltar
+        e.dataTransfer.dropEffect = 'move';
+    });
 
+    document.getElementById('lista-no-asignados').addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    });
+
+    document.getElementById('lista-asignados').addEventListener('drop', (e) => {
+        e.preventDefault();
+        const id = e.dataTransfer.getData('text/plain');
+        const item = document.querySelector(`.item-despacho[data-id="${id}"]`);
+        if (item && item.dataset.tipo === 'no-asignado') {
+            moverItem(item, 'no-asignado');
+        }
+    });
+
+    document.getElementById('lista-no-asignados').addEventListener('drop', (e) => {
+        e.preventDefault();
+        const id = e.dataTransfer.getData('text/plain');
+        const item = document.querySelector(`.item-despacho[data-id="${id}"]`);
+        if (item && item.dataset.tipo === 'asignado') {
+            moverItem(item, 'asignado');
+        }
+    });
+
+    console.log("🚀 Sistema de flecha hacia mapa iniciado");
 }); // Cierre del DOMContentLoaded
+
+
 
 // === Función para llenar el panel flotante con vehículos activos ===
 function actualizarPanelFlotante(vehicles) {
@@ -2429,41 +3197,6 @@ function actualizarCeldaActividadGps(servicio) {
     const finGps = formatTime(servicio.hora_fin_gps);
 
     // --- Start GPS ---
-    if (inicioGps) {
-        startGps.innerHTML = `<b>Start GPS:</b> ${inicioGps}`;
-        startGps.style.display = 'block';
-    } else {
-        startGps.style.display = 'none';
-    }
-
-    // --- End GPS ---
-    if (finGps) {
-        endGps.innerHTML = `<b>End GPS:</b> ${finGps}`;
-        endGps.style.display = 'block';
-    } else {
-        endGps.style.display = 'none';
-    }
-
-    // --- Duration GPS ---
-    let durationText = 'Waiting for data to calculate';
-    if (servicio.hora_inicio_gps && !servicio.hora_fin_gps) {
-        durationText = 'In progress';
-    } else if (servicio.hora_inicio_gps && servicio.hora_fin_gps) {
-        const start = new Date(servicio.hora_inicio_gps).getTime();
-        const end = new Date(servicio.hora_fin_gps).getTime();
-        const diff = end - start;
-        const h = String(Math.floor(diff / 3600000)).padStart(2, '0');
-        const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
-        const s = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
-        durationText = `${h}:${m}:${s}`;
-    }
-    durationGps.innerHTML = `<b>Duration GPS:</b> ${durationText}`;
-}
-
-// ———————————————————————————————————————
-// CARGA OBLIGATORIA A LAS 00:01:00
-// ———————————————————————————————————————
-function esperarYcargarCarrusel() {
     const ahora = new Date();
     let ejecucion = new Date(
         ahora.getFullYear(),
@@ -2479,7 +3212,7 @@ function esperarYcargarCarrusel() {
 
     const esperaMs = ejecucion - ahora;
 
-    console.log(`⏱️ Programado para ejecutar en: ${Math.ceil(esperaMs / 1000 / 60)} minutos`);
+    //console.log(`⏱️ Programado para ejecutar en: ${Math.ceil(esperaMs / 1000 / 60)} minutos`);
 
     setTimeout(async () => {
         console.log("⏰ [00:01:00] Ejecutando reinicio del sistema...");
@@ -2493,65 +3226,3 @@ function esperarYcargarCarrusel() {
         }
     }, esperaMs);
 }
-
-// === ESTILOS CSS PARA LA FLECHA ===
-// (Esto puede ir también en tu archivo CSS principal)
-const estiloFlecha = `
-.flecha-tooltip {
-    position: absolute;
-    background: linear-gradient(135deg, #4CAF50, #2E7D32);
-    color: white;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: bold;
-    white-space: nowrap;
-    z-index: 1000;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    pointer-events: none;
-    animation: fadeIn 0.3s ease;
-}
-
-.flecha-tooltip::before {
-    content: '';
-    position: absolute;
-    width: 0;
-    height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-top: 8px solid #4CAF50;
-    bottom: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.flecha-linea {
-    position: absolute;
-    background: #4CAF50;
-    transform-origin: 0 0;
-    z-index: 999;
-    pointer-events: none;
-}
-
-.flecha-punta {
-    position: absolute;
-    width: 0;
-    height: 0;
-    border-top: 6px solid transparent;
-    border-bottom: 6px solid transparent;
-    border-left: 10px solid #4CAF50;
-    z-index: 999;
-    pointer-events: none;
-}
-`;
-
-// Insertar estilos en el documento
-const styleSheet = document.createElement('style');
-styleSheet.textContent = estiloFlecha;
-document.head.appendChild(styleSheet);
-

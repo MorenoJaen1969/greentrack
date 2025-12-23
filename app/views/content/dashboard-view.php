@@ -1,18 +1,28 @@
-<!-- app/views/content/dashboard-view.php -->
 <div class="dashboard-container">
     <!-- 30% - Carrusel de servicios -->
     <div class="carousel-wrapper">
         <div class="elem_row">
-            <h3 class="carousel-title">
-                Daily Itinirary
-                <span id="fecha-display" style="color: #fffb23ff; margin: 0 8px;">-- --</span>
-                <span id="hora-display" style="color: #4aff1cff;">--:--:--</span>
-                <button id="btn-daily-status" class="button" style="margin-left: 10px;">
-                    Daily Status
-                </button>
-                <button id="btn-select-client" class="button" style="margin-left: 10px;">
-                    Select Client
-                </button>
+            <h3 class="carousel-title"> 
+                <div class="grid-t-p">
+                    <div class="grid-t-p_01">
+                        Daily Itinirary
+                        <span id="fecha-display" style="color: #fffb23ff; margin: 0 8px;">-- --</span>
+                        <span id="hora-display" style="color: #4aff1cff;">--:--:--</span>
+                    </div>
+                    <div class="grid-t-p_02">
+                        <button id="btn-daily-status" class="button" style="margin-left: 10px;">
+                            Daily Status
+                        </button>
+                        <button id="btn-select-client" class="button" style="margin-left: 10px;">
+                            Select Customer
+                        </button>
+                    </div>
+                    <div class="grid-t-p_03">
+                        <button id="btn-select-despacho" class="button-despacho" style="margin-left: 10px;">
+                            Dispatch Service
+                        </button>
+                    </div>
+                </div>
             </h3>
         </div>
 
@@ -68,11 +78,12 @@
     </div>
 </div>
 
+<!-- Modal: Para Seleccionar Cliente -->
 <div id="modal-select-client" class="segundo_proceso" style="display: none;">
     <div class="modal-contenedor" style="width: 50%;">
         <!-- Encabezado -->
         <div class="modal-header">
-            <h3 class="titulo_modal">Select Client</h3>
+            <h3 class="titulo_modal">Select Customer</h3>
             <button id="close-select-client" class="btn_cerrar">&times;</button>
         </div>
         <div id="lista-clientes" style="max-height: 50vh; overflow-y: auto;">
@@ -81,13 +92,79 @@
     </div>
 </div>
 
+<!-- Modal: Para Mostrar despacho -->
+<div id="modal-select-despacho" class="segundo_proceso" style="display: none;">
+    <div class="modal-contenedor_despacho">
+        <!-- Encabezado -->
+        <div class="modal-header">
+            <h3 class="titulo_modal">Service Dispatch</h3>
+            <!-- <button id="btn-zona_c">🔄 Crear Zonas Cuadriculas</button> -->
+            <button id="close-select-despacho" class="btn_cerrar">&times;</button>
+        </div>
+
+        <!-- Contenedor de los dos paneles -->
+        <div style="display: flex; gap: 0.5rem; justify-content: space-between; width: 100%;">
+            <div class="panel1">
+                <!-- Panel: Servicios Asignados (HOY) -->
+                <div class="lista_despacho">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4 id="tit_tipo_servcio" style="margin: 0; color: #2c7;">Pre-Assigned</h4>
+                        <div>
+                            <label for="fecha-despacho">This dispatch is for the day:</label>
+                            <input type="date" id="fecha-despacho" style="font-size: 0.9em; padding: 0.3rem; border: 1px solid #999; border-radius: 4px;">
+                        </div>
+                    </div>
+                    <div id="lista-asignados" class="panel-scroll vista_det">
+                        <p>Loading...</p>
+                    </div>
+                </div>
+
+                <div id="pie_panel_izquierdo" class="pie_despacho caja_resumen">
+                    <!-- Botón de guardar (opcional, para futura implementación) -->
+                    <div style="text-align: center; margin-top: 1rem;">
+                        <button id="btn-guardar-despacho" class="btn-guardar">Save Dispatch</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones de control central -->
+            <div style="display: flex; flex-direction: column; justify-content: center; gap: 0.5rem;">
+                <button id="btn-mover-a-asignados" disabled title="Add to Today">></button>
+                <button id="btn-mover-a-no-asignados" disabled title="Remove from Today"><</button>
+            </div>
+
+            <div class="panel1">
+                <!-- Panel: Servicios NO Asignados -->
+                <div class="lista_despacho">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4 style="margin-top: 0; color: #a33;">Available for Assignment</h4>
+                        <!-- Dentro del panel derecho -->
+                        <div class="elemnto_hor" style="margin-bottom: 0.8rem; width: 20vw;">
+                            <input type="text" id="buscar-no-asignados" 
+                                placeholder="Search for client, address, or frequency..." 
+                                style="width: 100%; margin-right:10px; padding: 0.4rem; font-size: 0.9em; border: 1px solid #ccc; border-radius: 4px;">
+                            <button id="btn-next-coincidencia" 
+                                    style="display: none; padding: 0.4rem 0.6rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                Next
+                            </button>                            
+                        </div>
+                    </div>
+
+                    <div id="lista-no-asignados" class="panel-scroll vista_det">
+                        <p>Loading...</p>
+                    </div>
+                </div>
+
+                <div id="pie_panel_derecho" class="pie_despacho caja_resumen">
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
 <!-- Formulario flotante sobre el mapa -->
-<div id="form-flotante-historico" style="position: absolute; top: 40px; right: 40px; z-index: 10001; 
-            width: 280px; height: auto; min-height: 80px; 
-            background: rgba(0,0,0,0.7); color: #fff; border-radius: 10px; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2); 
-            padding: 12px; cursor: move; display: flex; flex-direction: column; 
-            font-family: Arial, sans-serif;">
+<div id="form-flotante-historico" class="form_float">
 
     <!-- Título y botón Ver -->
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -97,6 +174,40 @@
             View
         </button>
         <!-- <button id="btn-reconciliar-historico">🔄 Reconcile Historical Data</button>         -->
+        <!-- <button id="btn-reconciliar-historico-completo">🔄 Reconcile Historical Data</button>         -->
+    </div>
+
+    <!-- Línea divisoria con margen -->
+    <div style="width: 100%; height: 1px; background: #fff; margin: 6px 0; position: relative; overflow: hidden;">
+        <div style="background: #fff; height: 100%; width: 90%; margin: 0 auto;"></div>
+    </div>
+
+    <!-- Contenedor de botones de vehículos Activos (Con servicios)-->
+    <div id="contenedor-vehiculos-historico"
+        style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; width: 100%;">
+    </div>
+
+    <!-- Línea divisoria con margen -->
+    <div style="width: 100%; height: 1px; background: #fff; margin: 6px 0; position: relative; overflow: hidden;">
+        <div style="background: #fff; height: 100%; width: 90%; margin: 0 auto;"></div>
+    </div>
+
+        <!-- Contenedor de botones de vehículos Activos (Con servicios)-->
+    <div id="contenedor-vehiculos-sin-servicio"
+        style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; width: 100%;">
+    </div>
+
+</div>
+
+<!-- Formulario flotante sobre el mapa Para datos del dia -->
+<div id="form-referencia-dia" class="form_refer">
+    <!-- Título y botón Ver -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div class="elem_column">
+            <span class="tit_form">Pass through day</span>
+            <span id="form_veh_act" class="sub_form"></span>
+            <div id="loading-typewriter"></div>
+        </div>
     </div>
 
     <!-- Línea divisoria con margen -->
@@ -105,22 +216,20 @@
     </div>
 
     <!-- Contenedor de botones de vehículos -->
-    <div id="contenedor-vehiculos-historico" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; width: 100%;">
-        <!-- Los botones se insertarán aquí dinámicamente desde JS -->
-        <!-- Ejemplo: -->
-        <!-- <button class="btn-vehiculo-hist" style="background:#FF0000;">TRUCK 15</button> -->
+    <div id="contenedor-stops" class="contenedor-stops">
     </div>
 </div>
 
 <!-- Modal avanzado para consulta histórica -->
 <div id="modal-historico-ruta" class="modal-overlay"
     style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000;">
-    
+
     <div class="modal_hist"
-         style="width: 96%; height: 90%; margin: 0% auto; background: #fff; border-radius: 10px; padding: 15px; display: flex; flex-direction: column; font-family: Arial, sans-serif;">
+        style="width: 96%; height: 90%; margin: 0% auto; background: #fff; border-radius: 10px; padding: 15px; display: flex; flex-direction: column; font-family: Arial, sans-serif;">
 
         <!-- Título y cierre -->
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #ddd;">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #ddd;">
             <h3 style="margin: 0; font-size: 1.2em;">Historical Route & Services</h3>
             <button id="btn-cerrar-modal-historico"
                 style="background: #f44336; color: #fff; border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 18px; cursor: pointer;">✕</button>
@@ -145,15 +254,13 @@
 
             <!-- Mapa (70%) -->
             <div class="cell-mapa" style="flex: 7; min-width: 300px;">
-                <div id="mapa-historico"
-                     style="width: 100%; height: 100%; background: #222; border-radius: 8px;">
+                <div id="mapa-historico" style="width: 100%; height: 100%; background: #222; border-radius: 8px;">
                 </div>
             </div>
 
             <!-- Panel lateral: Servicios (30%) -->
             <div class="cell-info" style="flex: 3; display: flex; flex-direction: column; min-width: 250px;">
-                <div id="servicios-historico"
-                    style="
+                <div id="servicios-historico" style="
                         flex: 1;
                         max-height: 100%;
                         overflow-y: auto;
@@ -201,7 +308,88 @@
     </div>
 </div>
 
+<!-- Modal de Detalles de Servicio -->
+<div id="modal-servicio" class="modal-overlay_gps" style="display:none;">
+    <div class="modal-contenedor">
+        <button id="close_modal_servicio" class="modal-cerrar1">✕</button>
+        <div class="modal-grid-3x2">
+            <!-- Información principal -->
+            <div class="modal-info" style="grid-column: 1; grid-row: 1 / 3;">
+                <h3>Service Details</h3>
+                <table class="tabla-detalles" id="tabla-detalles-servicio"></table>
+                <h4>Crew Members</h4>
+                <div class="crew-detalle-lista" id="crew-detalle-lista"></div>
+                <div id="ultima-nota-servicio"></div>
+            </div>
+            <!-- Acciones -->
+            <div class="modal-acciones" style="grid-column: 2; grid-row: 1;">
+                <h4>Actions</h4>
+                <button id="btn-inicio-actividades" class="btn-accion btn-inicio">Start of activities</button>
+                <button id="btn-finalizar-servicio" class="btn-accion btn-finalizar">Processed</button>
+                <button id="btn-replanificar-servicio" class="btn-accion btn-replanificar">Rescheduled</button>
+                <button id="btn-cancelar-servicio" class="btn-accion btn-cancelar">Cancelled</button>
+            </div>
+            <!-- Notas y campos dinámicos -->
+            <div class="modal-notas" style="grid-column: 2; grid-row: 2;">
+                <div id="bloque-hora-inicio" class="bloque-hora-inicio" style="display:none; margin-bottom:8px;">
+                    <label><strong>Start time:</strong></label>
+                    <input type="time" id="input-hora-inicio" class="input-hora input-hora-inicio">
+                </div>
+                <div id="bloque-nota-inicio" class="bloque-nota-inicio" style="display:none; margin-bottom:8px;">
+                    <label><strong>Start note:</strong></label>
+                    <textarea id="input-nota-inicio" class="input-notas nota-inicio" readonly></textarea>
+                </div>
+                <div id="bloque-hora-fin" class="bloque-hora-fin" style="display:none; margin-bottom:8px;">
+                    <label><strong>End time:</strong></label>
+                    <input type="time" id="input-hora-fin" class="input-hora input-hora-fin">
+                </div>
+                <div id="bloque-nota-final" class="bloque-nota-final" style="display:none; margin-bottom:8px;">
+                    <label><strong>Final note:</strong></label>
+                    <textarea id="input-nota-final" class="input-notas nota-final" placeholder="Add a note..."></textarea>
+                </div>
+                <div id="acciones-notas" class="acciones-notas" style="display:none;">
+                    <button id="btn-guardar-notas" class="btn-guardar-notas">Save</button>
+                    <button id="btn-cancelar-notas" class="btn-cancelar-notas">Cancel</button>
+                </div>
+            </div>
+            <!-- Historial -->
+            <div class="modal-historial" style="grid-column: 1 / 3; grid-row: 3; height: 200px; overflow-y: auto;">
+                <h4>Service History</h4>
+                <table class="tabla-historial">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Truck</th>
+                            <th>Status</th>
+                            <th>Duration</th>
+                        </tr>                                    
+                    </thead>
+                    <tbody id="historial-servicio">
+                        <tr><td colspan="4">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+    function sumarUnDiaYEvitarSabado(fecha) {
+        // Crear una copia para no modificar la original
+        const nuevaFecha = new Date(fecha);
+        
+        // Sumar 1 día
+        nuevaFecha.setDate(nuevaFecha.getDate() + 1);
+        
+        // Verificar si es sábado (getDay() devuelve 6 para sábado)
+        if (nuevaFecha.getDay() === 6) {
+            // Si es sábado, sumar 1 día más (para hacerlo domingo)
+            nuevaFecha.setDate(nuevaFecha.getDate() + 1);
+        }
+        
+        return nuevaFecha;
+    }
+
     // Actualizar fecha y hora en tiempo real
     function actualizarReloj() {
         const ahora = new Date();
@@ -211,6 +399,7 @@
         const fecha = ahora.toLocaleDateString('es-ES', opcionesFecha)
             .replace('.', ''); // Quitar el punto de "abr."
 
+        
         // Formato: hh:mm:ss
         const hora = ahora.toLocaleTimeString('es-ES', {
             hour: '2-digit',
@@ -228,10 +417,55 @@
     actualizarReloj();
     setInterval(actualizarReloj, 1000);
 
+    // Leer la hora de cierre desde el backend (en formato HH:mm)
+    const horaCierre = '<?php echo HORA_CIERRE_SESION; ?>';
+    let tiempoInactividad = null;
+    let umbralMs = null;
 
+    if (horaCierre) {
+        // Convertir hora de cierre a timestamp de hoy
+        const [horas, minutos] = horaCierre.split(':').map(Number);
+        const hoy = new Date();
+        const cierreHoy = new Date(hoy);
+        cierreHoy.setHours(horas, minutos + 30, 0, 0); // +30 minutos
+
+        // Si ya pasó la hora de cierre, no activar el temporizador
+        if (cierreHoy > hoy) {
+            umbralMs = cierreHoy.getTime() - hoy.getTime();
+            console.log('⏰ Temporizador de inactividad activado. Cierre programado en:', umbralMs / 60000, 'minutos');
+            iniciarTemporizadorInactividad(umbralMs);
+        }
+    }
+
+    function iniciarTemporizadorInactividad(ms) {
+        // Reiniciar temporizador en cada actividad
+        const reiniciar = () => {
+            if (tiempoInactividad) clearTimeout(tiempoInactividad);
+            tiempoInactividad = setTimeout(cerrarSesion, ms);
+        };
+
+        // Eventos que reinician el temporizador
+        ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(evento => {
+            document.addEventListener(evento, reiniciar, true);
+        });
+
+        // Iniciar el temporizador
+        reiniciar();
+    }
+
+    function cerrarSesion() {
+        console.log('🔒 Cerrando sesión por inactividad');
+        // Opcional: notificar al backend
+        fetch('/app/ajax/usuariosAjax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ modulo_usuarios: 'cerrar_sesion' })
+        }).finally(() => {
+            window.location.href = '/'; // Redirigir al login
+        });
+    }
 
     console.log('Antes de cargar Datos Generales');
-
 
     async function cargarConfigYIniciar() {
         try {
@@ -354,5 +588,4 @@
             });
         }
     }
-
 </script>

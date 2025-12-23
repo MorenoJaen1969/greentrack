@@ -123,7 +123,9 @@ class datosgeneralesController extends mainModel
 
     public function obtener_Clave($clave) 
     {
-        $query = "SELECT valor FROM configuracion_sistema WHERE clave = :v_clave";
+        $query = "SELECT valor 
+			FROM configuracion_sistema 
+			WHERE clave = :v_clave";
         $parametros = ['v_clave' => $clave];
 
 		try {
@@ -143,9 +145,44 @@ class datosgeneralesController extends mainModel
 
     }
 
+    public function tiempos_de_actividad() 
+    {
+        $query = "SELECT clave, valor, TIME_FORMAT(valor, '%H:%i') AS valor_hora
+			FROM configuracion_sistema
+			WHERE clave IN ('hora_cierre_sesion', 'hora_fin_jornada', 'hora_inicio_jornada')";
+
+        $parametros = [];
+
+		try {
+			$resultado = $this->ejecutarConsulta($query, '', $parametros, 'fetchAll');
+
+			// Valores por defecto
+			$parametros = [
+				'hora_cierre_sesion' => '18:30',
+				'hora_fin_jornada'     => '18:00',
+				'hora_inicio_jornada'  => '08:00'
+			];
+
+			if ($resultado && is_array($resultado)) {
+				foreach ($resultado as $fila) {
+					if ($fila['valor'] !== null) {
+						$parametros[$fila['clave']] = $fila['valor'];
+					}
+				}
+			}
+		    return $parametros; // ✅ SOLO RETURN, NUNCA ECHO
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error crítico en obtenerClave: " . $e->getMessage(), true);
+	        echo json_encode(['valor' => []]);
+		}
+    }
+
 	public function datos_para_gps()
 	{
-        $query = "SELECT valor FROM configuracion_sistema WHERE clave = :v_clave1 or clave = :v_clave2 OR clave = :v_clave3 OR clave = :v_clave4";
+        $query = "SELECT valor 
+			FROM configuracion_sistema 
+			WHERE clave = :v_clave1 or clave = :v_clave2 OR clave = :v_clave3 OR clave = :v_clave4";
         $parametros = [
 			'v_clave1' => "mapa_base",
 			'v_clave2' => "umbral_metros",

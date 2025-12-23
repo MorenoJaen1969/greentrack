@@ -88,7 +88,11 @@ async function cargarCamionetas(fecha_act) {
         const res = await fetch('/app/ajax/motor2Ajax.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ modulo_motor2: 'obtener_trucks_activos_hoy_color', fecha_proc: fecha_act })
+            body: JSON.stringify({
+                token: '<?php echo $_SESSION["user_access_key"]; ?>',
+                modulo_motor2: 'obtener_trucks_activos_hoy_color',
+                fecha_proc: fecha_act
+            })
         });
         const data = await res.json();
         const lista = document.getElementById('camionetas-list');
@@ -238,12 +242,164 @@ async function verEstadoCamion_pasado(vehicle_id, color, tiempo_act) {
     }
 }
 
+async function obtenerDatosIniciales(vehicle_id) {
+    // === 1. Obtener último punto GPS del vehículo ===
+    const res = await fetch('/app/ajax/motor2Ajax.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            token: '<?php echo $_SESSION["user_access_key"]; ?>',
+            modulo_motor2: 'obtener_ultimo_punto_truck',
+            truck: vehicle_id
+        })
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+}
+
+function mostrarEstadoInicial(detalle, vehicle_id, color, data) {
+    const { puntos, server_time } = data.gps;
+    const puntoActual = puntos[0];
+    const lastRecordTime = new Date(puntoActual.timestamp);
+    const serverTime = new Date(server_time);
+    const diffMin = (serverTime - lastRecordTime) / (1000 * 60);
+
+    const serviciosCamion = data.servicios || [];
+    const crew = Array.isArray(data.crew) ? data.crew : [];
+
+    const estadoParadaHtml = diffMin >= 5
+        ? `<p style="color:#2E7D32; font-size:0.9em;">🟢 Stopped for ${Math.floor(diffMin)} min</p>`
+        : `<p style="color:#FF8F00; font-size:0.9em;">⏩ Active or recently updated</p>`;
+
+    detalle.innerHTML = `
+        <p><small>Last record: ${formatTimeCT(lastRecordTime)}</small></p>
+        <p><small>Server time: ${formatTimeCT(serverTime)}</small></p>
+        ${estadoParadaHtml}
+
+        <p style="color:#0066CC; font-size:0.9em;" id="contador-seccion">
+            👁️ Watching: <span id="tiempo-observado">0m 0s</span><br>
+            📊 Not reporting for: <span id="total-on-site">${Math.floor(diffMin)} min</span>
+        </p>
+
+        <!-- Status, Crew, Servicios -->
+        ${renderStatusHtml(puntoActual, diffMin)}
+        <p><b>Crew:</b></p>
+        ${renderCrewHtml(crew)}
+        <hr>
+        <h4>📋 Services of the day</h4>
+        ${renderServiciosHtml(serviciosCamion, color)}
+    `;
+}
+
+function actualizarEstadoGPS(detalle, gpsData, vehicle_id) {
+    const { puntos, server_time } = gpsData;
+    const puntoActual = puntos[0];
+    const lastRecordTime = new Date(puntoActual.timestamp);
+    const serverTime = new Date(server_time);
+    const diffMin = (serverTime - lastRecordTime) / (1000 * 60);
+
+    const totalEl = document.getElementById('total-on-site');
+    if (totalEl) {
+        totalEl.textContent = `${Math.floor(diffMin)} min`;
+    }
+
+    const statusBox = document.querySelector('.status-box');
+    if (statusBox && diffMin >= 5) {
+        statusBox.innerHTML = '🟡 Stopped<br><small>Location not at client</small>';
+        statusBox.style.background = '#FFC107';
+        statusBox.style.color = 'black';
+    } else if (statusBox) {
+        statusBox.innerHTML = '➡️ En route';
+        statusBox.style.background = '';
+        statusBox.style.color = '';
+    }
+}
+
+function actualizarContadoresVisuales(detalle, segundos) {
+    const watchingEl = document.getElementById('tiempo-observado');
+    if (watchingEl) {
+        const mins = Math.floor(segundos / 60);
+        const segs = segundos % 60;
+        watchingEl.textContent = `${mins}m ${segs}s`;
+    }
+}
+
 /**
  * Muestra el estado detallado del camión seleccionado
  * - Usa última posición GPS
  * - Evalúa si está detenido
  * - Determina estado solo por comportamiento (sin servicios)
  */
+async function verEstadoCamion_propuesta(vehicle_id, color) {
+    const detalle = document.getElementById('estado-detallado');
+    detalle.innerHTML = `<p>Loading ${vehicle_id}...</p>`;
+
+    // Detener seguimiento previo
+    if (window.seguimientoInterval) {
+        clearInterval(window.seguimientoInterval);
+    }
+
+    let tiempoObservadoSegundos = 0;
+
+    try {
+        // === 1. Carga inicial: obtener todo (GPS + servicios + crew) ===
+        const data = await obtenerDatosIniciales(vehicle_id);
+
+        if (!data || !data.gps || data.gps.cantidad === 0) {
+            throw new Error('NoGPS');
+        }
+
+        // Mostrar datos iniciales
+        mostrarEstadoInicial(detalle, vehicle_id, color, data);
+
+        // Marcar como seleccionado
+        marcarSeleccionado(vehicle_id);
+
+        // === 2. Iniciar seguimiento activo (solo GPS) ===
+        window.seguimientoInterval = setInterval(async () => {
+            try {
+                const gpsData = await obtenerUltimoPunto(vehicle_id);
+                if (!gpsData || !gpsData.success || gpsData.cantidad === 0) return;
+
+                // Actualizar solo el bloque crítico
+                actualizarEstadoGPS(detalle, gpsData, vehicle_id);
+
+                // Incrementar tiempo de observación
+                tiempoObservadoSegundos += 5;
+                actualizarContadoresVisuales(detalle, tiempoObservadoSegundos);
+
+            } catch (err) {
+                console.warn(`Seguimiento ${vehicle_id}:`, err.message);
+            }
+        }, 5000);
+
+    } catch (err) {
+        console.error(`Error in verEstadoCamion(${vehicle_id}):`, err);
+
+        // Caso: error en GPS
+        detalle.innerHTML = `
+            <div class="status-box" style="background:#FF9800; color:black;">
+                ⚠️ GPS signal not available
+            </div>
+            <p><small>Unable to determine location.</small></p>
+
+            <p><b>Crew:</b></p>
+            <i>Not assigned</i>
+
+            <hr>
+            <h4>📋 Services of the day (?)</h4>
+            <p style="color:#888;">Services assigned: unknown</p>
+        `;
+
+        document.querySelectorAll('.camioneta-item').forEach(el => {
+            el.classList.remove('selected');
+        });
+        const div = document.querySelector(`.camioneta-item[data-id="${vehicle_id}"]`);
+        if (div) div.classList.add('selected');
+    }
+}
+
 async function verEstadoCamion(vehicle_id, color, tiempo_act) {
     const detalle = document.getElementById('estado-detallado');
     detalle.innerHTML = `<p>Loading ${vehicle_id}...</p>`;
@@ -257,87 +413,76 @@ async function verEstadoCamion(vehicle_id, color, tiempo_act) {
     let tiempoObservadoSegundos = 0;
 
     try {
-        // === 1. Obtener último punto GPS del vehículo ===
-        const res = await fetch('/app/ajax/motor2Ajax.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                modulo_motor2: 'obtener_ultimo_punto_truck',
-                truck: vehicle_id
-            })
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await obtenerDatosIniciales(vehicle_id);
 
-        //if (res.status !== 204) {
-            const data = await res.json();
-            //if (!data?.success || !Array.isArray(data.puntos) || data.puntos.length === 0) {
-            //    throw new Error('InvalidData');
-            //}
+        let estadoParadaHtml = '';
+        let estaDetenido = '';
+        let lat = 0;
+        let lng = 0;
+        let lastRecordTime = "0000-00-00 00:00:00";
+        let diffMs = null;
+        let diffMin = 0;
 
-            let estadoParadaHtml = '';
-            let estaDetenido = '';
-            let lat = 0;
-            let lng = 0;
+        if (data.cantidad > 0) {
+            const { puntos, server_time } = data;
+            const puntoActual = puntos[0];
+            const puntoAnterior = puntos[1] || null;
 
-            if (data.cantidad > 0){
-                const { puntos, server_time } = data;
-                const puntoActual = puntos[0];
-                const puntoAnterior = puntos[1] || null;
+            // Validar coordenadas
+            lat = parseFloat(puntoActual.lat);
+            lng = parseFloat(puntoActual.lng);
+            if (isNaN(lat) || isNaN(lng)) throw new Error('InvalidGPS');
 
-                // Validar coordenadas
-                lat = parseFloat(puntoActual.lat);
-                lng = parseFloat(puntoActual.lng);
-                if (isNaN(lat) || isNaN(lng)) throw new Error('InvalidGPS');
+            // === 2. Convertir tiempos a objetos Date ===
+            const serverTime = new Date(server_time);
+            lastRecordTime = new Date(puntoActual.timestamp);
 
-                // === 2. Convertir tiempos a objetos Date ===
-                const serverTime = new Date(server_time);
-                const lastRecordTime = new Date(puntoActual.timestamp);
+            if (isNaN(lastRecordTime.getTime()) || isNaN(serverTime.getTime())) {
+                throw new Error('InvalidTimestamp');
+            }
 
-                if (isNaN(lastRecordTime.getTime()) || isNaN(serverTime.getTime())) {
-                    throw new Error('InvalidTimestamp');
-                }
+            // Calcular diferencia en minutos
 
-                // Calcular diferencia en minutos
-                const diffMs = serverTime - lastRecordTime;
-                const diffMin = diffMs / (1000 * 60);
+            diffMs = serverTime - lastRecordTime;
+            diffMin = diffMs / (1000 * 60);
 
-                // Formatear hora legible
-                const formatTime = (date) => {
-                    const h = String(date.getHours()).padStart(2, '0');
-                    const m = String(date.getMinutes()).padStart(2, '0');
-                    const s = String(date.getSeconds()).padStart(2, '0');
-                    return `${h}:${m}:${s}`;
-                };
+            // Formatear hora legible
+            const formatTime = (date) => {
+                const h = String(date.getHours()).padStart(2, '0');
+                const m = String(date.getMinutes()).padStart(2, '0');
+                const s = String(date.getSeconds()).padStart(2, '0');
+                return `${h}:${m}:${s}`;
+            };
 
-                // === 3. Evaluar si está detenido ===
-                const umbralMinutos = window.APP_CONFIG?.umbral_minutos || 5;
-                const estaDetenidoPorTiempo = diffMin >= umbralMinutos;
+            // === 3. Evaluar si está detenido ===
+            const umbralMinutos = window.APP_CONFIG?.umbral_minutos || 5;
+            const estaDetenidoPorTiempo = diffMin >= umbralMinutos;
 
-                const estaDetenidoPorMovimiento = puntoAnterior &&
-                    parseFloat(puntoActual.speed) <= 1 &&
-                    Math.abs(parseFloat(puntoActual.course) - parseFloat(puntoAnterior.course)) < window.APP_CONFIG.umbral_course;
+            const estaDetenidoPorMovimiento = puntoAnterior &&
+                parseFloat(puntoActual.speed) <= 1 &&
+                Math.abs(parseFloat(puntoActual.course) - parseFloat(puntoAnterior.course)) < window.APP_CONFIG.umbral_course;
 
-                estaDetenido = estaDetenidoPorTiempo || estaDetenidoPorMovimiento;
+            estaDetenido = estaDetenidoPorTiempo || estaDetenidoPorMovimiento;
 
-                if (estaDetenido) {
-                    const inicioParada = new Date(serverTime.getTime() - diffMs);
-                    estadoParadaHtml = `
+            if (estaDetenido) {
+                estadoParadaHtml = `
                         <p style="color:#2E7D32; font-size:0.9em;">
-                            🟢 Stopped for ${Math.floor(diffMin)} min (since ${formatTime(inicioParada)})
+                            🟢 Stopped for ${Math.floor(diffMin)} min<br>
+                            <small>Last signal: ${formatTimeCT(lastRecordTime)}</small>
                         </p>
                     `;
-                } else {
-                    estadoParadaHtml = `
+            } else {
+                estadoParadaHtml = `
                         <p style="color:#FF8F00; font-size:0.9em;">
                             ⏩ Active or recently updated
                         </p>
                     `;
-                }
-            }else{
-                const server_time = data.server_time;
-                const serverTime = new Date(server_time);
-                estaDetenido = true;
             }
+        } else {
+            const server_time = data.server_time;
+            const serverTime = new Date(server_time);
+            estaDetenido = true;
+        }
         //}
 
         // === 4. Obtener servicios asignados ===
@@ -351,7 +496,7 @@ async function verEstadoCamion(vehicle_id, color, tiempo_act) {
             for (const servicio of serviciosCamion) {
 
 
-        if (typeof servicio.lat !== 'number') continue;
+                if (typeof servicio.lat !== 'number') continue;
                 const dist = calcularDistanciaMetros(lat, lng, servicio.lat, servicio.lng);
                 if (dist <= umbralMetros && dist < distMinima) {
                     distMinima = dist;
@@ -421,7 +566,7 @@ async function verEstadoCamion(vehicle_id, color, tiempo_act) {
 
         // === 6. Actualizar interfaz inicial ===
         detalle.innerHTML = `
-            <p><small>Last record: ${formatTime(lastRecordTime)}</small></p>
+            <p><small>Last record: ${formatTimeCT(lastRecordTime) || '—'}</small></p>
             ${estadoParadaHtml || ''}
 
             <!-- Contadores dinámicos -->
@@ -439,13 +584,12 @@ async function verEstadoCamion(vehicle_id, color, tiempo_act) {
             <h4>📋 Services of the day (?)</h4>
             ${serviciosHtml}
         `;
-console.log('detalle.innerHTML: ', detalle.innerHTML);            
 
         // Marcar como seleccionado
         document.querySelectorAll('.camioneta-item').forEach(el => {
             el.classList.remove('selected');
         });
-        
+
         const div = document.querySelector(`.camioneta-item[data-id="${vehicle_id}"]`);
 
         if (div) div.classList.add('selected');
@@ -454,8 +598,6 @@ console.log('detalle.innerHTML: ', detalle.innerHTML);
         if (window.seguimientoInterval) {
             clearInterval(window.seguimientoInterval);
         }
-
-console.log('1: ');            
 
         tiempoObservadoSegundos = 0;
 
@@ -467,112 +609,120 @@ console.log('1: ');
                 ultimaPosicion: { lat, lng }
             };
         }
-console.log('2: ');            
 
-        if (tiempo_act) {
-console.log('3: ');            
-            const estado = estadoCamion[vehicle_id];
-            const UMBRAL_SEGUNDOS_SALIDA = 15 * 60; // 15 minutos
+        const estado = estadoCamion[vehicle_id];
+        const UMBRAL_SEGUNDOS_SALIDA = 15 * 60; // 15 minutos
 
-            window.seguimientoInterval = setInterval(async () => {
-                try {
-                    const res = await fetch('/app/ajax/motor2Ajax.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            modulo_motor2: 'obtener_ultimo_punto_truck',
-                            truck: vehicle_id
-                        })
-                    });
+        window.seguimientoInterval = setInterval(async () => {
+            //console.log('✅ [Seguimiento] Intervalo activo para:', vehicle_id);
+            try {
+                const res = await fetch('/app/ajax/motor2Ajax.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: '<?php echo $_SESSION["user_access_key"]; ?>',
+                        modulo_motor2: 'obtener_ultimo_punto_truck',
+                        truck: vehicle_id
+                    })
+                });
 
-                    if (res.status === 204 || !res.ok) return;
-
-                    const data = await res.json();
-                    if (!data?.success || !Array.isArray(data.puntos) || data.puntos.length === 0) return;
-
-                    const pto = data.puntos[0];
-                    const lat = parseFloat(pto.lat);
-                    const lng = parseFloat(pto.lng);
-                    if (isNaN(lat) || isNaN(lng)) return;
-
-                    const serverTime = new Date(data.server_time);
-                    const lastRecordTime = new Date(pto.timestamp);
-                    if (isNaN(lastRecordTime.getTime()) || isNaN(serverTime.getTime())) return;
-
-                    // Evaluar movimiento
-                    const distMov = calcularDistanciaMetros(estado.ultimaPosicion.lat, estado.ultimaPosicion.lng, lat, lng);
-                    const haMovido = distMov > 10;
-                    const speed = pto.speed > 1;
-
-                    // Actualizar última posición
-                    estado.ultimaPosicion = { lat, lng };
-
-                    // Evaluar proximidad a sede
-                    const distToHQ = calcularDistanciaMetros(lat, lng, HQ.lat, HQ.lng);
-                    const enSedeAhora = distToHQ <= window.APP_CONFIG.umbral_metros;
-
-                    if (enSedeAhora) {
-                        if (!estado.enSede) {
-                            estado.enSede = true;
-                            estado.tiempoEnSede = 0;
-                        } else {
-                            estado.tiempoEnSede += 5;
-                        }
-                    } else {
-                        estado.enSede = false;
-                        estado.tiempoEnSede = 0;
-                    }
-
-                    // Actualizar contadores
-                    tiempoObservadoSegundos += 5;
-                    const diffMs = serverTime - lastRecordTime;
-                    const diffMin = diffMs / (1000 * 60);
-
-                    const watchingEl = document.getElementById('tiempo-observado');
-                    const totalEl = document.getElementById('total-on-site');
-                    const contadorSeccion = document.getElementById('contador-seccion');
-                    const statusBox = document.querySelector('.status-box');
-
-                    if (!statusBox) return;
-
-                    // === DECISIÓN SOLO POR VEHÍCULO ===
-                    if (estado.enSede && estado.tiempoEnSede >= UMBRAL_SEGUNDOS_SALIDA) {
-                        // ✅ Fin de jornada
-                        statusBox.innerHTML = '✅ End of day — Stationed at headquarters';
-                        statusBox.style.background = '#4CAF50';
-                        statusBox.style.color = 'white';
-                        if (contadorSeccion) contadorSeccion.style.display = 'none';
-                    }
-                    else if (enSedeAhora) {
-                        // 📍 Aún no termina
-                        statusBox.innerHTML = '📍 Near headquarters';
-                        if (contadorSeccion) contadorSeccion.style.display = 'block';
-                    }
-                    else if (haMovido || speed) {
-                        // 🚗 Se movió → reanudar
-                        estado.enSede = false;
-                        estado.tiempoEnSede = 0;
-                        if (statusBox.innerText.includes('End of day')) {
-                            statusBox.innerHTML = '➡️ En route';
-                            statusBox.style.background = '';
-                            statusBox.style.color = '';
-                        }
-                        if (contadorSeccion) contadorSeccion.style.display = 'block';
-                    }
-
-                    // Actualizar contadores visuales
-                    if (watchingEl && contadorSeccion && contadorSeccion.style.display !== 'none') {
-                        const mins = Math.floor(tiempoObservadoSegundos / 60);
-                        const segs = tiempoObservadoSegundos % 60;
-                        watchingEl.textContent = `${mins}m ${segs}s`;
-                        if (totalEl) totalEl.textContent = `${Math.floor(diffMin)} min`;
-                    }
-
-                } catch (err) {
-                    console.warn(`Seguimiento ${vehicle_id}:`, err.message);
+                if (res.status === 204 || !res.ok) {
+                    console.warn('❌ Respuesta no válida:', res.status);
+                    return;
                 }
-            }, 5000);
-        }
+
+                const data = await res.json();
+                //console.log('📡 Datos recibidos:', data); // 👈 Ver aquí si hay respuesta
+
+                if (!data?.success || !Array.isArray(data.puntos) || data.puntos.length === 0) {
+                    console.warn('⚠️ Sin puntos GPS:', data);
+                    return;
+                }
+
+                const pto = data.puntos[0];
+                const lat = parseFloat(pto.lat);
+                const lng = parseFloat(pto.lng);
+                if (isNaN(lat) || isNaN(lng)) return;
+
+                const serverTime = new Date(data.server_time);
+                const lastRecordTime = new Date(pto.timestamp);
+                if (isNaN(lastRecordTime.getTime()) || isNaN(serverTime.getTime())) return;
+
+                // Evaluar movimiento
+                const distMov = calcularDistanciaMetros(estado.ultimaPosicion.lat, estado.ultimaPosicion.lng, lat, lng);
+                const haMovido = distMov > 10;
+                const speed = pto.speed > 1;
+
+                // Actualizar última posición
+                estado.ultimaPosicion = { lat, lng };
+
+                // Evaluar proximidad a sede
+                const distToHQ = calcularDistanciaMetros(lat, lng, HQ.lat, HQ.lng);
+                const enSedeAhora = distToHQ <= window.APP_CONFIG.umbral_metros;
+
+                if (enSedeAhora) {
+                    if (!estado.enSede) {
+                        estado.enSede = true;
+                        estado.tiempoEnSede = 0;
+                    } else {
+                        estado.tiempoEnSede += 5;
+                    }
+                } else {
+                    estado.enSede = false;
+                    estado.tiempoEnSede = 0;
+                }
+
+                // Actualizar contadores
+                tiempoObservadoSegundos += 1;
+                const diffMs = serverTime - lastRecordTime;
+                const diffMin = diffMs / (1000 * 60);
+
+                const watchingEl = document.getElementById('tiempo-observado');
+                const totalEl = document.getElementById('total-on-site');
+                const contadorSeccion = document.getElementById('contador-seccion');
+                const statusBox = document.querySelector('.status-box');
+
+                if (!statusBox) return;
+
+                // === DECISIÓN SOLO POR VEHÍCULO ===
+                if (estado.enSede && estado.tiempoEnSede >= UMBRAL_SEGUNDOS_SALIDA) {
+                    // ✅ Fin de jornada
+                    statusBox.innerHTML = '✅ End of day — Stationed at headquarters';
+                    statusBox.style.background = '#4CAF50';
+                    statusBox.style.color = 'white';
+                    if (contadorSeccion) contadorSeccion.style.display = 'none';
+                }
+                else if (enSedeAhora) {
+                    // 📍 Aún no termina
+                    statusBox.innerHTML = '📍 Near headquarters';
+                    if (contadorSeccion) contadorSeccion.style.display = 'block';
+                }
+                else if (haMovido || speed) {
+                    // 🚗 Se movió → reanudar
+                    estado.enSede = false;
+                    estado.tiempoEnSede = 0;
+                    if (statusBox.innerText.includes('End of day')) {
+                        statusBox.innerHTML = '➡️ En route';
+                        statusBox.style.background = '';
+                        statusBox.style.color = '';
+                    }
+                    if (contadorSeccion) contadorSeccion.style.display = 'block';
+                }
+
+                const totalMinutosEnSitio = diffMin + (tiempoObservadoSegundos / 60);
+
+                // Actualizar contadores visuales
+                if (watchingEl && contadorSeccion && contadorSeccion.style.display !== 'none') {
+                    const mins = Math.floor(tiempoObservadoSegundos / 60);
+                    const segs = tiempoObservadoSegundos % 60;
+                    watchingEl.textContent = `${mins}m ${segs}s`;
+                    if (totalEl) totalEl.textContent = `${Math.floor(totalMinutosEnSitio)} min`;
+                }
+                // Tiempo total estimado en sitio = tiempo desde último GPS + tiempo que llevas observando
+            } catch (err) {
+                console.warn(`Seguimiento ${vehicle_id}:`, err.message);
+            }
+        }, 1000);
     }
     catch (err) {
         console.error(`Error in verEstadoCamion(${vehicle_id}):`, err);
@@ -600,26 +750,89 @@ console.log('3: ');
     }
 }
 
+/**
+ * Formatea a HH:mm en CT desde string ISO o objeto Date
+ * Acepta: string (ISO o con espacio), Date, null, undefined
+ */
+function formatTimeCT(input) {
+    // Casos nulos o vacíos
+    if (!input) return null;
+
+    let date = null;
+
+    // Si es string, intentar parsear
+    if (typeof input === 'string') {
+        const clean = input.trim().replace(' ', 'T');
+        if (clean === '' || clean === '0000-00-00 00:00:00' || clean === '0000-00-00T00:00:00') {
+            return null;
+        }
+        date = new Date(clean);
+    }
+    // Si es objeto Date
+    else if (input instanceof Date) {
+        date = input;
+    }
+    // Cualquier otro tipo (array, object, etc.)
+    else {
+        return null;
+    }
+
+    // Validar que sea una fecha válida
+    if (isNaN(date.getTime())) {
+        return null;
+    }
+
+    try {
+        return date.toLocaleTimeString([], {
+            timeZone: 'America/Chicago',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Calcula duración en HH:mm:ss entre dos timestamps (ISO o similares)
+ * Usa CT y valida entradas
+ */
+function calcularDuracion_fin(inicio, fin) {
+    if (!inicio) return null;
+
+    const parseDate = (iso) => {
+        if (!iso || typeof iso !== 'string' || iso === '' || iso === '0000-00-00 00:00:00') return null;
+        const clean = iso.trim().replace(' ', 'T');
+        const date = new Date(clean);
+        return isNaN(date.getTime()) ? null : date;
+    };
+
+    const start = parseDate(inicio);
+    const end = fin ? parseDate(fin) : new Date(); // ahora
+
+    if (!start) return null;
+    if (!end) return null;
+
+    const diffSec = Math.floor((end - start) / 1000);
+    if (diffSec < 0) return '00:00:00';
+
+    const h = String(Math.floor(diffSec / 3600)).padStart(2, '0');
+    const m = String(Math.floor((diffSec % 3600) / 60)).padStart(2, '0');
+    const s = String(diffSec % 60).padStart(2, '0');
+
+    return `${h}:${m}:${s}`;
+}
+
 // ======================
 // renderMotorGridGridHTML - Cuadrícula 2x2 con barra de título azul marino
 // ======================
 function renderMotorGridGridHTML(servicio) {
-    const formatTime = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
-
-    const calcularDuracion = (inicio, fin) => {
-        if (!inicio) return null;
-        const start = new Date(inicio);
-        const end = fin ? new Date(fin) : dia_hoy;
-        const diffSec = Math.floor((end - start) / 1000);
-        const h = String(Math.floor(diffSec / 3600)).padStart(2, '0');
-        const m = String(Math.floor((diffSec % 3600) / 60)).padStart(2, '0');
-        const s = String(diffSec % 60).padStart(2, '0');
-        return `${h}:${m}:${s}`;
-    };
+    const calcularDuracion = calcularDuracion_fin(servicio.hora_aviso_usuario, servicio.hora_finalizado);
 
     const getSupervisionStatus = () => {
         if (servicio.supervision_inicio) {
-            return { text: '✔️ Validated', time: formatTime(servicio.supervision_inicio) };
+            return { text: '✔️ Validated', time: formatTimeCT(servicio.supervision_inicio) };
         } else if (servicio.estado === 'culminado' && !haExpiradoPlazo(servicio.fin_servicio)) {
             return { text: '🔍 Awaiting supervision', time: '—' };
         } else if (servicio.estado === 'culminado') {
@@ -635,82 +848,85 @@ function renderMotorGridGridHTML(servicio) {
     let html = ``;
 
     html = `
-        <div class="motor-grid-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; font-size: 0.8em;">
+        <div class="motor-grid-container grid_motores">
             <!-- Motor 1 -->
-            <div class="motor-cell" data-motor="1" data-servicio="${servicio.id_servicio}" style="background: #f1f8ff; border: 1px solid #bbdefb; border-radius: 6px; padding: 0; min-height: 70px; overflow: hidden;">
-                <div class="motor-header" style="background: ${headerBg}; color: ${headerColor}; padding: 4px 6px; font-size: 0.9em; text-align: center; font-weight: bold;">🔧 Motor 1 - Office</div>
-                <div class="motor-body" style="padding: 6px;"> `;
+            <div class="grid_motores_1" data-motor="1" data-servicio="${servicio.id_servicio}" style="background: #f1f8ff; border: 1px solid #bbdefb; border-radius: 6px; padding: 0; min-height: 70px; overflow: hidden;">
+                <div class="motor-header" style="background: ${headerBg}; color: ${headerColor}; padding: 4px 6px; font-size: 0.9em; text-align: center; font-weight: bold;">🔧 Motor 1 - Office</div>`;
     if (servicio.hora_aviso_usuario !== null || servicio.hora_finalizado !== null) {
         html += `
+                <div class="motor-body" style="padding: 6px;">
                     <div style="line-height:1.4; font-size:0.9em;">`;
         if (servicio.hora_aviso_usuario !== null) {
             html += `
-                        <div><strong>Start: </strong> ${formatTime(servicio.hora_aviso_usuario)}</div>`;
+                        <div><strong>Start: </strong> ${formatTimeCT(servicio.hora_aviso_usuario) || '—'}</div>`;
         } else {
             html += `
                         <div class="tit-aling-row"><strong>Start: </strong><div class="tit-det"> Missing Service Startup Charge</div></div>`;
         }
         if (servicio.hora_finalizado !== null) {
             html += `
-                        <div><strong>End: </strong> ${formatTime(servicio.hora_finalizado)}</div>`;
+                        <div><strong>End: </strong> ${formatTimeCT(servicio.hora_finalizado) || '—'}</div>`;
         } else {
             html += `
                         <div class="tit-aling-row"><strong>End: </strong><div class="tit-det"> End of Service details were not uploaded</div></div>`;
         }
         if (servicio.hora_aviso_usuario !== null && servicio.hora_finalizado !== null) {
             html += `
-                        <div><strong>Duration: </strong> ${calcularDuracion(servicio.hora_aviso_usuario, servicio.hora_finalizado)}</div>`;
+                        <div><strong>Duration: </strong> ${calcularDuracion_fin(servicio.hora_aviso_usuario, servicio.hora_finalizado)}</div>`;
         } else {
             html += `
                         <div class="tit-aling-row"><strong>Duration: </strong><div class="tit-det"> Missing data to calculate Time</div></div>`;
         }
+        html += `
+                    </div>`;
     } else {
         html += `
-                        <div style="text-align: center; color: #777; font-weight: normal; font-size: 0.9em; margin: 4px 0;">Waiting for data to calculate</div>`;
+                <div style="text-align: center; color: #777; font-weight: normal; font-size: 0.9em; margin: 4px 0;">Waiting for data to calculate`;
     }
     html += `
-                    </div>
                 </div>
             </div>`;
     html += `
             <!-- Motor 2 -->
-            <div class="motor-cell" data-motor="2" data-servicio="${servicio.id_servicio}" style="background: #f1f8e9; border: 1px solid #c5e1a5; border-radius: 6px; padding: 0; min-height: 70px; overflow: hidden;">
-                <div class="motor-header" style="background: ${headerBg}; color: ${headerColor}; padding: 4px 6px; font-size: 0.9em; text-align: center; font-weight: bold;">📡 Motor 2 - GPS + Geo</div>
+            <div class="grid_motores_2" data-motor="2" data-servicio="${servicio.id_servicio}" style="background: #f1f8e9; border: 1px solid #c5e1a5; border-radius: 6px; padding: 0; min-height: 70px; overflow: hidden;">
+                <div class="motor-header" style="background: ${headerBg}; color: ${headerColor}; padding: 4px 6px; font-size: 0.9em; text-align: center; font-weight: bold;">📡 Motor 2 - GPS + Geo</div>`;
+    if (servicio.hora_inicio_gps !== null || servicio.hora_fin_gps !== null) {
+        html += `
                 <div class="motor-body" style="padding: 6px;">
                     <div style="line-height:1.4; font-size:0.9em;">`;
-    if (servicio.hora_inicio_gps !== null || servicio.hora_fin_gps !== null) {
         if (servicio.hora_inicio_gps !== null) {
             html += `
-                        <div><strong>Start: </strong> ${formatTime(servicio.hora_inicio_gps)}</div>`;
+                        <div><strong>Start: </strong> ${formatTimeCT(servicio.hora_inicio_gps) || '—'}</div>`;
         } else {
             html += `
                         <div class="tit-aling-row"><strong>Start: </strong><div class="tit-det"> Missing Service Startup Charge</div></div>`;
         }
         if (servicio.hora_fin_gps !== null) {
             html += `
-                        <div><strong>End: </strong> ${formatTime(servicio.hora_fin_gps)}</div>`;
+                        <div><strong>End: </strong> ${formatTimeCT(servicio.hora_fin_gps) || '—'}</div>`;
         } else {
             html += `
                         <div class="tit-aling-row"><strong>End: </strong><div class="tit-det"> End of Service details were not uploaded</div></div>`;
         }
         if (servicio.hora_inicio_gps !== null && servicio.hora_fin_gps !== null) {
             html += `
-                        <div><strong>Dur:</strong> ${calcularDuracion(servicio.hora_inicio_gps, servicio.hora_fin_gps)}</div>`;
+                        <div><strong>Dur:</strong> ${calcularDuracion_fin(servicio.hora_inicio_gps, servicio.hora_fin_gps)}</div>`;
         } else {
             html += `
                         <div class="tit-aling-row"><strong>Duration: </strong><div class="tit-det"> Missing data to calculate Time</div></div>`;
         }
+        html += `
+                    </div>`;
     } else {
         html += `
-                        <div style="text-align: center; color: #777; font-weight: normal; font-size: 0.9em; margin: 4px 0;">Waiting for data to calculate</div>`
+                <div style="text-align: center; color: #777; font-weight: normal; font-size: 0.9em; margin: 4px 0;">Waiting for data to calculate`
     }
-    html += `
-                    </div>            
-                </div>
+        html += `
+                </div>            
             </div>
 
             <!-- Motor 3 -->
-            <div class="motor-cell" data-motor="3" data-servicio="${servicio.id_servicio}" style="background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 0; min-height: 70px; overflow: hidden;">
+            <div class="grid_motores_3" data-motor="3" data-servicio="${servicio.id_servicio}" style="background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 0; min-height: 70px; overflow: hidden;">
                 <div class="motor-header" style="background: ${headerBg}; color: ${headerColor}; padding: 4px 6px; font-size: 0.9em; text-align: center; font-weight: bold;">⚙️ Motor 3 - Driver</div>
                 <div class="motor-body" style="padding: 6px;">
                     <div style="text-align: center; color: #777; font-weight: normal; font-size: 0.9em; margin: 4px 0;">Waiting for data to calculate</div>
@@ -718,7 +934,7 @@ function renderMotorGridGridHTML(servicio) {
             </div>
 
             <!-- Motor 4 -->
-            <div class="motor-cell" data-motor="4" data-servicio="${servicio.id_servicio}" style="background: #ede7f6; border: 1px solid #9fa8da; border-radius: 6px; padding: 0; min-height: 70px; overflow: hidden;">
+            <div class="grid_motores_4" data-motor="4" data-servicio="${servicio.id_servicio}" style="background: #ede7f6; border: 1px solid #9fa8da; border-radius: 6px; padding: 0; min-height: 70px; overflow: hidden;">
                 <div class="motor-header" style="background: ${headerBg}; color: ${headerColor}; padding: 4px 6px; font-size: 0.9em; text-align: center; font-weight: bold;">👁️ Motor 4 - Supervisor</div>
                 <div class="motor-body" style="padding: 6px;">
                     <div style="line-height:1.4; font-size:0.9em;">
@@ -734,7 +950,7 @@ function renderMotorGridGridHTML(servicio) {
             </div>
         </div>
     `;
-
+    console.log(html);
     return html;
 }
 
@@ -1068,6 +1284,7 @@ async function obtenerRutaDelDia(vehicle_id, fecha) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                token: '<?php echo $_SESSION["user_access_key"]; ?>',
                 modulo_motor2: 'obtener_historico_bd',
                 vehicle_id: vehicle_id,
                 from_time: fecha,    // "YYYY-MM-DD"
@@ -1192,12 +1409,6 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
     return R * c;
 }
 
-function marcarMensajesNuevos() {
-    const btn = document.getElementById('btn-messages');
-    btn.classList.remove('default');
-    btn.classList.add('new');
-}
-
 
 function ajustarAlturaContainer() {
     const container = document.querySelector('.container');
@@ -1271,12 +1482,13 @@ async function cargarServiciosData() {
     try {
         const fechaEnviar = selectedDate;
 
-        const res = await fetch('/app/ajax/serviciosAjax.php', {
+        const res = await fetch('/app/ajax/mobileAjax.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                modulo_servicios: 'listar_para_geoferencia',
-                fecha: fechaEnviar
+                token: '<?php echo $_SESSION["user_access_key"]; ?>',
+                modulo_mobiles: 'listar_para_geoferencia',
+                fecha: fechaEnviar 
             })
         });
         const data = await res.json();
@@ -1322,12 +1534,236 @@ document.getElementById('calendar-input').addEventListener('change', function ()
     }
 });
 
-
 // === Iniciar al cargar ===
-window.addEventListener('configListo', () => {
+window.addEventListener('configListo', () => { 
     cargarServiciosData();
     cargarCamionetas(selectedDate);
 
     const active = document.querySelector('.camioneta-item.selected');
     if (active) verEstadoCamion(active.dataset.id, active.dataset.color, true);
 });
+
+// 1. Abrir modal al hacer click en "Where is it?"
+const menuDondeEsta = document.getElementById('menu-donde-esta'); 
+const btnMessages = document.getElementById('btn-messages'); 
+const modalDondeEsta = document.getElementById('modal-donde-esta');
+const selectVehiculo = document.getElementById('select-vehiculo-donde-esta');
+const closeModalDondeEsta = document.getElementById('close_modal_donde_esta');
+const close_chat = document.getElementById('close_chat');
+const infoVehiculo = document.getElementById('info-vehiculo-donde-esta');
+
+if (menuDondeEsta && modalDondeEsta && selectVehiculo && closeModalDondeEsta && infoVehiculo) {
+    menuDondeEsta.onclick = async function (e) {
+        e.preventDefault();
+        infoVehiculo.innerHTML = '';
+        modalDondeEsta.style.display = 'flex';
+
+        // Cargar vehículos del día
+        const res = await fetch('/app/ajax/mobileAjax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ modulo_mobiles: 'listar_vehiculos' })
+        });
+
+        const resp = await res.json();
+
+        if (resp.success) {
+            console.log(`✅ Vehiculos encontrados (${resp.data.length}):`, resp.data);
+
+            const vehiculos = resp.data;
+
+            selectVehiculo.innerHTML = '';
+
+            const optDefault = document.createElement('option');
+            optDefault.value = '';
+            optDefault.textContent = 'Select a vehicle';
+            optDefault.disabled = true;
+            optDefault.selected = true;
+            selectVehiculo.appendChild(optDefault);
+
+            if (vehiculos && vehiculos.length) {
+                vehiculos.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v.id_truck;
+                    opt.textContent = v.nombre + (v.placa ? ' (' + v.placa + ')' : '');
+                    opt.setAttribute('data-nombre', v.nombre); // <--- Aquí
+                    opt.setAttribute('data-color', v.color); // <--- Aquí
+                    selectVehiculo.appendChild(opt);
+                });
+            } else {
+                selectVehiculo.innerHTML = '<option>No vehicles found</option>';
+            }
+        } else {
+            console.warn(`⚠️ Error updating GPS time: ${resp.error}`);
+        }
+
+    };
+}
+
+// 2. Al seleccionar un vehículo, mostrar info y marker
+document.getElementById('select-vehiculo-donde-esta').onchange = async function () {
+    const select = this;
+    const selectedOption = select.options[select.selectedIndex];
+    const nombreVehiculo = selectedOption.getAttribute('data-nombre');
+    const colorVehiculo = selectedOption.getAttribute('data-color') || '#2196F3';
+    // Ahora puedes usar nombreVehiculo
+    console.log('Nombre del vehículo:', nombreVehiculo);
+
+    const idtruck = this.value;
+    const infoDiv = document.getElementById('info-vehiculo-donde-esta');
+    infoDiv.innerHTML = 'Loading...';
+
+    const data = {
+        modulo_motor2: 'info_vehiculo',
+        id_truck: nombreVehiculo
+    };
+
+    // Consultar si el vehículo tiene servicio activo
+    const resp = await fetch('/app/ajax/motor2Ajax.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+
+    const vdata = await resp.json();
+
+    // Si no está en servicio, consultar a verizon
+    if (vdata && vdata.lat && vdata.lng) {
+
+        // Suponiendo que ya tienes lat y lng del vehículo
+        const latVehiculo = vdata.lat;
+        const lngVehiculo = vdata.lng;
+
+        // 1. Verificar si está en la sede
+        const sedeLat = 30.3204272;
+        const sedeLng = -95.4217815;
+        const distanciaSede = calcularDistanciaMetros(latVehiculo, lngVehiculo, sedeLat, sedeLng);
+
+        let html = `
+            <div style="
+                background: ${colorVehiculo};
+                color: #fff;
+                font-size: 1.2em;
+                font-weight: bold;
+                padding: 12px 18px;
+                border-radius: 8px 8px 0 0;
+                margin-bottom: 18px;
+                letter-spacing: 1px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            ">
+                Vehicle: ${nombreVehiculo}
+            </div>
+            <div style="padding: 18px 12px 12px 12px; background: #f9f9f9; border-radius: 0 0 8px 8px;">
+                <div style="margin-bottom: 12px;">
+                    <b>Location:</b> <span style="color:#0066cc">${vdata.lat}, ${vdata.lng}</span>
+                </div>
+        `;
+
+        if (distanciaSede <= window.APP_CONFIG.umbral_metros) {
+            html += `
+                <div style="margin-bottom: 12px;">
+                    <b>Location:</b> <span style="color:#388e3c;">At headquarters</span>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <b>Distance:</b> ${Math.round(distanciaSede)} meters
+                </div>
+            `;
+        } else {
+            // 1. Consultar propiedades
+            const resProps = await fetch('/app/ajax/mobileAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ modulo_mobiles: 'listar_propiedades' })
+            });
+            const propsResp = await resProps.json();
+            let propiedadEncontrada = null;
+
+            let dist = null;
+
+            if (propsResp.success && Array.isArray(propsResp.data)) {
+                for (const prop of propsResp.data) {
+                    dist = calcularDistanciaMetros(
+                        latVehiculo, lngVehiculo,
+                        parseFloat(prop.lat), parseFloat(prop.lng)
+                    );
+                    if (dist <= window.APP_CONFIG.umbral_metros) {
+                        propiedadEncontrada = prop;
+                        break;
+                    }
+                }
+            }
+
+            if (propiedadEncontrada) {
+                html += `
+                    <div style="margin-bottom: 12px;">
+                        <b>Property:</b> <span style="color:#1565c0;">${propiedadEncontrada.cliente}</span>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <b>Address:</b> ${propiedadEncontrada.direccion}
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <b>Distance:</b> ${Math.round(dist)} meters
+                    </div>
+                `;
+            } else {
+                $apiKey = "pk.1472af9e389d1d577738a28c25b3e620"
+                $lat = latVehiculo;
+                $lng = lngVehiculo;
+
+                const data = {
+                    modulo_motor2: 'obtener_direccion',
+                    apikey: $apiKey,
+                    lat: $lat,
+                    lng: $lng
+                };
+
+                const resp = await fetch('/app/ajax/motor2Ajax.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const locationIQ = await resp.json();
+
+                if (locationIQ && locationIQ.direccion && locationIQ.data) {
+                    html += `
+                        <div style="margin-bottom: 12px;">
+                            <b>Address:</b> <span style="color:#388e3c;">${locationIQ.direccion}</span>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div style="margin-bottom: 12px;">
+                            <b>Location:</b> <span style="color:#c62828;">Not at any registered Location</span>
+                        </div>
+                    `;
+                }
+            }
+        }
+        html += `</div>`;
+        infoDiv.innerHTML = html;
+
+        if (window.mapa) {
+            if (window.markerDondeEsta) window.mapa.removeLayer(window.markerDondeEsta);
+            window.markerDondeEsta = L.marker([vdata.lat, vdata.lng], { icon: L.icon({ iconUrl: '/img/marker-donde-esta.png', iconSize: [32, 32] }) }).addTo(window.mapa);
+            window.mapa.setView([vdata.lat, vdata.lng], 16);
+            setTimeout(() => {
+                if (window.markerDondeEsta) window.mapa.removeLayer(window.markerDondeEsta);
+            }, 10 * 60 * 1000);
+        }
+    } else {
+        infoDiv.innerHTML = 'No location found for this vehicle.';
+    }
+};
+
+// 3. Botón cerrar modal
+document.getElementById('close_modal_donde_esta').onclick = function () {
+    document.getElementById('modal-donde-esta').style.display = 'none';
+    if (window.markerDondeEsta && window.mapa) {
+        window.mapa.removeLayer(window.markerDondeEsta);
+    }
+};
+
+close_chat.onclick = function () {
+    document.getElementById('chat-modal').style.display = 'none';
+};

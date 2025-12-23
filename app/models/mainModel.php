@@ -532,13 +532,17 @@ class mainModel
         $consulta->closeCursor();
         $consulta = null;
 
+        if ($tabla !== 'gps_estado_dispositivos' && $tabla !== 'auditoria') {
+            $reg_audit = $this->registrarAuditoria($tabla, 'INSERT', null, $datos);
+        } else {
+            error_log("Resultado para auditoria: " . $id_resulta);
+        }
         $this->log("Registro incorporado a la tabla " . $tabla . " Ultimo ID: " . $id_resulta);
-
         return $id_resulta;
     }
 
     /*----------  Funcion para ejecutar una consulta UPDATE preparada  ----------*/
-    protected function actualizarDatos($tabla, $datos, $condicion)
+    public function actualizarDatos($tabla, $datos, $condicion, $checkEmpty = true): int|string
     {
         $this->log("=== INICIO ACTUALIZACIÓN ===");
         try {
@@ -546,102 +550,131 @@ class mainModel
             $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $conn->beginTransaction();
 
-            // 1. Verificar existencia del registro ANTES de actualizar 
-            $registro = $this->verificarRegistroExistente($conn, $tabla, $condicion);
+            // === 1. Normalizar y construir condiciones ===
+            $where_parts = [];
+            $condicion_params = [];
+
+            if (isset($condicion[0]) && is_array($condicion[0])) {
+                // Múltiples condiciones: $condicion = [ [...], [...], ... ]
+                foreach ($condicion as $cond) {
+                    $campo = $cond['condicion_campo'];
+                    $operador = $cond['condicion_operador'];
+                    $marcador = $cond['condicion_marcador'];
+                    $valor = $cond['condicion_valor'];
+                    $where_parts[] = "$campo $operador $marcador";
+                    $condicion_params[$marcador] = $valor;
+                }
+            } else {
+                // Condición simple (retrocompatible)
+                $campo = $condicion['condicion_campo'];
+                $operador = $condicion['condicion_operador'];
+                $marcador = $condicion['condicion_marcador'];
+                $valor = $condicion['condicion_valor'];
+                $where_parts[] = "$campo $operador $marcador";
+                $condicion_params[$marcador] = $valor;
+            }
+
+            // === 2. Verificar existencia del registro con todas las condiciones ===
+            $check_query = "SELECT * FROM $tabla WHERE " . implode(" AND ", $where_parts) . " LIMIT 1";
+            $check_stmt = $conn->prepare($check_query);
+            foreach ($condicion_params as $marcador => $valor) {
+                $check_stmt->bindValue($marcador, $valor);
+            }
+            $check_stmt->execute();
+            $registro = $check_stmt->fetch(PDO::FETCH_ASSOC);
+
             if (!$registro) {
                 throw new Exception("El registro no existe");
             }
 
-            // 2. Construir consulta con verificación EXPLÍCITA de cambios 
-            $query = "UPDATE $tabla SET "; 
+            // === 3. Construir SET con verificación de cambios reales ===
+            $query = "UPDATE $tabla SET ";
             $sets = [];
             $datos_final = [];
             $changes = false;
 
-            // Obtener metadatos de los campos
             $estructuraCampos = $this->obtenerEstructuraCampos($conn, $tabla);
-
             $this->log("Origen de datos: " . print_r($datos, true));
+
             foreach ($datos as $clave) {
                 $campo = $clave['campo_nombre'];
                 $marcador = $clave['campo_marcador'];
                 $tipoCampo = strtolower($estructuraCampos[$campo]['Type'] ?? 'varchar');
-                if ($this->compararValores($registro[$campo], $clave['campo_valor'], $tipoCampo)){
+                if ($checkEmpty) {
+                    if ($this->compararValores($registro[$campo], $clave['campo_valor'], $tipoCampo)) {
+                        $changes = true;
+                        $sets[] = "$campo = $marcador";
+                        $datos_final[] = $clave;
+                        $this->log("Campo '$campo' tiene cambios (Tipo: $tipoCampo)");
+                    } else {
+                        $this->log("Campo '$campo' sin cambios (Tipo: $tipoCampo)");
+                    }
+                }else{
                     $changes = true;
                     $sets[] = "$campo = $marcador";
                     $datos_final[] = $clave;
                     $this->log("Campo '$campo' tiene cambios (Tipo: $tipoCampo)");
-                } else {
-                    $this->log("Campo '$campo' sin cambios (Tipo: $tipoCampo)");
                 }
             }
 
             if (!$changes) {
                 $this->log("ADVERTENCIA: No hay cambios reales en los datos");
                 $conn->rollBack();
-                $mensaje = $this->generarHtmlError(2, []);
-                return $mensaje;
+                return "No hay cambios";
             }
 
             $query .= implode(", ", $sets);
-            $query .= " WHERE ";
+            $query .= " WHERE " . implode(" AND ", $where_parts);
+            $this->log("Consulta final: $query");
 
-            // === CONSTRUCCIÓN DE MÚLTIPLES CONDICIONES ===
-error_log("Arreglo de condicion " . json_encode($condicion));            
-//            $where_parts = [];
-//            foreach ($condicion as $cond) {
-//                $where_parts[] = $cond['campo_nombre'] . " = " . $cond['condicion_marcador'];
-//            }
-//            $query .= implode(" AND ", $where_parts);
-
-            $query .= $condicion['campo_nombre'] . " = " . $condicion['campo_marcador'];
-
-            // 3. Ejecutar con DEBUG profundo
+            // === 4. Ejecutar actualización ===
             $stmt = $conn->prepare($query);
-            
-            // Vincular parámetros 
+
+            // Vincular datos a actualizar
             foreach ($datos_final as $clave) {
-                $stmt->bindValue($clave['campo_nombre'], $clave['campo_valor']);
-                $this->log("Vinculado: " . $clave['campo_nombre'] . " = " . $clave['campo_valor']);
+                $stmt->bindValue($clave['campo_nombre'], $clave['campo_valor'] ?? '');
+                $this->log("Vinculado SET: " . $clave['campo_nombre'] . " = " . $clave['campo_valor'] ?? '');
             }
 
-            // Vincular cada condición
-//            foreach ($condicion as $cond) {
-//                $stmt->bindValue($cond['campo_nombre'], $cond['campo_valor']);
-//                $this->log("Vinculado WHERE: " . $cond['campo_nombre'] . " = " . $cond['campo_valor']);
-//            }
+            // Vincular condiciones
+            foreach ($condicion_params as $marcador => $valor) {
+                $stmt->bindValue($marcador, $valor);
+                $this->log("Vinculado WHERE: $marcador = " . $valor);
+            }
 
-            $stmt->bindValue($condicion['campo_nombre'], $condicion['campo_valor']);
-            $this->log("Vinculado WHERE: " . $condicion['campo_nombre'] . " = " . $condicion['campo_valor']);
-
-
-            $this->log("Consulta final: $query");
-            
-            // 4. Ejecutar y verificar 
             $stmt->execute();
             $filas = $stmt->rowCount();
 
-            if ($filas === 0) {
-                // Debug avanzado 
-                $this->log("=== DEBUG AVANZADO ==="); 
-                $this->log("Registro actual: " . print_r($registro, true));
-                $this->log("Valores nuevos: " . print_r(array_column($datos, 'campo_valor', 'campo_nombre'), true));
-
-                // Verificar constraints 
-                $this->verificarConstraints($conn, $tabla); 
-                throw new Exception("Actualización ejecutada pero 0 filas afectadas");
+            $es_condicion_unica = true;
+            foreach ($condicion as $cond) {
+                if (($cond['operador'] ?? '=') !== '=') {
+                    $es_condicion_unica = false;
+                    break;
+                }
+            }
+            if ($es_condicion_unica) {            
+                if ($filas === 0) {
+                    $this->log("=== DEBUG AVANZADO ===");
+                    $this->log("Registro actual: " . print_r($registro, true));
+                    $this->log("Valores nuevos: " . print_r(array_column($datos, 'campo_valor', 'campo_nombre'), true));
+                    $this->verificarConstraints($conn, $tabla);
+                    throw new Exception("Actualización ejecutada pero 0 filas afectadas");
+                }
             }
 
             $conn->commit();
+
+            // === 5. Registrar auditoría ===
+            $reg_audit = $this->registrarAuditoria($tabla, 'UPDATE', $condicion, null, $datos_final);
+
             $this->log("Actualización exitosa. Filas afectadas: $filas");
             return $filas;
-            
+
         } catch (Exception $e) {
             if (isset($conn) && $conn->inTransaction()) {
                 $conn->rollBack();
             }
             $this->logWithBacktrace("ERROR: " . $e->getMessage(), true);
-//$mensaje = $this->generarHtmlError(1, $e, $query, $datos, $condicion);
             return 0;
         }
     }
@@ -706,14 +739,11 @@ $this->log("Palabras: ", json_encode($palabras));
 
     private function verificarRegistroExistente($conn, $tabla, $condicion)
     {
-        error_log("Consulta de la condicion: " . json_encode($condicion));
-        $cond = $condicion['campo_nombre'] . " = " . $condicion['campo_marcador'];
+        $cond = $condicion['condicion_campo'] . " = " . $condicion['condicion_marcador'];
         $query = "SELECT * FROM $tabla WHERE " . $cond . " LIMIT 1";
 
-        error_log("Consulta armada: " . $query);
-
         $params = [
-            $condicion['campo_marcador'] => $condicion['campo_valor']
+            $condicion['condicion_marcador'] => $condicion['condicion_valor']
         ];
 		$result = $this->ejecutarConsulta($query, '', $params);
 
@@ -780,7 +810,7 @@ $this->log("Palabras: ", json_encode($palabras));
     /*---------- Paginador de tablas ----------*/
     protected function paginadorTablas($pagina, $numeroPaginas, $url, $botones, $id_codigos)
     {
-        $palabras = $this->initializeIdioma();
+        //$palabras = $this->initializeIdioma(); 
 
         if (isset($id_codigos['id_obra'])) {
             $n0 = $id_codigos['id_obra'];
@@ -804,17 +834,17 @@ $this->log("Palabras: ", json_encode($palabras));
 
         if ($numeroPaginas <= 1) {
             $tabla .= '
-                <a class="pagination-previous is-disabled" disabled >' . $palabras["paginador"]["anterior"] . '</a>
+                <a class="pagination-previous is-disabled" disabled >Previous</a>
                 <ul class="pagination-list">
                 ';
         } else {
             // Paginas Anteriores
             if ($origen == 0) {
-                $tabla .= '<a class="pagination-previous" href="' . $url . ($pagina - 1) . '/">' . $palabras["paginador"]["anterior"] . '</a>';
+                $tabla .= '<a class="pagination-previous" href="' . $url . ($pagina - 1) . '/">Previous</a>';
             } elseif ($origen == 1) {
-                $tabla .= '<a class="pagination-previous" href="' . $url . ($pagina - 1) . '/' . $n0 . '/">' . $palabras["paginador"]["anterior"] . '</a>';
+                $tabla .= '<a class="pagination-previous" href="' . $url . ($pagina - 1) . '/' . $n0 . '/">Previous</a>';
             } elseif ($origen == 2) {
-                $tabla .= '<a class="pagination-previous" href="' . $url . ($pagina - 1) . '/">' . $palabras["paginador"]["anterior"] . '</a>';
+                $tabla .= '<a class="pagination-previous" href="' . $url . ($pagina - 1) . '/">Previous</a>';
             }
             $tabla .= '<ul class="pagination-list">';
 
@@ -831,6 +861,9 @@ $this->log("Palabras: ", json_encode($palabras));
         }
 
         $ci = 0;
+        if ($pagina <= 0) {
+            $pagina = 1;
+        }
 
         for ($i = $pagina; $i <= $numeroPaginas; $i++) {
 
@@ -861,7 +894,7 @@ $this->log("Palabras: ", json_encode($palabras));
         if ($pagina == $numeroPaginas) {
             $tabla .= '
                 </ul>
-                <a class="pagination-next is-disabled" disabled >' . $palabras["paginador"]["siguiente"] . '</a>
+                <a class="pagination-next is-disabled" disabled >Next</a>
                 ';
         } else {
             $tabla .= '<li><span class="pagination-ellipsis">&hellip;</span></li>';
@@ -874,11 +907,11 @@ $this->log("Palabras: ", json_encode($palabras));
             }
             $tabla .= '</ul>';
             if ($origen == 0) {
-                $tabla .= '<a class="pagination-next" href="' . $url . ($pagina + 1) . '/">' . $palabras["paginador"]["siguiente"] . '</a>';
+                $tabla .= '<a class="pagination-next" href="' . $url . ($pagina + 1) . '/">Next</a>';
             } elseif ($origen == 1) {
-                $tabla .= '<a class="pagination-next" href="' . $url . ($pagina + 1) . '/' . $n0 . '/">' . $palabras["paginador"]["siguiente"] . '</a>';
+                $tabla .= '<a class="pagination-next" href="' . $url . ($pagina + 1) . '/' . $n0 . '/">Next</a>';
             } elseif ($origen == 2) {
-                $tabla .= '<a class="pagination-next" href="' . $url . ($pagina + 1) . '/">' . $palabras["paginador"]["siguiente"] . '</a>';
+                $tabla .= '<a class="pagination-next" href="' . $url . ($pagina + 1) . '/">Next</a>';
             }
         }
         $tabla .= '</nav>';
@@ -1303,4 +1336,165 @@ $this->log("Palabras: ", json_encode($palabras));
     {
         throw new RuntimeException("Deserialización de mainModel no permitida.");
     }
+
+    public function registrarAuditoriaOperacionCompleja(string $tabla, string $accion, string $query, array $params)
+    {
+        $auditoria_datos = [
+            ['campo_nombre' => 'tabla',           'campo_marcador' => ':tabla',           'campo_valor' => $tabla],
+            ['campo_nombre' => 'accion',          'campo_marcador' => ':accion',          'campo_valor' => $accion],
+            ['campo_nombre' => 'condicion',       'campo_marcador' => ':condicion',       'campo_valor' => null],
+            ['campo_nombre' => 'datos_afectados', 'campo_marcador' => ':datos_afectados', 'campo_valor' => json_encode([
+                'query' => $query,
+                'params' => $params
+            ], JSON_UNESCAPED_UNICODE)],
+            ['campo_nombre' => 'usuario',         'campo_marcador' => ':usuario',         'campo_valor' => $_SESSION['usuario'] ?? null],
+            ['campo_nombre' => 'ip',              'campo_marcador' => ':ip',              'campo_valor' => $_SERVER['REMOTE_ADDR'] ?? null]
+        ];
+
+        $registro = $this->guardarDatos('auditoria', $auditoria_datos);
+        return $registro;
+    }
+
+    private function registrarAuditoria(
+        string $tabla,
+        string $accion,
+        ?array $condicion = null,        // Solo para UPDATE/DELETE
+        ?array $datos_nuevos = null,     // Solo para INSERT
+        ?array $datos_afectados = null   // Solo para UPDATE
+    ) {
+        $auditoria_datos = [
+            ['campo_nombre' => 'tabla',  'campo_marcador' => ':tabla',  'campo_valor' => $tabla],
+            ['campo_nombre' => 'accion', 'campo_marcador' => ':accion', 'campo_valor' => $accion],
+            ['campo_nombre' => 'usuario', 'campo_marcador' => ':usuario', 'campo_valor' => $_SESSION['usuario'] ?? null],
+            ['campo_nombre' => 'ip',      'campo_marcador' => ':ip',      'campo_valor' => $_SERVER['REMOTE_ADDR'] ?? null]
+        ];
+
+        if ($accion === 'INSERT' && $datos_nuevos !== null) {
+            // Convertir tu formato a asociativo
+            $valores = [];
+            foreach ($datos_nuevos as $item) {
+                if (isset($item['campo_nombre']) && isset($item['campo_valor'])) {
+                    $valores[$item['campo_nombre']] = $item['campo_valor'];
+                }
+            }
+            $auditoria_datos[] = [
+                'campo_nombre' => 'datos_nuevos',
+                'campo_marcador' => ':datos_nuevos',
+                'campo_valor' => json_encode($valores, JSON_UNESCAPED_UNICODE)
+            ];
+            // condicion y datos_afectados serán NULL
+            $auditoria_datos[] = ['campo_nombre' => 'condicion',       'campo_marcador' => ':condicion',       'campo_valor' => null];
+            $auditoria_datos[] = ['campo_nombre' => 'datos_afectados', 'campo_marcador' => ':datos_afectados', 'campo_valor' => null];
+
+        } elseif ($accion === 'UPDATE' && $condicion !== null && $datos_afectados !== null) {
+            // === Detectar formato de $condicion ===
+            if (isset($condicion[0]) && is_array($condicion[0])) {
+                // Nuevo formato: múltiples condiciones con operadores
+                $cond_json = [];
+                foreach ($condicion as $cond) {
+                    $cond_json[] = [
+                        'campo' => $cond['campo'],
+                        'operador' => $cond['operador'] ?? '=',
+                        'valor' => $cond['valor']
+                    ];
+                }
+            } else {
+                // Formato antiguo: condición simple de igualdad
+                $cond_json = [
+                    'campo' => $condicion['condicion_campo'],
+                    'operador' => '=',
+                    'valor' => $condicion['condicion_valor']
+                ];
+            }
+
+            $auditoria_datos[] = [
+                'campo_nombre' => 'condicion',
+                'campo_marcador' => ':condicion',
+                'campo_valor' => json_encode($cond_json, JSON_UNESCAPED_UNICODE)
+            ];
+            $auditoria_datos[] = [
+                'campo_nombre' => 'datos_afectados',
+                'campo_marcador' => ':datos_afectados',
+                'campo_valor' => json_encode(
+                    array_column($datos_afectados, 'campo_valor', 'campo_nombre'),
+                    JSON_UNESCAPED_UNICODE
+                )
+            ];
+            $auditoria_datos[] = ['campo_nombre' => 'datos_nuevos', 'campo_marcador' => ':datos_nuevos', 'campo_valor' => null];
+
+        } else {
+            throw new \InvalidArgumentException("Parámetros inválidos para auditoría");
+        }
+
+        $id_auditoria = $this->guardarDatos('auditoria', $auditoria_datos);
+        $this->log("Auditoría registrada: $accion en $tabla (ID auditoría: $id_auditoria)");
+        return $id_auditoria;
+    }
+
+    /**
+     * Marca una lista de mensajes como leídos para el usuario autenticado
+     * 
+     * @param array $messageIds Lista de IDs de mensajes a marcar como leídos
+     * @return int Número de filas afectadas
+     */
+    public function marcarMensajesComoLeidos($userId, $messageIds): int
+    {
+        try {
+            $conn = $this->conectar();
+            $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $conn->beginTransaction();
+
+            // === 1. Preparar placeholders para IN ===
+            $placeholders = str_repeat('?,', count($messageIds) - 1) . '?';
+
+            // === 2. Construir y ejecutar consulta ===
+            $sql = "UPDATE chat_mensajes 
+                    SET leido = 1 
+                    WHERE id IN ($placeholders) 
+                    AND sala_id IN (
+                        SELECT sala_id 
+                        FROM chat_usuarios_salas 
+                        WHERE usuario_id = ?
+                    )";
+
+            $stmt = $conn->prepare($sql);
+            
+            // Vincular IDs de mensajes
+            foreach ($messageIds as $i => $id) {
+                $stmt->bindValue($i + 1, $id, PDO::PARAM_INT);
+            }
+            // Vincular ID de usuario
+            $stmt->bindValue(count($messageIds) + 1, $userId, PDO::PARAM_INT);
+
+            $stmt->execute();
+            $filas = $stmt->rowCount();
+
+            // === 3. Registrar auditoría (adaptada al formato existente) ===
+            $condicion_auditoria = [
+                ['campo' => 'id', 'operador' => 'IN', 'valor' => $messageIds],
+                ['campo' => 'usuario_id', 'operador' => '=', 'valor' => $userId]
+            ];
+            $datos_auditoria = [
+                ['campo_nombre' => 'leido', 'campo_marcador' => ':leido', 'campo_valor' => 1]
+            ];
+            $this->registrarAuditoria(
+                'chat_mensajes',
+                'UPDATE',
+                $condicion_auditoria,
+                null,
+                $datos_auditoria
+            );
+
+            $conn->commit();
+            $this->log("marcarMensajesComoLeidos: $filas mensaje(s) marcado(s) como leído(s) para usuario $userId");
+            return $filas;
+
+        } catch (Exception $e) {
+            if (isset($conn) && $conn->inTransaction()) {
+                $conn->rollBack();
+            }
+            $this->logWithBacktrace("ERROR en marcarMensajesComoLeidos: " . $e->getMessage(), true);
+            return 0;
+        }
+    }    
 }

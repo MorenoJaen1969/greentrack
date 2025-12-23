@@ -39,10 +39,58 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
 }
-        
+   
+function startTypewriter(elementId, text = "Calculating stops...") {
+    const el = document.getElementById(elementId);
+    if (!el) return null;
+
+    let i = 0;
+    let isDeleting = false;
+    const typingSpeed = 100;
+    const deletingSpeed = 50;
+    const pauseBeforeDelete = 1500;
+
+    el.textContent = ''; // Limpiar contenido previo
+    el.style.display = 'block';
+
+    const type = () => {
+        if (!isDeleting) {
+            el.textContent = text.substring(0, i + 1);
+            i++;
+            if (i === text.length) {
+                isDeleting = true;
+                setTimeout(type, pauseBeforeDelete);
+                return;
+            }
+        } else {
+            el.textContent = text.substring(0, i - 1);
+            i--;
+            if (i === 0) {
+                isDeleting = false;
+            }
+        }
+
+        const speed = isDeleting ? deletingSpeed : typingSpeed;
+        el.timeout = setTimeout(type, speed);
+    };
+
+    el.timeout = setTimeout(type, 0);
+
+    // Devuelve una función para detener el efecto
+    return () => {
+        if (el.timeout) {
+            clearTimeout(el.timeout);
+            el.timeout = null;
+        }
+        el.textContent = '';
+        el.style.display = 'none';
+    };
+}
+
 /**
  * Inicia el motor de seguimiento GPS
  */
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🟢 motor2.js cargado correctamente');
     if (typeof window.map !== 'undefined') {
@@ -52,22 +100,66 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // === FUNCIÓN GLOBAL PARA ABRIR POPUP DE UN VEHÍCULO ===
-    window.abrirPopupVehiculo = function (truckId) {
+    window.abrirPopupVehiculo = async function (truckId) {
         console.log(`Intentando abrir popup para vehículo: ${truckId}`);
-        const marker = window.gpsMarkers[truckId];
-        if (!marker) {
-            console.warn(`❌ No se encontró el marcador para el vehículo: ${truckId}`);
+
+        const formReferencia = document.getElementById('form-referencia-dia');
+
+        if (!formReferencia) {
+            console.error("❌ No se encontró el modal #form-referencia-dia");
             return;
         }
+        formReferencia.style.display = 'flex';
+        // === INICIAR EFECTO DE CARGA ===
+        const stopTypewriter = startTypewriter('loading-typewriter', 'Calculating stops...');
 
-        // Centrar mapa suavemente
-        window.map.flyTo(marker.getLatLng(), 14, {
-            animate: true,
-            duration: 1.2
-        });
+        // Ocultar contenedor de resultados mientras carga
+        const contenedorStops = document.getElementById('contenedor-stops');
+        if (contenedorStops) contenedorStops.style.display = 'none';
 
-        // Forzar apertura del popup
-        marker.openPopup();
+        let veh_hist;
+        try {
+
+            // === CENTRAR EN EL MAPA ===
+            const marker = window.gpsMarkers?.[truckId];
+            if (marker) {
+                window.map.flyTo(marker.getLatLng(), 14, { animate: true, duration: 1.2 });
+                marker.openPopup();
+            }
+
+            // Centrar mapa suavemente
+            window.map.flyTo(marker.getLatLng(), 14, {
+                animate: true,
+                duration: 1.2
+            });
+
+            // Forzar apertura del popup
+            marker.openPopup();
+
+            // === CONSTRUIR EL HISTORIAL ===
+            veh_hist = await obtenerVehicHoy(truckId);
+
+            // === DETENER EFECTO DE CARGA ===
+            if (stopTypewriter) stopTypewriter();
+
+            if (Array.isArray(veh_hist) || veh_hist.length === 0) {
+                console.log(`🟡 No hay rutas para hoy del vehículo ${truckId}`);
+                contenedorStops.innerHTML = '<p>There are no registered routes.</p>';
+                contenedorStops.style.display = 'block';
+                return;
+            }
+
+            console.log(`🚛 Rutas realizadas del Truck: ${truckId}`);
+            llenarModalRutas(veh_hist, truckId);
+            contenedorStops.style.display = 'block';
+
+        } catch (error) {
+            console.error("Error al cargar rutas del vehículo:", error);
+            if (stopTypewriter) stopTypewriter();
+            contenedorStops.innerHTML = '<p>Error loading routes.</p>';
+            contenedorStops.style.display = 'block';
+        }
+
     };
 
     // Iniciar GPS después
@@ -77,6 +169,17 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(iniciarMotorGPS, 2000);
     }
 });
+
+function llenarModalRutas(rutas, truckId) {
+    const contenedor = document.getElementById('contenedor-stops');
+    if (!contenedor) return;
+
+    if (rutas.length === 0) {
+        contenedor.innerHTML = '<p>No hay rutas registradas para hoy.</p>';
+        return;
+    }
+    contenedor.innerHTML = rutas;
+}
 
 async function iniciarMotorGPS() {
     try {
@@ -89,6 +192,29 @@ async function iniciarMotorGPS() {
                     }
                 }, 500);
             });
+        }
+
+        // === ESCUCHAR CIERRE DE POPUP ===
+        if (!window._popupCloseListenerAdded) {
+            window.map.on('popupclose', function () {
+                const formReferencia = document.getElementById('form-referencia-dia');
+                if (formReferencia && formReferencia.style.display === 'flex') {
+                    formReferencia.style.display = 'none';
+
+                    // Opcional: detener el efecto typewriter
+                    const loadingEl = document.getElementById('loading-typewriter');
+                    if (loadingEl && loadingEl.timeout) {
+                        clearTimeout(loadingEl.timeout);
+                        loadingEl.textContent = '';
+                        loadingEl.style.display = 'none';
+                    }
+
+                    // Opcional: limpiar contenedor
+                    const contenedorStops = document.getElementById('contenedor-stops');
+                    if (contenedorStops) contenedorStops.innerHTML = '';
+                }
+            });
+            window._popupCloseListenerAdded = true; // evitar duplicados
         }
 
         // Asegurar serviciosData (si viene de otro módulo)
@@ -131,7 +257,7 @@ async function obtenerTrucksActivosHoy() {
         const res = await fetch('/app/ajax/motor2Ajax.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ modulo_motor2: 'obtener_trucks_activos_hoy' })
+            body: JSON.stringify({ modulo_motor2: 'obtener_trucks_activos_hoy_excl' })
         });
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -140,6 +266,31 @@ async function obtenerTrucksActivosHoy() {
 
     } catch (err) {
         console.error('🚨 Error al obtener trucks activos del día:', err.message);
+        return [];
+    }
+}
+
+/**
+ * Consulta trucks activos del día
+ */
+async function obtenerVehicHoy(vehicle_id) {
+    try {
+        const res = await fetch('/app/ajax/motor2Ajax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(
+                { 
+                    modulo_motor2: 'obtener_ruta_hoy', 
+                    vehicle_id: vehicle_id
+                }
+            )
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        return data.rutas;
+
+    } catch (err) {
+        console.error('🚨 Error al obtener rutas de la trucks del día:', err.message);
         return [];
     }
 }
@@ -360,14 +511,24 @@ async function dibujarRutaCompleta(truck) {
                 }
 
                 // Cierre en sede
-                const distanciaSede = calcularDistanciaMetros(
+                // const distanciaSede = calcularDistanciaMetros(
+                //     punto.lat,
+                //     punto.lng,
+                //     SEDE_LATLNG[0],
+                //     SEDE_LATLNG[1]
+                // );
+
+//                if (distanciaSede <= window.APP_CONFIG.umbral_metros && estaDetenido && !ultimaDeteccionSede && servicioIniciado) {
+
+                const distanciaCliente_act = calcularDistanciaMetros(
                     punto.lat,
                     punto.lng,
-                    SEDE_LATLNG[0],
-                    SEDE_LATLNG[1]
+                    servicio.lat,
+                    servicio.lng
                 );
 
-                if (distanciaSede <= window.APP_CONFIG.umbral_metros && estaDetenido && !ultimaDeteccionSede && servicioIniciado) {
+
+                if (distanciaCliente_act > window.APP_CONFIG.umbral_metros && estaDetenido && !ultimaDeteccionSede && servicioIniciado) {
                     console.log(`🔴 ${truck} cerró servicio en sede`);
                     ultimaDeteccionSede = true;
                     servicioIniciado = false;
@@ -511,7 +672,7 @@ if (!modalHistorico || !btnAbrirModal || !btnCerrarModal) {
         }
     });
 
-    // === 4. Cerrar al hacer clic fuera del contenido del modal (opcional) ===
+    // === 4. Cerrar al hacer clic fuera del contenido del modal ===
     modalHistorico.addEventListener('click', (e) => {
         if (e.target === modalHistorico) {
             modalHistorico.style.display = 'none';
@@ -1170,7 +1331,7 @@ function animarRutaHistorica(truck, historial) {
  * - Paradas prolongadas no planificadas
  */
 function iniciarGeoferenciaContinua(truck, marker) {
-    const CHECK_INTERVAL = 5000; // Cada 5 segundos
+    const CHECK_INTERVAL = 15000; // Cada 15 segundos
 
     // Variables de estado
     let ultimaPosicion = null;

@@ -1,0 +1,124 @@
+    /* Estilos generales para el módulo de rutas */
+
+    .principal {
+    	display: flex;
+    	flex-direction: column;
+    	height: 100vh;
+    	margin-left: 1vw;
+    	width: 98.9vw;
+    }
+
+    #rutas-map-container {
+    	font-family: Arial, sans-serif;
+    }
+
+    #rutas-title-bar {
+    	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    #rutas-sidebar {
+    	display: flex;
+    	flex-direction: column;
+    }
+
+    #rutas-controls button {
+    	transition: background-color 0.3s ease;
+    }
+
+    #rutas-controls button:hover {
+    	opacity: 0.8;
+    }
+
+    #zonas-seleccionadas-lista,
+    #rutas-lista {
+    	background-color: #ffffff;
+    }
+
+    /* Estilo para las entradas de la lista */
+    .ruta-item,
+    .zona-item {
+    	padding: 5px;
+    	margin: 2px 0;
+    	border-bottom: 1px solid #eee;
+    	cursor: pointer;
+    	font-size: 0.9em;
+    }
+
+    .ruta-item:hover,
+    .zona-item:hover {
+    	background-color: #d5dbdb;
+    }
+
+    /* Estilo para la cuadrícula de Leaflet (personalizable) */
+    .leaflet-grid-label {
+    	background: rgba(255, 255, 255, 0.8);
+    	padding: 1px 4px;
+    	border: 1px solid #ccc;
+    	font-size: 10px;
+    	white-space: nowrap;
+    }
+
+    /* Asegurar que el mapa ocupe el 100% del contenedor asignado */
+    #map {
+    	height: 100%;
+    	width: 100%;
+    }
+
+    /* Estilo para celdas seleccionadas */
+    .leaflet-zona-seleccionada {
+    	stroke: #e74c3c;
+    	stroke-width: 3;
+    	fill-opacity: 0.3;
+    }
+
+    /* Estilo para la ruta dibujada */
+    .leaflet-ruta-activa {
+    	stroke-width: 5;
+    	fill-opacity: 0.2;
+    }
+
+    /* Estilo para direcciones (marcadores o círculos) */
+    .direccion-marker {
+    	border-radius: 50%;
+    	border: 2px solid #000;
+    }
+
+    /* Scrollbar personalizada (opcional) */
+    #rutas-sidebar::-webkit-scrollbar,
+    #zonas-seleccionadas-lista::-webkit-scrollbar,
+    #rutas-lista::-webkit-scrollbar {
+    	width: 8px;
+    }
+
+    #rutas-sidebar::-webkit-scrollbar-track,
+    #zonas-seleccionadas-lista::-webkit-scrollbar-track,
+    #rutas-lista::-webkit-scrollbar-track {
+    	background: #f1f1f1;
+    }
+
+    #rutas-sidebar::-webkit-scrollbar-thumb,
+    #zonas-seleccionadas-lista::-webkit-scrollbar-thumb,
+    #rutas-lista::-webkit-scrollbar-thumb {
+    	background: #888;
+    	border-radius: 4px;
+    }
+
+    #rutas-sidebar::-webkit-scrollbar-thumb:hover,
+    #zonas-seleccionadas-lista::-webkit-scrollbar-thumb:hover,
+    #rutas-lista::-webkit-scrollbar-thumb:hover {
+    	background: #555;
+    }
+
+	    /* Estilo para el botón de cuadrícula personalizado */
+    .leaflet-control-custom {
+        background-color: white;
+        padding: 5px;
+        margin-bottom: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .leaflet-control-custom:hover {
+        background-color: #f0f0f0;
+    }

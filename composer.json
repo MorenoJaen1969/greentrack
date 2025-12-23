@@ -1,0 +1,25 @@
+{
+    "name": "tu-empresa/chat-system",
+    "description": "Sistema de Chat en Tiempo Real",
+    "type": "project",
+    "require": {
+        "firebase/php-jwt": "^6.0",
+        "guzzlehttp/guzzle": "^7.0",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "react/socket": "^1.12",
+        "ratchet/pawl": "^0.4",
+    },
+    "autoload": {
+        "psr-4": {
+            "app\\websocket\\": "websocket/",
+            "app\\": "app/"
+        }
+    },
+    "config": {
+        "platform-check": false,
+        "platform": {
+            "php": "8.4.0"
+        }
+    }
+}

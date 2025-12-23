@@ -144,7 +144,7 @@ class usuariosController extends mainModel
     public function valida_usuario($paquete){
         $token = $paquete['token'];
 
-        $sql = "SELECT nombre, email
+        $sql = "SELECT id, nombre, email, token
             FROM usuarios_ejecutivos 
             WHERE token = :v_token AND activo = 1";
 
@@ -161,7 +161,71 @@ class usuariosController extends mainModel
             die('<h3>Token inválido o expirado.</h3>');
         }
 
-        // ✅ Usuario autorizado
+        // ✅ Usuario autorizado 
         return $result;
     }
+
+	public function getUserByToken($token)
+	{
+        $sql = "SELECT id, nombre, email, token
+            FROM usuarios_ejecutivos 
+            WHERE token = :v_token AND activo = 1";
+
+		$params = [
+			':v_token' => $token
+		];
+		
+		$result = $this->ejecutarConsulta($sql, '', $params, 'fetchAll');
+		
+		return ($result && count($result) > 0) ? $result[0] : false;
+	}
+
+	public function getUser($username, $password)
+	{
+        $sql = "SELECT id AS id_user, nombre, email, token
+            FROM usuarios_ejecutivos 
+            WHERE email = :email AND activo = 1";
+
+		$params = [
+			':email' => $username
+		];
+
+		$this->log("Consulta de validacion de usuario " . $sql);
+		
+		$result = $this->ejecutarConsulta($sql, '', $params);
+
+		$this->log("Resultado de validacion de usuario " . json_encode($result));
+
+		if (!$result || count($result) === 0) {
+			return false; // Usuario no encontrado
+		} else {
+			// ✅ NUEVO: Actualizar estado a 'online' en la base de datos
+			$chat_estado = 'online';
+			$chat_ultima_conexion = date('Y-m-d H:i:s');
+			$datos = [
+				['campo_nombre' => 'chat_estado', 'campo_marcador' => ':chat_estado', 'campo_valor' => $chat_estado],
+				['campo_nombre' => 'chat_ultima_conexion', 'campo_marcador' => ':chat_ultima_conexion', 'campo_valor' => $chat_ultima_conexion]
+			];
+			$condicion = [
+				'condicion_campo' => 'id',
+				'condicion_operador' => '=', 
+				'condicion_marcador' => ':id',
+				'condicion_valor' => $result['id_user']
+			];
+			$this->actualizarDatos('usuarios_ejecutivos', $datos, $condicion);
+
+			$sql = "SELECT id AS id_user, nombre, email, token
+				FROM usuarios_ejecutivos 
+				WHERE email = :email AND activo = 1";
+
+			$params = [
+				':email' => $username
+			];
+			
+			$result = $this->ejecutarConsulta($sql, '', $params);
+
+			return $result;
+		}
+	}
+
 }

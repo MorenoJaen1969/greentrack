@@ -105,29 +105,6 @@ function getMotherboardId() {
     return hash('sha256', implode('|', $identifiers));
 }
 
-/**
- * Valida el hardware del servidor
- */
-function validarHardware() {
-    // Si es local, siempre válido
-    if (esEjecucionLocal()) {
-        $_SESSION['hardware_validated'] = true;
-        return;
-    }
-
-    // En producción, validar
-    $mac = getMacAddress();
-    $mbId = getMotherboardId();
-
-    $macOk = ($mac === strtolower(MAC_ADDRESS ?? ''));
-    $mbOk = ($mbId === (MB_ID ?? ''));
-
-    $_SESSION['hardware_validated'] = $macOk && $mbOk;
-
-    // Opcional: registrar intento (para debugging)
-    // error_log("Validación hardware: MAC={$mac} (".($macOk?'OK':'FAIL')."), MB={$mbId} (".($mbOk?'OK':'FAIL').")");
-}
-
 // === INICIO DEL FLUJO ===
 
 // Limpiar buffer previo si no hay ninguno activo

@@ -125,20 +125,29 @@ class medianocheController extends mainModel
 			$hoy = date('Y-m-d');
 
 			// === 1. Cerrar servicios no atendidos (id_status = 37 → 48) ===
-			$query1 = "
-				UPDATE servicios 
-				SET 
-					id_status = 48,
-					estado_servicio = 'no_servido',
-					fecha_actualizacion = NOW() 
-				WHERE 
-					DATE(fecha_programada) < :hoy 
-					AND id_status = 37";
 
-			$params1 = [':hoy' => $hoy];
-			$filasCerradas = $this->ejecutarConsulta($query1, '', $params1, 'rowCount');
+			try {
+				$datos = [
+					['campo_nombre' => 'id_status', 'campo_marcador' => ':id_status', 'campo_valor' => 48],
+					['campo_nombre' => 'estado_servicio', 'campo_marcador' => ':estado_servicio', 'campo_valor' => 'no_servido'],
+					['campo_nombre' => 'fecha_actualizacion', 'campo_marcador' => ':fecha_actualizacion', 'campo_valor' => $hoy]
+				];
+				$condicion = [
+					['condicion_campo' => 'fecha_programada', 'condicion_operador' => '<', 'condicion_marcador' => ':fecha_programada', 'condicion_valor' => $hoy],
+					['condicion_campo' => 'id_status', 'condicion_operador' => '=', 'condicion_marcador' => ':id_status', 'condicion_valor' => 37]
+				];
 
-			$this->log("✅ Cierre completado. $filasCerradas servicios marcados como 'No Servido'");
+				$cant_reg = $this->actualizarDatos('servicios', $datos, $condicion);
+				$this->log("✅ Cierre completado. $cant_reg servicios marcados como 'No Servido'");
+
+				http_response_code(200);
+				echo json_encode(['success' => 'ok', 'message' => $cant_reg . ' Record Update completed']);
+
+			} catch (Exception $e) {
+				$this->logWithBacktrace("Error en finalizarServicio: " . $e->getMessage(), true);
+				http_response_code(500);
+				echo json_encode(['error' => 'Could not update']);
+			}
 
 			// === 2. Actualizar campo `historial = 1` en clientes que tengan servicios anteriores válidos ===
 			$query2 = "
@@ -153,7 +162,16 @@ class medianocheController extends mainModel
 				)";
 
 			$params2 = [':hoy' => $hoy];
-			$this->ejecutarConsulta($query2, '', $params2);
+			$filas = $this->ejecutarConsulta($query2, '', $params2);
+
+			if ($filas > 0) {
+				$this->registrarAuditoriaOperacionCompleja(
+					tabla: 'clientes',
+					accion: 'UPDATE',
+					query: $query2,
+					params: [':hoy' => $hoy]
+				);
+			}
 
 			// Limpiar estado GPS al cerrar el día
 			if (isset($_SESSION['gps_tracker_last'])) {
@@ -166,8 +184,8 @@ class medianocheController extends mainModel
 			http_response_code(200);
 			echo json_encode([
 				'success' => true,
-				'message' => "Cierre de servicios no atendidos y actualización de historial completados",
-				'servicios_cerrados' => $filasCerradas
+				'message' => "Closure of unattended services and history update completed",
+				'servicios_cerrados' => $filas
 			]);
 
 		} catch (Exception $e) {

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test WebSocket 7070</title>
+</head>
+<body>
+    <h1>Test WebSocket Puerto 7070</h1>
+    <div id="status">Conectando...</div>
+    <div id="messages"></div>
+
+    <script>
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+        
+        // Conectar al WebSocket
+        const socket = new WebSocket('ws://localhost:7070');
+        
+        socket.onopen = function(event) {
+            status.innerHTML = '✅ CONECTADO al WebSocket en puerto 7070';
+            status.style.color = 'green';
+            
+            // Enviar mensaje de prueba
+            socket.send(JSON.stringify({
+                type: 'message',
+                content: 'Mensaje de prueba desde cliente',
+                room: 'interno'
+            }));
+        };
+        
+        socket.onmessage = function(event) {
+            const message = document.createElement('div');
+            message.innerHTML = '📨 Mensaje recibido: ' + event.data;
+            messages.appendChild(message);
+        };
+        
+        socket.onerror = function(error) {
+            status.innerHTML = '❌ ERROR conectando al WebSocket: ' + error;
+            status.style.color = 'red';
+        };
+        
+        socket.onclose = function(event) {
+            status.innerHTML = '🔌 Conexión WebSocket cerrada';
+            status.style.color = 'orange';
+        };
+    </script>
+</body>
+</html>

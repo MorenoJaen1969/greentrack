@@ -1,0 +1,33 @@
+<IfModule mod_rewrite.c> 
+    RewriteEngine On 
+    RewriteBase / 
+    
+    # ---- Configuración de seguridad básica ---- 
+    # Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" 
+    # Header always set X-Content-Type-Options "nosniff" 
+    # Header always set X-Frame-Options "SAMEORIGIN" 
+    
+    # ---- Redirección HTTPS (opcional, descomenta si lo necesitas) ---- 
+    # RewriteCond %{HTTPS} off 
+    # RewriteCond %{SERVER_PORT} !^8055$ 
+    # RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301] 
+    
+    # ---- Regla principal para manejo de rutas ---- 
+    # Excluye archivos y directorios reales 
+    RewriteCond %{REQUEST_FILENAME} !-f 
+    RewriteCond %{REQUEST_FILENAME} !-d 
+    
+    # Redirige todo a index.php capturando la ruta 
+    RewriteRule ^(.*)$ index.php?views=$1 [L,QSA] 
+    
+    # ---- Configuración adicional para rendimiento ---- 
+    #<IfModule mod_deflate.c> 
+    #    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript 
+    #</IfModule> 
+</IfModule> 
+    
+# ---- Bloqueo de acceso a archivos sensibles ---- 
+#<FilesMatch "\.(env|log|htaccess)$"> 
+#    Order allow,deny 
+#    Deny from all 
+#</FilesMatch>

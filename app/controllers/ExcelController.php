@@ -313,14 +313,25 @@ class ExcelController extends mainModel{
 
     private function marcarServiciosComoHistorias($fecha)
 	{
-		$query = "UPDATE servicios SET id_status = :id_status WHERE DATE(fecha_programada) = :fecha AND id_status = :status_activo";
-		$params = [
-			':id_status' => $this->id_status_historico,
-			':fecha' => $fecha,
-			':status_activo' => $this->id_status_activo
-		];
-		$cant_reg = $this->ejecutarConsulta($query, 'servicios', $params);
-		$this->log("$cant_reg Servicios del $fecha marcados como Cancelados");
+		try {
+			$datos = [
+				['campo_nombre' => 'id_status', 'campo_marcador' => ':id_status', 'campo_valor' => $this->id_status_historico]
+			];
+			$condicion = [
+				['condicion_campo' => 'fecha_programada', 'condicion_operador' => '=', 'condicion_marcador' => ':fecha_programada', 'condicion_valor' => $fecha],
+				['condicion_campo' => 'id_status', 'condicion_operador' => '=', 'condicion_marcador' => ':id_status', 'condicion_valor' => $this->id_status_activo],
+			];
+
+			$cant_reg = $this->actualizarDatos('servicios', $datos, $condicion);
+
+			http_response_code(200);
+			echo json_encode(['success' => 'ok', 'message' => $cant_reg . ' Record Update completed']);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error en finalizarServicio: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'Could not update']);
+		}
 	}
 
 	private function obtenerColorPorTruck($id_truck)

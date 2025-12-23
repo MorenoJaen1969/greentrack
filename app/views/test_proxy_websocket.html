@@ -1,0 +1,50 @@
+<html>
+<body>
+<h2>Prueba WebSocket con Proxy</h2>
+<div id="status">Conectando...</div>
+<div id="messages"></div>
+
+<script>
+const status = document.getElementById('status');
+const messages = document.getElementById('messages');
+
+const token = 'bd3933852ea0edd0321937344f2c5a2dcc446213857230954ce3dd58ac4810be';
+
+// Usar el proxy WebSocket (mismo dominio HTTPS)
+const ws = new WebSocket('wss://positron4tx.ddns.net:9990/ws/?token=' + token);
+
+ws.onopen = () => {
+    status.innerHTML = '✅ CONECTADO VÍA PROXY!';
+    status.style.color = 'green';
+    console.log("WebSocket abierto via proxy");
+    
+    setTimeout(() => {
+        ws.send(JSON.stringify({
+            type: 'message',
+            content: 'Prueba desde proxy SSL',
+            room: 'interno'
+        }));
+    }, 1000);
+};
+
+ws.onmessage = (e) => {
+    console.log("Mensaje recibido:", e.data);
+    const msg = document.createElement('div');
+    msg.innerHTML = '📨: ' + e.data;
+    messages.appendChild(msg);
+};
+
+ws.onerror = (e) => {
+    console.error("Error WebSocket:", e);
+    status.innerHTML = '❌ ERROR: ' + JSON.stringify(e);
+    status.style.color = 'red';
+};
+
+ws.onclose = (e) => {
+    console.log("WebSocket cerrado:", e.code, e.reason);
+    status.innerHTML = '🔌 Cerrado - Código: ' + e.code;
+    status.style.color = 'orange';
+};
+</script>
+</body>
+</html>

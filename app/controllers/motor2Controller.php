@@ -1,14 +1,16 @@
 <?php
 namespace app\controllers;
 require_once APP_R_PROY . 'app/models/mainModel.php';
+require_once APP_R_PROY . 'app/controllers/usuariosController.php';
 
 use app\models\mainModel;
+use app\controllers\usuariosController;
 
 use \Exception;
 use DateTime;
 use DateTimeZone;
 
-class motor2Controller extends mainModel
+class motor2Controller extends mainModel 
 {
 	private $ultimoToken = null;
 	private $tokenExpiraEn = null; // Timestamp de expiración
@@ -16,6 +18,8 @@ class motor2Controller extends mainModel
 	private $logFile;
 	private $errorLogFile;
 	private $ultimaCoordenada = [];
+
+	private $id_status_activo;
 	private $o_f;
 
 	public function __construct()
@@ -58,6 +62,8 @@ class motor2Controller extends mainModel
 		
 		// rotación automatica de log (Elimina logs > XX dias)
 		$this->rotarLogs(15);
+
+		$this->id_status_activo = 26;
 
 		// if (isset($_COOKIE['clang'])) {
 		// 	$this->idioma_act = $_COOKIE['clang'];
@@ -127,6 +133,49 @@ class motor2Controller extends mainModel
 		file_put_contents($this->errorLogFile, $logMessage . PHP_EOL, FILE_APPEND | LOCK_EX);
 	}
 
+	public function validarAcceso($token)
+	{
+		// 1. Verificar que el usuario tiene acceso
+		if (!isset($_SESSION['user_valid']) || !$_SESSION['user_valid']) {
+			http_response_code(403);
+			echo json_encode([
+				'status' => 'error',
+				'message' => 'Acceso denegado: no autenticado'
+			]);
+			exit;
+		}
+
+		// 2. Verificar que el access_key existe en sesión
+		$access_key = $_SESSION['token'] ?? null;
+		if (!$access_key) {
+			http_response_code(403);
+			echo json_encode([
+				'status' => 'error',
+				'message' => 'Acceso denegado: falta token de sesión'
+			]);
+			exit;
+		}
+
+		$usuarioController = new usuariosController();
+		$userData = $usuarioController->getUserByToken($token);
+
+		if (!$userData) {
+			session_destroy();
+			http_response_code(403);
+			echo json_encode([
+				'status' => 'error',
+				'message' => 'Token inválido o expirado'
+			]);
+			exit;
+		}
+
+		http_response_code(200);
+		echo json_encode([
+			'status' => 'ok',
+		]);
+		exit;
+	}
+
 	public function obtenerTokenVerizon()
 	{
 		$this->log("Solicitando nuevo token a Verizon FIM API (GET)");
@@ -173,7 +222,7 @@ class motor2Controller extends mainModel
 
 		// === CASO 3: Respuesta vacía ===
 		if (empty($response)) {
-			$mensaje = "Respuesta vacía del endpoint de token";
+			$mensaje = "Respuesta vacía del endpoint de token"; 
 			$this->logWithBacktrace($mensaje, true);
 			return false;
 		}
@@ -239,73 +288,52 @@ class motor2Controller extends mainModel
 		$this->log("=== INICIO: obtenerGpsVerizon === Solicitud GPS para: {$vehicle_id}");
 
 		try {
-			// === 1. Validar que el truck exista y esté en servicio hoy ===
-			$sql_status = "SELECT * FROM status_all 
-				WHERE tabla LIKE '%truck%' 
-				AND status LIKE '%Activo%'";
-
-			$result_status = $this->ejecutarConsulta($sql_status, '', [], 'fetchAll');
-
-			if (!$result_status || !isset($result_status[0]['id_status'])) {
-				$this->logWithBacktrace("No se encontró status Activo para truck ", true);
-				throw new Exception("No se encontró status Activo para truck");
-			}
-
-			$id_status_truck_activo = $result_status[0]['id_status'];		// Esto deveria devolver 26. Lo voy a dejar fijo  a ver que pasa
-
-			// === 2. Consultar mapeo dinámico: Truck → ID Verizon ===
+			// === 1. Consultar mapeo: Truck → ID Verizon (sin filtro de servicio) ===
 			$sql = "
 				SELECT DISTINCT 
 					t.nombre, UPPER(t.nombre) AS id_verizon
 				FROM truck t
-				INNER JOIN servicios s ON t.id_truck = s.id_truck
 				WHERE 
-					DATE(s.fecha_programada) = CURDATE()
-					AND s.id_status != 39
-					AND t.id_status = 26
+					t.id_status = :id_status_activo
 					AND t.nombre = :nombre_truck
 			";
 
 			$params = [
-				':nombre_truck' => $vehicle_id
+				':nombre_truck' => $vehicle_id,
+				':id_status_activo' => $this->id_status_activo
 			];
 
 			$result = $this->ejecutarConsulta($sql, "", $params, 'fetchAll');
 
 			if (empty($result)) {
-				$this->log("INFO: El vehículo {$vehicle_id} no está programado hoy");
-				echo json_encode([
-					'lat' => 30.3204272,
-					'lng' => -95.4217815,
-					'from_backup' => true,
-					'message' => 'Truck not in service today'
-				]);
-				return;
+				$this->log("ERROR: Vehículo {$vehicle_id} no encontrado o inactivo");
+				return [ // Retornar, no imprimir
+					'error' => 'truck_not_found',
+					'message' => 'Truck not found or inactive',
+					'source' => 'system'
+				];
 			}
 
-			// Obtener el nombre original del vehículo
-			$vehicle_nombre_bruto = $result[0]['nombre']; // Ej: TRUCK 2
-
-			// Formatearlo para que coincida con Verizon
+			$vehicle_nombre_bruto = $result[0]['nombre'];
 			$device_id = $this->formatearVehicleNumber($vehicle_nombre_bruto);
-
 			$this->log("Mapeo: {$vehicle_id} → DeviceID: {$device_id}");
 
-			// === 3. Obtener token de acceso ===
+			// === 2. Obtener token de acceso ===
 			$token = $this->obtenerTokenVerizon();
 			if (!$token) {
 				$this->logWithBacktrace("No se pudo obtener token de Verizon", true);
-				throw new Exception("No se pudo obtener token de Verizon");
+				return [
+					'error' => 'auth_failed',
+					'message' => 'Could not get Verizon token',
+					'source' => 'verizon_auth'
+				];
 			}
 
 			// === 4. Consultar ubicación real del vehículo ===
-			// === Usar vehicle_number (no deviceId) y codificar correctamente ===
-			$vehicle_number = $device_id; // Ej: "TRUCK 10"
-			$encoded_vehicle = rawurlencode($vehicle_number); // → "TRUCK%2010"
-
+			$encoded_vehicle = rawurlencode($device_id);
 			$url = "https://fim.api.us.fleetmatics.com/rad/v1/vehicles/{$encoded_vehicle}/location";
 
-			$this->log("Consultando GPS vía: {$url}"); 
+			$this->log("Consultando GPS vía: {$url}");
 
 			$ch = curl_init();
 			curl_setopt_array($ch, [
@@ -324,109 +352,139 @@ class motor2Controller extends mainModel
 			$curl_error = curl_error($ch);
 			curl_close($ch);
 
-$this->log("Respuesta: " . $http_code);
-$this->log("Paquete: " . print_r($response,true));
-
+			$this->log("Respuesta HTTP: " . $http_code);
+			$this->log("Paquete: " . print_r($response, true));
 
 			// === CASO 1: Error de conexión cURL ===
 			if ($curl_error) {
-				$mensaje = "cURL Error al obtener GPS de {$device_id}: {$curl_error}";
-				$this->logWithBacktrace($mensaje, true);
-				echo json_encode([
-					'lat' => 30.3204272,
-					'lng' => -95.4217815,
-					'from_backup' => true,
-					'error' => 'Connection failed'
-				]);
-				return;
+				$this->logWithBacktrace("cURL Error: {$curl_error}", true);
+				return [
+					'error' => 'connection_failed',
+					'message' => 'Connection to Verizon failed',
+					'source' => 'curl'
+				];
 			}
 
 			// === CASO 2: Código HTTP diferente de 200 ===
 			if ($http_code !== 200) {
-				// Caso especial: vehículo sin actividad reciente
-				if ($http_code >= 201 || $http_code <= 299 ){
-					if ($http_code === 204) {
-						$this->log("INFO: Vehículo {$vehicle_id} está detenido sin actividad reciente");
+				switch ($http_code) {
+					case 204:
+						// 📵 GPS apagado o sin señal
+						$this->logWithBacktrace("📡 GPS 204: Vehículo {$vehicle_id} sin señal", true);
+						// Registrar estado
+						$this->registrarEstadoGPS($vehicle_id, 'offline', null, null);
 						
-						// Aún así, si tiene servicio hoy, devolvemos sede como punto de partida
+						// ✅ Opcional: usar última posición conocida o sede
+						$lat_backup = 30.3204272;
+						$lng_backup = -95.4217815;
+
+						$this->guardarCoordenada($vehicle_id, $lat_backup, $lng_backup, null, null);
 						echo json_encode([
-							'lat' => 30.3204272,
-							'lng' => -95.4217815,
+							'lat' => $lat_backup,
+							'lng' => $lng_backup,
 							'from_backup' => true,
-							'message' => 'Vehicle inactive but in service',
+							'message' => 'Vehicle offline, using hub location',
 							'source' => 'backup_hub'
 						]);
-						return;
-					} else {
-						$this->log("INFO: Vehículo {$vehicle_id} posee una condicion. HTTP: {$http_code}");
-						// Aún así, si tiene servicio hoy, devolvemos sede como punto de partida
+						return; // Salir después de guardar
+												
+					case 404:
+						$this->logWithBacktrace("⚠️ 404: Dispositivo no encontrado para {$vehicle_id}", true);
+						$this->registrarEstadoGPS($vehicle_id, 'not_registered', null, null);
+
+						// ✅ Opcional: usar última posición conocida o sede
+						$lat_backup = 30.3204272;
+						$lng_backup = -95.4217815;
+
+						$this->guardarCoordenada($vehicle_id, $lat_backup, $lng_backup, null, null);
 						echo json_encode([
-							'lat' => 30.3204272,
-							'lng' => -95.4217815,
+							'lat' => $lat_backup,
+							'lng' => $lng_backup,
 							'from_backup' => true,
-							'message' => 'Vehicle inactive but in service',
-							'source' => 'backup_hub'
+							'message' => 'Device not found in Verizon system',
+							'source' => 'verizon_api'
 						]);
-						return;
-					}
+						return; // Salir después de guardar
+
+
+					case 401:
+					case 403:
+						$this->logWithBacktrace("🔐 Error de autenticación con Verizon para {$vehicle_id}", true);
+						return [
+							'error' => 'authentication_error',
+							'message' => "authentication_error",
+							'source' => 'verizon_api',
+							'status_code' => $http_code
+						];
+
+					default:
+						$this->logWithBacktrace("❌ HTTP {$http_code} inesperado para {$vehicle_id}", true);
+						return [
+							'error' => 'http_error',
+							'message' => "HTTP {$http_code} error",
+							'source' => 'verizon_api',
+							'status_code' => $http_code
+						];
 				}
 
-				// Otros errores sí son críticos
-				$mensaje = "HTTP {$http_code} al obtener GPS de {$device_id}. Respuesta: " . substr($response ?? '', 0, 200);
-				$this->logWithBacktrace($mensaje, true);
-				echo json_encode([
-					'lat' => 30.3204272,
-					'lng' => -95.4217815,
-					'from_backup' => true,
-					'error' => 'Failed to fetch from Verizon'
-				]);
+/* 				// Para otros errores, usar sede solo si tiene servicio hoy
+				$tieneServicioHoy = $this->tieneServicioHoy($vehicle_id);
+
+				if ($tieneServicioHoy) {
+					$this->logWithBacktrace("📍 GPS no disponible, pero tiene servicio hoy → usando sede como referencia temporal", true);
+					echo json_encode([
+						'lat' => 30.3204272,
+						'lng' => -95.4217815,
+						'from_backup' => true,
+						'message' => 'Truck has service today but GPS is unreachable',
+						'source' => 'backup_hub'
+					]);
+				} else {
+					$this->logWithBacktrace("🚫 Sin GPS ni servicio hoy para {$vehicle_id}", true);
+					echo json_encode([
+						'error' => 'no_data',
+						'message' => 'No GPS data and no service today',
+						'source' => 'system'
+					]);
+				}
 				return;
-			}
+ */			}
 
 			// === CASO 3: Respuesta vacía ===
 			if (empty($response)) {
-				$mensaje = "Respuesta vacía del GPS para {$device_id}";
-				$this->logWithBacktrace($mensaje, true);
-				echo json_encode([
-					'lat' => 30.3204272,
-					'lng' => -95.4217815,
-					'from_backup' => true,
-					'error' => 'Empty response'
-				]);
-				return;
+				$this->logWithBacktrace("Respuesta vacía del GPS para {$device_id}", true);
+				return [
+					'error' => 'empty_response',
+					'message' => 'Empty response from Verizon',
+					'source' => 'verizon_api'
+				];
 			}
 
 			// === CASO 4: Decodificación JSON fallida ===
 			$data = json_decode($response, true);
 			if (!is_array($data)) {
-				$mensaje = "Respuesta no JSON válida de Verizon para {$device_id}: " . substr($response, 0, 200);
-				$this->logWithBacktrace($mensaje, true);
-				echo json_encode([
-					'lat' => 30.3204272,
-					'lng' => -95.4217815,
-					'from_backup' => true,
-					'error' => 'Invalid JSON'
-				]);
-				return;
+				$this->logWithBacktrace("Respuesta no JSON válida: " . substr($response, 0, 200), true);
+				return [
+					'error' => 'invalid_json',
+					'message' => 'Invalid JSON response',
+					'source' => 'verizon_api'
+				];
 			}
 
-			// === CASO 5: Extraer coordenadas con tolerancia a mayúsculas ===
+			// === CASO 5: Extraer coordenadas ===
 			$lat = $data['Latitude'] ?? $data['latitude'] ?? null;
 			$lng = $data['Longitude'] ?? $data['longitude'] ?? null;
 
 			if (!is_numeric($lat) || !is_numeric($lng)) {
-				$mensaje = "Coordenadas no válidas para {$device_id}: lat={$lat}, lng={$lng}";
-				$this->logWithBacktrace($mensaje, true);
-				echo json_encode([
-					'lat' => 30.3204272,
-					'lng' => -95.4217815,
-					'from_backup' => true,
-					'error' => 'Missing or invalid coordinates'
-				]);
-				return;
+				$this->logWithBacktrace("Coordenadas no válidas para {$device_id}: lat={$lat}, lng={$lng}", true);
+				return [
+					'error' => 'invalid_coordinates',
+					'message' => 'Missing or invalid coordinates',
+					'source' => 'verizon_api'
+				];
 			}
 
-			// Mapear otros campos con tolerancia
+			// Mapear otros campos
 			$speed = $data['Speed'] ?? $data['speedKmph'] ?? $data['speed'] ?? null;
 			$course = $data['Direction'] ?? $data['directionDegrees'] ?? $data['course'] ?? null;
 			$timestamp = $data['UpdateUTC'] ?? $data['timestamp'] ?? null;
@@ -440,6 +498,7 @@ $this->log("Paquete: " . print_r($response,true));
 				'source' => 'verizon_api'
 			];
 
+			// === 🔥 GUARDAR CON FILTRO DE MOVIMIENTO ===
 			$this->guardarCoordenada(
 				$vehicle_id,
 				(float)$lat,
@@ -448,21 +507,270 @@ $this->log("Paquete: " . print_r($response,true));
 				is_numeric($course) ? (int)$course : null
 			);
 
-			$this->log("GPS OK: {$vehicle_id} → {$output['lat']}, {$output['lng']}");
+			// También registrar como "online"
+			$this->registrarEstadoGPS($vehicle_id, 'online', $lat, $lng);
+
+			$this->log("✅ GPS procesado y guardado: {$vehicle_id} → {$lat}, {$lng}");
 			echo json_encode($output);
 
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error crítico en obtenerGpsVerizon: " . $e->getMessage(), true);
+			return [
+				'error' => 'internal_error',
+				'message' => 'Internal server error',
+				'source' => 'system'
+			];
+		}
+	}
+
+	private function tieneServicioHoy($truck) {
+		$sql = "SELECT COUNT(*) 
+				FROM servicios s
+				LEFT JOIN truck t on s.id_truck = t.id_truck
+				WHERE DATE(s.fecha_programada) = CURDATE() 
+				AND t.nombre = :v_truck 
+				AND s.id_status != 39";
+
+		$params = [
+			':v_truck' => $truck
+		];
+		$result = $this->ejecutarConsulta($sql, "", $params);
+
+		if ($result->rowCount() > 0) {
+			$row = $result->fetch();
+			$count = $row[0];
+			if ($count > 0) {
+				return true;
+			}else{
+				return false;
+			}
+		} else {
+			return false;
+		}
+	}
+
+	private function registrarEstadoGPS($truck, $estado, $lat = null, $lng = null) {
+		$datos = [
+			['campo_nombre' => 'truck',		'campo_marcador' => ':truck',	'campo_valor' => $truck],
+			['campo_nombre' => 'estado',	'campo_marcador' => ':estado',	'campo_valor' => $estado],
+			['campo_nombre' => 'lat',    	'campo_marcador' => ':lat',		'campo_valor' => $lat],
+			['campo_nombre' => 'lng',    	'campo_marcador' => ':lng',		'campo_valor' => $lng]
+		];
+
+		try {
+			$this->guardarDatos('gps_estado_dispositivos', $datos); 
+			$this->log("✅ Estado del vehiculo: {$truck} → {$estado} → {$lat}, {$lng}");
+		} catch (Exception $e) {
+			$this->logWithBacktrace("❌ Error al guardar estado del vehiculo: " . $e->getMessage(), true);
+		}
+	}
+
+	public function obtenerGpsLocationIQSoloConsulta($apikey, $lat, $lng){
+		$this->log("=== INICIO: Direccion Actual a partir de coordenadas ===");
+		try {
+			$url = "https://us1.locationiq.com/v1/reverse.php?key={$apikey}&lat={$lat}&lon={$lng}&format=json&";
+
+			$this->log("Consultando GPS vía: {$url}.");
+
+			$ch = curl_init();
+			curl_setopt_array($ch, [
+				CURLOPT_URL => $url,
+				CURLOPT_RETURNTRANSFER => true,
+				CURLOPT_HTTPHEADER => [
+					'Accept: application/json'
+				],
+				CURLOPT_TIMEOUT => 10,
+				CURLOPT_SSL_VERIFYPEER => true
+			]);
+
+			$response = curl_exec($ch);
+			$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+			$curl_error = curl_error($ch);
+			curl_close($ch);
+
+			if ($curl_error) {
+				$this->logWithBacktrace("cURL Error: {$curl_error}", true);
+				echo json_encode([
+					'success' => false,
+					'error' => 'Connection failed'
+				]);
+				return;
+			}
+
+			if ($http_code !== 200) {
+				$this->logWithBacktrace("HTTP {$http_code} al obtener dirección", true);
+				echo json_encode([
+					'success' => false,
+					'error' => 'Failed to fetch from LocationIQ'
+				]);
+				return;
+			}
+
+			if (empty($response)) {
+				$this->logWithBacktrace("Respuesta vacía de LocationIQ", true);
+				echo json_encode([
+					'success' => false,
+					'error' => 'Empty response'
+				]);
+				return;
+			}
+
+			$data = json_decode($response, true);
+			if (!is_array($data)) {
+				$this->logWithBacktrace("Respuesta no JSON válida de LocationIQ", true);
+				echo json_encode([
+					'success' => false,
+					'error' => 'Invalid JSON'
+				]);
+				return;
+			}
+
+			// Puedes devolver el campo 'display_name' como dirección
+			$direccion = $data['display_name'] ?? null;
+
 			echo json_encode([
-				'lat' => 30.3204272,
-				'lng' => -95.4217815,
-				'from_backup' => true,
+				'success' => true,
+				'direccion' => $direccion,
+				'data' => $data
+			]);
+			return;
+						
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error crítico en obtenerGpsLocationIQSoloConsulta: " . $e->getMessage(), true);
+			echo json_encode([
+				'lat' => null,
+				'lng' => null,
+				'error' => 'Internal server error'
+			]);
+		}
+	}
+
+	public function obtenerGpsVerizonSoloConsulta($vehicle_id)
+	{
+		$this->log("=== INICIO: Posicion actual del Truck === Solicitud GPS para: {$vehicle_id}");
+
+		try {
+			// 1. Obtener el nombre formateado del vehículo
+			$device_id = $this->formatearVehicleNumber($vehicle_id);
+
+			// 2. Obtener token de acceso
+			$token = $this->obtenerTokenVerizon();
+			if (!$token) {
+				$this->logWithBacktrace("No se pudo obtener token de Verizon", true);
+				throw new Exception("No se pudo obtener token de Verizon");
+			}
+
+			// 3. Consultar ubicación real del vehículo
+			$vehicle_number = $device_id; // Ej: "TRUCK 10"
+			$encoded_vehicle = rawurlencode($vehicle_number); // → "TRUCK%2010"
+
+			$url = "https://fim.api.us.fleetmatics.com/rad/v1/vehicles/{$encoded_vehicle}/location";
+
+			$this->log("Consultando GPS vía: {$url}. Codigo de vehiculo: " . $encoded_vehicle);
+
+			$ch = curl_init();
+			curl_setopt_array($ch, [
+				CURLOPT_URL => $url,
+				CURLOPT_RETURNTRANSFER => true,
+				CURLOPT_HTTPHEADER => [
+					'Authorization: Atmosphere atmosphere_app_id=' . VERIZON_APP_ID . ', Bearer ' . $token,
+					'Accept: application/json'
+				],
+				CURLOPT_TIMEOUT => 10,
+				CURLOPT_SSL_VERIFYPEER => true
+			]);
+
+			$response = curl_exec($ch);
+			$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+			$curl_error = curl_error($ch);
+			curl_close($ch);
+
+			if ($curl_error) {
+				$this->logWithBacktrace("cURL Error: {$curl_error}", true);
+				echo json_encode([
+					'lat' => null,
+					'lng' => null,
+					'error' => 'Connection failed'
+				]);
+				return;
+			}
+
+			if ($http_code !== 200) {
+				$this->logWithBacktrace("HTTP {$http_code} al obtener GPS", true);
+				echo json_encode([
+					'lat' => null,
+					'lng' => null,
+					'error' => 'Failed to fetch from Verizon'
+				]);
+				return;
+			}
+
+			if (empty($response)) {
+				$this->logWithBacktrace("Respuesta vacía del GPS", true);
+				echo json_encode([
+					'lat' => null,
+					'lng' => null,
+					'error' => 'Empty response'
+				]);
+				return;
+			}
+
+			$data = json_decode($response, true);
+			if (!is_array($data)) {
+				$this->logWithBacktrace("Respuesta no JSON válida de Verizon", true);
+				echo json_encode([
+					'lat' => null,
+					'lng' => null,
+					'error' => 'Invalid JSON'
+				]);
+				return;
+			}
+
+			$lat = $data['Latitude'] ?? $data['latitude'] ?? null;
+			$lng = $data['Longitude'] ?? $data['longitude'] ?? null;
+
+			if (!is_numeric($lat) || !is_numeric($lng)) {
+				$this->logWithBacktrace("Coordenadas no válidas", true);
+				echo json_encode([
+					'lat' => null,
+					'lng' => null,
+					'error' => 'Missing or invalid coordinates'
+				]);
+				return;
+			}
+
+			$output = [
+				'lat' => (float)$lat,
+				'lng' => (float)$lng,
+				'timestamp' => $data['UpdateUTC'] ?? $data['timestamp'] ?? null,
+				'speed' => $data['Speed'] ?? $data['speedKmph'] ?? $data['speed'] ?? null,
+				'course' => $data['Direction'] ?? $data['directionDegrees'] ?? $data['course'] ?? null,
+				'source' => 'verizon_api'
+			];
+
+			echo json_encode($output);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error crítico en obtenerGpsVerizonSoloConsulta: " . $e->getMessage(), true);
+			echo json_encode([
+				'lat' => null,
+				'lng' => null,
 				'error' => 'Internal server error'
 			]);
 		}
 	}
 
 	public function guardarCoordenada($vehicle_id, $lat, $lng, $speed = null, $course = null) {
+		// Al inicio de la función
+		$fechaActual = date('Y-m-d');
+		foreach ($_SESSION['gps_tracker_last'] as $clave => $valor) {
+			$parts = explode('_', $clave);
+			$fechaClave = end($parts);
+			if ($fechaClave < $fechaActual) {
+				unset($_SESSION['gps_tracker_last'][$clave]);
+			}
+		}
+
 		// === 1. Clave única por vehículo y día ===
 		$clave = $vehicle_id . '_' . date('Y-m-d');
 
@@ -494,9 +802,19 @@ $this->log("Paquete: " . print_r($response,true));
 			$anterior_lat = round($anterior[0], 6);
 			$anterior_lng = round($anterior[1], 6);
 
+			// ✅ Opción 1: Redondeo (ya lo tienes)
 			if ($nueva_lat == $anterior_lat && $nueva_lng == $anterior_lng) {
-				$this->log("🔁 Coordenada duplicada para {$vehicle_id}. No se guarda.");
-				return; // ← Salida temprana: no se inserta en BD
+				$this->log("🔁 Coordenada duplicada para {$vehicle_id} (redondeo). No se guarda.");
+				return;
+			}
+
+			// ✅ Opción 2: Distancia mínima (fallback adicional)
+			$distancia = $this->calcularDistanciaMetros($lat, $lng, $anterior[0], $anterior[1]);
+			$umbralMetros = 5;
+
+			if ($distancia < $umbralMetros) {
+				$this->log("📍 Movimiento menor a {$umbralMetros}m ({$distancia}m). No se guarda.");
+				return;
 			}
 		}
 
@@ -510,15 +828,36 @@ $this->log("Paquete: " . print_r($response,true));
 			['campo_nombre' => 'origen',       'campo_marcador' => ':origen',       'campo_valor' => 'realtime']
 		];
 
-		try {
-			$this->guardarDatos('gps_tracker', $datos);
-			// === 5. Actualizar MEMORIA con la nueva coordenada ===
-			$this->ultimaCoordenada[$clave] = [$nueva_lat, $nueva_lng];
-	        $_SESSION['gps_tracker_last'][$clave] = [$nueva_lat, $nueva_lng];
-			$this->log("✅ Coordenada guardada: {$vehicle_id} → {$nueva_lat}, {$nueva_lng}");
-		} catch (Exception $e) {
-			$this->logWithBacktrace("❌ Error al guardar coordenada: " . $e->getMessage(), true);
+		$maxIntentos = 3;
+		for ($i = 1; $i <= $maxIntentos; $i++) {
+			try {
+				$this->guardarDatos('gps_tracker', $datos);
+				// === 5. Actualizar MEMORIA con la nueva coordenada ===
+				$this->ultimaCoordenada[$clave] = [$nueva_lat, $nueva_lng];
+				$_SESSION['gps_tracker_last'][$clave] = [$nueva_lat, $nueva_lng];
+				$this->log("✅ Coordenada guardada: {$vehicle_id} → {$nueva_lat}, {$nueva_lng}");
+				break; // Éxito → salir del bucle
+			} catch (Exception $e) {
+				if ($i === $maxIntentos) {
+					$this->logWithBacktrace("❌ Error al guardar coordenada: " . $e->getMessage(), true);
+					throw $e;
+				}
+				sleep(1); // Esperar antes de reintento
+			}
 		}
+	}
+
+	// === FUNCIÓN AUXILIAR: calcularDistanciaMetros ===
+	private function calcularDistanciaMetros($lat1, $lng1, $lat2, $lng2)
+	{
+		$R = 6371e3;
+		$φ1 = deg2rad($lat1);
+		$φ2 = deg2rad($lat2);
+		$Δφ = deg2rad($lat2 - $lat1);
+		$Δλ = deg2rad($lng2 - $lng1);
+		$a = sin($Δφ / 2) * sin($Δφ / 2) + cos($φ1) * cos($φ2) * sin($Δλ / 2) * sin($Δλ / 2);
+		$c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+		return $R * $c;
 	}
 
 	/**
@@ -733,19 +1072,28 @@ $this->log("Paquete: " . print_r($response,true));
 					continue;
 				}
 
-				// Preparar datos para actualizar
-				$sql = "UPDATE truck
-						SET verizon_vehicle_number = :v_verizon_vehicle_number, 
-							verizon_device_id = :v_verizon_device_id
-						WHERE id_truck = :v_id";
+				try {
+					$datos = [
+						['campo_nombre' => 'verizon_vehicle_number', 'campo_marcador' => ':verizon_vehicle_number', 'campo_valor' => $nombre],
+						['campo_nombre' => 'verizon_device_id', 'campo_marcador' => ':verizon_device_id', 'campo_valor' => $nombre]
+					];
+					$condicion = [
+						'condicion_campo' => 'id_truck',
+						'condicion_operador' => '=', 					
+						'condicion_marcador' => ':id_truck',
+						'condicion_valor' => $id
+					];
 
-				$param = [
-					':v_verizon_vehicle_number' => $nombre,
-					':v_verizon_device_id' => $nombre,
-					':v_id' => $id
-				];
+					$filas = $this->actualizarDatos('truck', $datos, $condicion);
 
-				$filas = $this->ejecutarConsulta($sql, "", $param);
+					http_response_code(200);
+					echo json_encode(['success' => 'ok', 'message' => 'Update completed']);
+
+				} catch (Exception $e) {
+					$this->logWithBacktrace("Error en finalizarServicio: " . $e->getMessage(), true);
+					http_response_code(500);
+					echo json_encode(['error' => 'Could not update']);
+				}
 
 				if ($filas !== null && $filas > 0) {
 					$this->log("✅ Migrado: {$nombre} (id_truck={$id})");
@@ -782,15 +1130,26 @@ $this->log("Paquete: " . print_r($response,true));
 	public function obtenerTrucksActivosHoy() {
 		$this->log("Solicitando lista de trucks activos hoy");
 
+		// $sql = "
+		// 	SELECT DISTINCT 
+		// 		t.id_truck, t.nombre AS vehicle_id
+		// 	FROM truck t
+		// 	INNER JOIN servicios s ON t.id_truck = s.id_truck
+		// 	WHERE 
+		// 		DATE(s.fecha_programada) = CURDATE()
+		// 		AND s.id_status != 39
+		// 		AND t.id_status = 26
+		// 	ORDER BY t.nombre
+		// ";
+
+
+		// Consulta de todos los vehiculos
+
 		$sql = "
 			SELECT DISTINCT 
 				t.id_truck, t.nombre AS vehicle_id
 			FROM truck t
-			INNER JOIN servicios s ON t.id_truck = s.id_truck
-			WHERE 
-				DATE(s.fecha_programada) = CURDATE()
-				AND s.id_status != 39
-				AND t.id_status = 26
+			WHERE t.id_status = 26
 			ORDER BY t.nombre
 		";
 
@@ -813,8 +1172,49 @@ $this->log("Paquete: " . print_r($response,true));
 		}
 	}	
 
+	public function obtenerTrucksActivosHoy_excl() {
+		// $this->log("Solicitando lista de trucks activos hoy");
+
+		$sql = "
+			SELECT DISTINCT 
+				t.id_truck, t.nombre AS vehicle_id
+			FROM truck t
+			INNER JOIN servicios s ON t.id_truck = s.id_truck
+			WHERE 
+				DATE(s.fecha_programada) = CURDATE()
+				AND s.id_status != 39
+				AND t.id_status = 26
+			ORDER BY t.nombre
+		";
+
+		try {
+			$result = $this->ejecutarConsulta($sql, '', [], 'fetchAll');
+			
+			if (!$result || !is_array($result)) {
+				$this->log("INFO: No se encontraron trucks activos hoy");
+				return [];
+			}
+
+			$activos = array_column($result, 'vehicle_id', );
+			// Extraer solo los nombres
+			usort($activos, function($a, $b) {
+				$numA = (int) preg_replace('/[^0-9]/', '', $a);
+				$numB = (int) preg_replace('/[^0-9]/', '', $b);
+				return $numA <=> $numB;
+			});
+
+			$this->log("Trucks activos hoy: " . implode(', ', $activos));
+			return $activos;
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error al obtener trucks activos: " . $e->getMessage(), true);
+			return [];
+		}
+	}	
+
+
 	public function obtenerTrucksActivosHoy_Color($fecha_cal = null) {
-		$this->log("Solicitando lista de trucks activos hoy");
+		$this->log("Solicitando lista de trucks activos hoy con su color");
 
 		if ($fecha_cal){
 			$fecha_programada = $fecha_cal;
@@ -833,7 +1233,6 @@ $this->log("Paquete: " . print_r($response,true));
 				AND t.id_status = 26
 			ORDER BY t.nombre
 		";
-
 		$param = [
 			'v_fecha_programada' => $fecha_programada
 		];
@@ -841,7 +1240,7 @@ $this->log("Paquete: " . print_r($response,true));
 		try {
 			$result = $this->ejecutarConsulta($sql, '', $param, 'fetchAll');
 			
-			if (!$result || !is_array($result)) {
+			if (!$result || !is_array($result)) { 
 				$this->log("INFO: No se encontraron trucks activos hoy");
 				return []; 
 			}
@@ -861,7 +1260,7 @@ $this->log("Paquete: " . print_r($response,true));
 			return [];
 		}
 	}	
-
+ 
 
 	public function obtenerHistorialGPS($vehicle_id) {
 		//$this->log("Solicitando historial GPS para: $vehicle_id");
@@ -1016,5 +1415,357 @@ $this->log("Paquete: " . print_r($response,true));
 		// Devolver ambos puntos (último y penúltimo)
         echo json_encode($param);
         exit;  
+	}
+
+	public function obtenerUltimoPuntoTodos()
+	{
+		$this->log("Solicitando movimientos de vehiculos en servicio");
+
+		$timestamp1 = $fromTimeUtc ?? date('Y-m-d');
+		$timestamp1 .= ' 00:00:00';
+		$timestamp2 = $toTimeUtc ?? date('Y-m-d');
+		$timestamp2 .= ' 23:59:59';
+
+		$this->log("Parametros de Fechas de los vehiculos entre  $timestamp1 y $timestamp2");
+
+		$sql = "
+			SELECT g.vehicle_id as truck, g.lat, g.lng, g.timestamp, g.speed, g.course
+				FROM greentrack_live.gps_tracker g
+				INNER JOIN (
+					SELECT 
+						vehicle_id, 
+						MAX(timestamp) AS max_timestamp
+					FROM greentrack_live.gps_tracker
+					WHERE timestamp BETWEEN :v_timestamp1 AND :v_timestamp2
+					GROUP BY vehicle_id
+				) ultimos ON g.vehicle_id = ultimos.vehicle_id AND g.timestamp = ultimos.max_timestamp
+				ORDER BY g.vehicle_id;";
+
+		$param = [
+			':v_timestamp1' => $timestamp1,
+			':v_timestamp2' => $timestamp2
+		];
+
+		try {
+			$result = $this->ejecutarConsulta($sql, '', $param, 'fetchAll');
+			
+			$historial = [];
+			if (!$result || !is_array($result)) {
+				$this->log("INFO: No hay historial GPS para hoy");
+				$historial[] = [
+					'lat' => 30.3204272,
+					'lng' => -95.4217815,
+					'from_backup' => true,
+					'message' => 'Truck not in service'
+				];
+				$this->log("✅ Sin Historial GPS BD devuelto " . count($historial) . " puntos");
+			} else {
+				// === CASO 2: Hay resultados → construir $historial  truck, lat, lng, timestamp ===
+				foreach ($result as $row) {
+					$historial[] = [
+						'truck' => $row['truck'],
+						'lat' => (float)$row['lat'],
+						'lng' => (float)$row['lng'],
+						'timestamp' => $row['timestamp']
+					];
+				}
+				$this->log("✅ Historial GPS BD devuelto para todos los vehiculos: " . count($historial) . " puntos");
+			}
+
+			return $historial;
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error al obtener historial GPS BD: " . $e->getMessage(), true);
+			return	[];
+		}
+	}
+
+	public function obtenerRutaHoy($vehicle_id)
+	{
+		$timestamp1 = $fromTimeUtc ?? date('Y-m-d');
+		$timestamp1 .= ' 00:00:00';
+		$timestamp2 = $toTimeUtc ?? date('Y-m-d');
+		$timestamp2 .= ' 23:59:59';
+
+		$sql = "
+			SELECT g.*, t.color
+				FROM greentrack_live.gps_tracker g 
+				LEFT JOIN greentrack_live.truck AS t ON g.vehicle_id = t.nombre COLLATE utf8mb4_unicode_ci
+				WHERE g.vehicle_id = :v_vehicle_id 
+				AND g.timestamp BETWEEN :v_timestamp1 AND :v_timestamp2
+				ORDER BY g.timestamp ASC";
+
+		$param = [
+			':v_vehicle_id' => $vehicle_id,
+			':v_timestamp1' => $timestamp1,
+			':v_timestamp2' => $timestamp2
+		];
+
+		try {
+			$result = $this->ejecutarConsulta($sql, '', $param, 'fetchAll');
+			
+			$historial = [];
+			if (!$result || !is_array($result)) {
+				$sql = "
+					SELECT truck.color
+						FROM truck 
+						WHERE nombre = :v_vehicle_id";
+
+				$param = [
+					':v_vehicle_id' => $vehicle_id
+				];
+				$res_act = $this->ejecutarConsulta($sql, '', $param);
+				$colorVehiculo = $res_act['color'] ?? '#333333';
+				$nombreVehiculo = $vehicle_id;
+				$sedeLat = 30.3204272;
+				$sedeLng = -95.4217815;
+				$latVehiculo = floatval($sedeLat);
+				$lngVehiculo = floatval($sedeLng);
+
+				$this->log("INFO: No hay historial GPS para $vehicle_id hoy");
+				$dt = new DateTime($timestamp1);
+				$hora = $dt->format('g:i A');
+
+
+				$html1 = "
+					<div style=\"
+						background: {$colorVehiculo};
+						color: #fff;
+						font-size: 1.2em;
+						font-weight: bold;
+						padding: 12px 18px;
+						border-radius: 8px;
+						margin-bottom: 10px;
+						letter-spacing: 1px;
+						box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+					\">
+						Vehicle: {$nombreVehiculo}
+					</div>
+
+					<div class=\"ele_coordenada\">
+						<div style=\"margin-bottom: 4px;\">
+							<b>Location:</b> 
+							<span style=\"color:#0066cc\">{$latVehiculo}, {$lngVehiculo}</span>
+							<b> H: {$hora}</b> 
+						</div>
+						<div style=\"margin-bottom: 4px;\">
+							<b>Location:</b> <span style=\"color:#388e3c;\">At headquarters</span>
+						</div>
+						<div style=\"margin-bottom: 4px;\">
+							<b>Distance:</b>0 meters
+						</div>
+					</div>";
+
+				$this->log("✅ Sin Historial GPS BD devuelto para $vehicle_id: " . count($historial) . " puntos");
+			} else {
+				// === CASO 2: Hay resultados → construir $historial ===
+				$html1 = ''; // ← Inicializar antes del bucle
+				$mostrarTitulo = true; // opcional: usar una variable local
+
+				foreach ($result as $row) {
+					$lat = (float)$row['lat'];
+					$lng = (float)$row['lng'];
+					if (is_numeric($lat) || is_numeric($lng)) {
+						// Verificar si las coordenadas son válidas
+						$coordenadasValidas = ($lat !== 0.0 || $lng !== 0.0); // ajusta según tu lógica
+
+						// Solo procesar filas con coordenadas válidas
+						if (!$coordenadasValidas) {
+							continue;
+						}
+
+						// Agregar el título solo la primera vez que haya datos válidos
+						if ($mostrarTitulo) {
+							$html1 .= "
+								<div style=\"
+									background: {$row['color']};
+									color: #fff;
+									font-size: 1.2em;
+									font-weight: bold;
+									padding: 12px 18px;
+									border-radius: 8px;
+									margin-bottom: 10px;
+									letter-spacing: 1px;
+									box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+								\">
+									Vehicle: {$vehicle_id}
+								</div>
+							";
+							$mostrarTitulo = false;
+						}
+
+						$vdata = ['lat' => $lat, 'lng' => $lng];
+						$html1 .= $this->generarHtmlUbicacionVehiculo($vdata, $row['color'], $vehicle_id, $row['timestamp']);
+					}
+				}
+				$this->log("✅ Historial GPS BD devuelto para $vehicle_id: " . count($historial) . " puntos");
+			}
+
+			echo json_encode([
+				'success' => true,
+				'rutas' => $html1
+			]);
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error al obtener historial GPS BD: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode([
+				'success' => false,
+				'truck' => $vehicle_id,
+				'rutas' => [],
+				'error' => 'Internal server error'
+			]);
+		}
+
+	}
+
+	// === FUNCIÓN: Generar HTML del modal de ubicación del vehículo ===
+	private function generarHtmlUbicacionVehiculo($vdata, $colorVehiculo, $nombreVehiculo, $timestamp)
+	{
+		// Validar datos de entrada
+		if (!isset($vdata['lat']) || !isset($vdata['lng'])) {
+			return '<p>Error: Coordenadas no disponibles.</p>';
+		}
+
+		$dt = new DateTime($timestamp);
+		$hora = $dt->format('g:i A');
+
+		$latVehiculo = floatval($vdata['lat']);
+		$lngVehiculo = floatval($vdata['lng']);
+
+		// Coordenadas de la sede
+		$sedeLat = 30.3204272;
+		$sedeLng = -95.4217815;
+
+		// Calcular distancia a la sede
+		$distanciaSede = $this->calcularDistanciaMetros($latVehiculo, $lngVehiculo, $sedeLat, $sedeLng);
+		$umbralMetros = defined('APP_UMBRAL_METROS') ? APP_UMBRAL_METROS : 150; // Ajusta según tu config
+		$html = "";
+
+		// 1. ¿Está en la sede?
+		if ($distanciaSede <= $umbralMetros) {
+		// Iniciar HTML
+			$html .= "
+				<div class=\"ele_coordenada\">
+					<div style=\"margin-bottom: 4px;\">
+						<b>Location:</b> 
+						<span style=\"color:#0066cc\">{$latVehiculo}, {$lngVehiculo}</span>
+						<b> H: {$hora}</b> 
+					</div>
+			";
+			$html .= "
+					<div style=\"margin-bottom: 4px;\">
+						<b>Location:</b> <span style=\"color:#388e3c;\">At headquarters</span>
+					</div>
+					<div style=\"margin-bottom: 4px;\">
+						<b>Distance:</b> " . round($distanciaSede) . " meters
+					</div>
+			";
+		} else {
+			// 2. Consultar propiedades desde la base de datos
+			$propiedades = $this->listarPropiedades(); // Tu función que consulta DB
+			$propiedadEncontrada = null;
+			$dist = null;
+
+			foreach ($propiedades as $prop) {
+				if (floatval($prop['lat']) > 0 || floatval($prop['lng']) < 0) {
+					$dist = $this->calcularDistanciaMetros(
+						$latVehiculo,
+						$lngVehiculo,
+						floatval($prop['lat']),
+						floatval($prop['lng'])
+					);
+
+					if ($dist <= $umbralMetros) {
+						$propiedadEncontrada = $prop;
+						break;
+					}
+				}
+			}
+
+			if ($propiedadEncontrada) {
+				$html = "
+					<div class=\"ele_coordenada\">
+						<div style=\"margin-bottom: 4px;\">
+							<b>Location:</b> <span style=\"color:#0066cc\">{$latVehiculo}, {$lngVehiculo}</span><b> H: {$hora}</b> 
+						</div>
+				";
+				$html .= "
+						<div style=\"margin-bottom: 4px;\">
+							<b>Property:</b> <span style=\"color:#1565c0;\">{$propiedadEncontrada['nombre']}</span>
+						</div>
+						<div style=\"margin-bottom: 4px;\">
+							<b>Address:</b> {$propiedadEncontrada['direccion']}
+						</div>
+						<div style=\"margin-bottom: 4px;\">
+							<b>Distance:</b> " . round($dist) . " meters
+						</div>
+				";
+			} else {
+				// 3. Usar LocationIQ para geocodificación inversa
+				$apiKey = "pk.1472af9e389d1d577738a28c25b3e620";
+				$url = "https://us1.locationiq.com/v1/reverse.php?key={$apiKey}&lat={$latVehiculo}&lon={$lngVehiculo}&format=json";
+
+				$ch = curl_init();
+				curl_setopt_array($ch, [
+					CURLOPT_URL => $url,
+					CURLOPT_RETURNTRANSFER => true,
+					CURLOPT_TIMEOUT => 10,
+					CURLOPT_USERAGENT => 'GreenTrack System'
+				]);
+
+				$response = curl_exec($ch);
+				$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+				curl_close($ch);
+
+				if ($httpCode === 200) {
+					$locationIQ = json_decode($response, true);
+					$address = $locationIQ['display_name'] ?? null;
+
+					$html = "
+						<div class=\"ele_coordenada\">
+							<div style=\"margin-bottom: 4px;\">
+								<b>Location:</b> <span style=\"color:#0066cc\">{$latVehiculo}, {$lngVehiculo}</span><b> H: {$hora}</b> 
+							</div>
+					";
+
+					if ($address) {
+						$html .= "
+							<div style=\"margin-bottom: 4px;\">
+								<b>Address:</b> <span style=\"color:#388e3c;\">{$address}</span>
+							</div>
+						";
+					} else {
+						$html .= "
+							<div style=\"margin-bottom: 4px;\">
+								<b>Location:</b> <span style=\"color:#c62828;\">Not at any registered Location</span>
+							</div>
+						";
+					}
+				}
+			}
+		}
+
+		$html .= "</div>";
+		return $html;
+	}
+
+	private function listarPropiedades()
+	{
+		try {
+			$sql = "SELECT c.nombre, d.direccion, d.lat, d.lng 
+				FROM clientes c
+				LEFT JOIN direcciones AS d ON c.id_cliente = d.id_cliente
+				WHERE d.direccion IS NOT NULL AND d.lat IS NOT NULL AND d.lng IS NOT NULL AND d.cambio = 1";
+			
+			$param = [];
+			
+			$result = $this->ejecutarConsulta($sql, '', $param, "fetchAll");
+			return $result;
+
+		} catch (Exception $e) {
+			error_log("Error al listar propiedades: " . $e->getMessage());
+			return [];
+		}
 	}
 }

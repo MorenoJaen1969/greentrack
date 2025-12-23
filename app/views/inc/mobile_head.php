@@ -11,9 +11,11 @@
 
 <!-- Js principal -->
 
-<!-- Estilos del dashboard -->
-<link rel="stylesheet" href="/app/views/inc/css/mobile.css">
+<!-- Font-Awesome CSS-->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css?v=<?= time() ?>">
 
+<!-- Estilos del dashboard -->
+<link rel="stylesheet" href="/app/views/inc/css/mobile.css?v=<?= time() ?>">
 
 <!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />

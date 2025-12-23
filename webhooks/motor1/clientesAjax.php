@@ -71,7 +71,6 @@ try {
         ob_clean(); // Limpia el búfer actual sin enviarlo
     }    
     $controller = new serviciosController();
-    error_log("Registrando cliente: " . print_r($params, true));
     
     $resultado = $controller->procesarClientesDesdeMotor1($params);
     if (!headers_sent()) {

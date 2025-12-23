@@ -112,7 +112,6 @@ try {
         }
     }
     // === FIN GENERACIÓN PDFs ===
-error_log("Resultado final: " . json_encode($resultado));            
 
     http_response_code(200);
     echo json_encode($resultado, JSON_PRETTY_PRINT);

@@ -1,0 +1,46 @@
+<html>
+<body>
+<h2>Prueba WebSocket Simple</h2>
+<div id="status">Conectando...</div>
+<div id="messages"></div>
+
+<script>
+const status = document.getElementById('status');
+const messages = document.getElementById('messages');
+
+// Usar tu token REAL
+const token = 'bd3933852ea0edd0321937344f2c5a2dcc446213857230954ce3dd58ac4810be';
+const ws = new WebSocket('wss://positron4tx.ddns.net:7070?token=' + token);
+
+ws.onopen = () => {
+    status.innerHTML = '✅ CONECTADO AL WEBSOCKET!';
+    status.style.color = 'green';
+    
+    // Enviar mensaje de prueba
+    setTimeout(() => {
+        ws.send(JSON.stringify({
+            type: 'message',
+            content: 'Hola WebSocket - prueba desde navegador',
+            room: 'interno'
+        }));
+    }, 1000);
+};
+
+ws.onmessage = (e) => {
+    const msg = document.createElement('div');
+    msg.innerHTML = '📨: ' + e.data;
+    messages.appendChild(msg);
+};
+
+ws.onerror = (e) => {
+    status.innerHTML = '❌ ERROR: ' + e;
+    status.style.color = 'red';
+};
+
+ws.onclose = (e) => {
+    status.innerHTML = '🔌 Conexión cerrada: ' + e.code;
+    status.style.color = 'orange';
+};
+</script>
+</body>
+</html>

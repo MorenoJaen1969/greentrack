@@ -1,0 +1,34 @@
+@font-face {
+    font-family:digital-7;
+    src: url('../fuentes/digital-7/digital-7.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+.form-data {
+    font-family: 'digital-7', monospace;
+}
+
+.fecha-programada {
+    text-align: center;
+}
+
+.fecha-ano {
+    font-family: 'digital-7', monospace;
+    font-size: 2.8rem;
+    line-height: 1.1;
+    color: #000;
+}
+
+.fecha-mes {
+    font-size: 1.6rem;
+    font-weight: bold;
+    margin: 6px 0;
+    color: #333;
+}
+
+.fecha-dia {
+    font-size: 1.4rem;
+    color: #666;
+    text-transform: capitalize;
+}

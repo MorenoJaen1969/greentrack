@@ -178,9 +178,9 @@ class paradasController extends mainModel
 		];
 
 		$condicion = [
-			["condicion_campo" => "id_parada", 	"condicion_marcador" => ":id_parada", 	"condicion_valor" => $id_parada],
-			["condicion_campo" => "vehicle_id", "condicion_marcador" => ":vehicle_id", 	"condicion_valor" => $vehicle_id],
-			["condicion_campo" => "estado", 	"condicion_marcador" => ":estado", 		"condicion_valor" => 'abierta']
+			["condicion_campo" => "id_parada", 	"condicion_operador" => "=", "condicion_marcador" => ":id_parada", 	"condicion_valor" => $id_parada],
+			["condicion_campo" => "vehicle_id", "condicion_operador" => "=", "condicion_marcador" => ":vehicle_id", 	"condicion_valor" => $vehicle_id],
+			["condicion_campo" => "estado", 	"condicion_operador" => "=", "condicion_marcador" => ":estado", 		"condicion_valor" => 'abierta']
 		];
 
 		$cant_reg = $this->actualizarDatos("paradas_operativas", $datos, $condicion);

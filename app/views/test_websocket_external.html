@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test WebSocket Externo 7070</title>
+</head>
+<body>
+    <h1>Test WebSocket Externo Puerto 7070</h1>
+    <div id="status">Conectando...</div>
+    <div id="messages"></div>
+
+    <script>
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+        
+        // Obtener token de la URL o usar uno de prueba
+        const urlParams = new URLSearchParams(window.location.search);
+        let token = urlParams.get('token');
+        
+        if (!token) {
+            // Token de prueba (deberías usar uno real de tu sistema)
+            token = '79256616c9a4ee6ca98583af334a40ac9954c56429f92fb6883635c906f5ceb4';
+        }
+        
+        // Conectar al WebSocket EXTERNO con token
+        const socket = new WebSocket('wss://positron4tx.ddns.net:7070?token=' + encodeURIComponent(token));
+        
+        socket.onopen = function(event) {
+            status.innerHTML = '✅ CONECTADO al WebSocket EXTERNO en puerto 7070';
+            status.style.color = 'green';
+            
+            // Enviar mensaje de prueba después de 1 segundo
+            setTimeout(() => {
+                socket.send(JSON.stringify({
+                    type: 'message',
+                    content: 'Mensaje de prueba desde cliente externo',
+                    room: 'interno',
+                    messageType: 'text'
+                }));
+            }, 1000);
+        };
+        
+        socket.onmessage = function(event) {
+            const message = document.createElement('div');
+            message.innerHTML = '📨 Mensaje recibido: ' + event.data;
+            messages.appendChild(message);
+            console.log('Mensaje recibido:', event.data);
+        };
+        
+        socket.onerror = function(error) {
+            status.innerHTML = '❌ ERROR conectando al WebSocket: ' + error;
+            status.style.color = 'red';
+            console.error('WebSocket error:', error);
+        };
+        
+        socket.onclose = function(event) {
+            status.innerHTML = '🔌 Conexión WebSocket cerrada. Código: ' + event.code + ', Razón: ' + event.reason;
+            status.style.color = 'orange';
+            console.log('WebSocket closed:', event.code, event.reason);
+        };
+        
+        // Agregar botón para enviar mensaje manualmente
+        const button = document.createElement('button');
+        button.innerHTML = 'Enviar Mensaje de Prueba';
+        button.onclick = function() {
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'message',
+                    content: 'Mensaje manual desde botón',
+                    room: 'interno',
+                    messageType: 'text'
+                }));
+            }
+        };
+        document.body.appendChild(button);
+    </script>
+</body>
+</html>

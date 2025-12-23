@@ -1,0 +1,887 @@
+/* Variables CSS consistentes con tu sistema */
+:root {
+    --primary-color: #2563eb;
+    --secondary-color: #64748b;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --error-color: #ef4444;
+    --hover-btn-color: #575656;
+
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-red: #b82020;
+    --bg-tertiary: #e2e8f0;
+    --bg-tittle: #d8dde1;
+
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+
+    --border-radius: 0.75rem;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+
+    /* Espaciado en unidades relativas */
+    --space-xs: 0.5rem;
+    --space-sm: 1rem;
+    --space-md: 1.5rem;
+    --space-lg: 2rem;
+
+    --space-xxs: 0.1rem;
+
+    --space-lg-vertical: 0.5rem;   /* arriba y abajo */
+    --space-lg-horizontal: 1.5rem; /* izquierda y derecha */
+
+}
+
+/* ========== ESTILOS PRINCIPALES DEL CHAT ========== */
+
+/* Contenedor principal del chat */
+.chat-app-container {
+    background: var(--bg-secondary);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    margin: 0 auto;
+    padding: 10px;
+    width: 90vw;
+}
+
+/* Header del Chat */
+.chat-header {
+    background: var(--bg-primary);
+    padding: var(--space-sm) var(--space-md);
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+/* CSS Grid Principal - CORREGIDO para coincidir con HTML */
+.chat-main-grid {
+    display: grid;
+    grid-template-columns: 320px 1fr 280px;
+    grid-template-areas: "sidebar messages info";
+    height: calc(100vh - 120px);
+    gap: 1px;
+    background: var(--bg-tertiary);
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+    overflow: hidden;
+}
+
+/* Sidebar de Contactos */
+.contacts-sidebar {
+    grid-area: sidebar;
+    background: var(--bg-primary);
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    padding: var(--space-lg);
+    border-bottom: 1px solid var(--bg-tertiary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--text-primary);
+}
+
+.btn-new-chat {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    width: 2rem;
+    height: 2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Área de Mensajes */
+.messages-area {
+    grid-area: messages;
+    background: var(--bg-primary);
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* ← O una altura fija en px/vh */
+}
+
+.messages-header {
+    padding: var(--space-lg-vertical) var(--space-lg-horizontal);
+    border-bottom: 1px solid var(--bg-tertiary);
+    background: var(--bg-tittle);
+}
+
+.current-chat-info h3 {
+    margin: 0 0 4px 0;
+    font-size: 1.125rem;
+    color: var(--text-primary);
+}
+
+.chat-status {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* Sidebar de Información */
+.chat-info-sidebar {
+    grid-area: info;
+    background: var(--bg-primary);
+    padding: var(--space-lg);
+}
+
+/* ========== COMPONENTES ESPECÍFICOS ========== */
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.user-avatar {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    object-fit: cover;
+}
+
+.user-details h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.user-status {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.header-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.btn-action {
+    background: var(--bg-secondary);
+    border: 1px solid var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    padding: var(--space-sm);
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.btn-action:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.btn-close {
+    background: var(--bg-red);
+    border: 1px solid var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    padding: var(--space-sm);
+    cursor: pointer;
+    color: var(--bg-primary);
+    font-size: 1.3rem;
+    transition: all 0.2s ease;
+}
+
+.btn-close:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.contacts-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-sm);
+}
+
+.contact-item {
+    position: relative; /* necesario para el badge absoluto */
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    margin-bottom: var(--space-xs);
+}
+
+.contact-item:hover {
+    background: var(--bg-secondary);
+}
+
+.contact-item.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+.contact-unread-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #ff4d4d;
+    color: white;
+    border-radius: 10px;
+    min-width: 20px;
+    height: 20px;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    font-weight: bold;
+    box-shadow: 0 0 3px rgba(0,0,0,0.3);
+}
+
+.group-unread-badge {
+    background: #ff4d4d;
+    color: white;
+    border-radius: 10px;
+    min-width: 20px;
+    height: 20px;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    font-weight: bold;
+    box-shadow: 0 0 3px rgba(0,0,0,0.3);
+    margin-right: 8px;
+    flex-shrink: 0; /* Evita que se encoja */
+}
+
+.contact-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    object-fit: cover;
+}
+
+.contact-details {
+    flex: 1;
+}
+
+.contact-name {
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.contact-status {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+}
+
+.welcome-message {
+    text-align: center;
+    padding: var(--space-xl);
+    color: var(--text-secondary);
+}
+
+.welcome-icon {
+    font-size: 3rem;
+    margin-bottom: var(--space-md);
+    color: var(--primary-color);
+}
+
+.message {
+    display: flex;
+    gap: var(--space-md);
+    max-width: 100%;
+    animation: messageAppear 0.3s ease;
+}
+
+@keyframes messageAppear {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message.own-message {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.message-avatar {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.message-content {
+    background: var(--bg-primary);
+    padding: var(--space-lg-vertical) var(--space-lg-horizontal);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    max-width: 100%;
+}
+
+.own-message .message-content {
+    background: var(--primary-color);
+    color: white;
+}
+
+.message-text {
+    word-wrap: break-word;
+    line-height: 1.4;
+}
+
+.message-time {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    margin-top: 4px;
+    text-align: right;
+}
+
+.message-input-area {
+    display: none;
+    flex-direction: column !important;
+    gap: var(--space-sm);
+    padding: var(--space-lg);
+    background: var(--bg-primary);
+    border-top: 1px solid var(--bg-tertiary);
+}
+
+.message-input-area > .input-with-send {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-end !important;
+    width: 100% !important;
+    gap: var(--space-sm) !important;
+}
+
+.message-input-area > .input-with-send > .message-textarea[contenteditable="true"] {
+    flex: 1 !important;
+    min-height: 2.5rem !important;
+    max-height: 120px !important;
+    box-sizing: border-box !important;
+}
+
+.message-input-area > .input-with-send > .btn-send {
+    flex-shrink: 0 !important;
+    width: 44px !important;
+    height: 44px !important;
+    margin-bottom: 2px !important;
+}
+
+.input-wrapper {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+}
+
+.input-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.btn-attach, .btn-audio {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: var(--space-sm);
+    border-radius: var(--border-radius);
+    transition: color 0.2s ease;
+}
+
+.btn-attach:hover, .btn-audio:hover {
+    color: var(--primary-color);
+    background: var(--bg-secondary);
+}
+
+.message-input {
+    padding: var(--space-md);
+    border: 1px solid var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.message-input:focus {
+    border-color: var(--primary-color);
+}
+
+.message-textarea {
+    width: 100%;
+    padding: var(--space-md) var(--space-lg) var(--space-md) var(--space-md);
+    border: 1px solid var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    line-height: 1.4;
+    resize: none;
+    outline: none;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    max-height: 120px;
+    min-height: 2.5rem;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease;
+}
+
+.message-textarea:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.message-textarea[contenteditable="true"] {
+    flex: 1;
+    min-height: 2.5rem;
+    max-height: 120px;
+    padding: var(--space-md);
+    border: 1px solid var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    line-height: 1.4;
+    outline: none;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    resize: none;
+    overflow-y: auto;
+    box-sizing: border-box; /* ← Asegura que el ancho incluya padding/borde */
+}
+
+.message-textarea[contenteditable="true"]:empty::before {
+    content: attr(placeholder);
+    color: var(--text-secondary);
+}
+
+.format-toolbar {
+    display: flex;
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    width: fit-content;
+}
+
+.format-btn {
+    width: 32px;
+    height: 28px;
+    border: 1px solid var(--bg-tertiary);
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.format-btn:hover,
+.format-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.format-btn[data-command="italic"] {
+    font-style: italic;
+}
+
+.format-btn[data-command="underline"] {
+    text-decoration: underline;
+}
+
+.format-btn[data-command="strikeThrough"] {
+    text-decoration: line-through;
+}
+
+.format-btn2 {
+    width: 32px;
+    height: 28px;
+    border: 1px solid var(--bg-tertiary);
+    background: rgb(193, 193, 193);
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.format-btn2:hover,
+.format-btn2.active {
+    background: var(--hover-btn-color);
+    color: white;
+    border-color: var(--hover-btn-color);
+}
+
+
+.editor-wrapper {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: flex-end; /* Alinea botón con la parte inferior del textarea */
+    width: 100%;
+}
+
+.tiptap-editor {
+    border: 1px solid var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    padding: var(--space-md);
+    min-height: 2.5rem;
+    max-height: 120px;
+    overflow-y: auto;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 1rem;
+    line-height: 1.4;
+    outline: none;
+}
+
+.tiptap-editor:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* Barra de herramientas (opcional pero recomendada) */
+.tiptap-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 8px 0 8px 8px;
+    border-bottom: 1px solid var(--bg-tertiary);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.tiptap-toolbar button {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--bg-tertiary);
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+}
+
+.tiptap-toolbar button:hover,
+.tiptap-toolbar button.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.emoji-btn {
+    position: absolute;
+    right: var(--space-md);
+    bottom: var(--space-md);
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.emoji-btn:hover {
+    color: var(--primary-color);
+    background: var(--bg-secondary);
+}
+
+.btn-send {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0; /* ← Evita que se encoja */
+    margin-bottom: 2px; /* Ajuste fino para alineación visual */
+}
+
+.btn-send:hover {
+    background: #1d4ed8;
+}
+
+/* ========== RESPONSIVE DESIGN ========== */
+
+@media (max-width: 1200px) {
+    .chat-main-grid {
+        grid-template-columns: 280px 1fr;
+        grid-template-areas: "sidebar messages";
+    }
+    
+    .chat-info-sidebar {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .chat-app-container {
+        width: 95vw;
+        padding: 5px;
+    }
+    
+    .chat-main-grid {
+        grid-template-columns: 1fr;
+        grid-template-areas: "messages";
+        height: calc(100vh - 100px);
+    }
+    
+    .contacts-sidebar {
+        display: none;
+    }
+    
+    .message {
+        max-width: 85%;
+    }
+}
+
+@media (max-width: 480px) {
+    .chat-header {
+        padding: var(--space-md);
+    }
+    
+    .messages-container {
+        padding: var(--space-md);
+    }
+    
+    .message-input-area {
+        padding: var(--space-md);
+    }
+    
+    .message {
+        max-width: 90%;
+    }
+}
+
+/* ========== ESTADOS Y UTILIDADES ========== */
+
+.loading-contacts {
+    text-align: center;
+    padding: var(--space-lg);
+    color: var(--text-secondary);
+}
+
+.no-contacts {
+    text-align: center;
+    padding: var(--space-lg);
+    color: var(--text-secondary);
+}
+
+.system-message {
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin: var(--space-sm) 0;
+    font-size: 0.875rem;
+}
+
+.status-success { color: var(--success-color); }
+.status-error { color: var(--error-color); }
+.status-warning { color: var(--warning-color); }
+
+/* ========== MANTENER TUS ESTILOS EXISTENTES ========== */
+
+.titulo-del-chat {
+    color: #b817f7;
+    font-family: "Garamond", "Times New Roman", serif;
+    font-size: 1.5em;
+    font-style: italic;
+    font-weight: bold;
+    left: 65vw;
+    padding: 10px 20px;
+    position: absolute;
+    top: 22px;
+}
+
+.chat_flot {
+    position: fixed;
+    top: 15px;
+    left: 32vw;
+    z-index: 1050;
+    background: #003366;
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    font-size: 1.4em;
+    user-select: none
+}
+
+/* 🔧 Fix para scroll dentro de CSS Grid */
+.chat-main-grid > * {
+    min-height: 0;
+    min-width: 0;
+}
+
+/* Agrupación por fecha */
+.message-date-group {
+    margin-bottom: var(--space-lg);
+}
+
+.date-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    margin-bottom: 8px;
+}
+
+.date-text-with-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px; /* Un solo espacio entre fecha y badge */
+    white-space: nowrap;
+}
+
+.date-text {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.toggle-date-group {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px;
+}
+
+.toggle-date-group:hover {
+    color: var(--primary-color);
+}
+
+/* Ajuste de espaciado entre grupos de fecha */
+.message-date-group {
+    margin-bottom: 0.625rem; /* ≈ 10px en rem (1rem = 16px → 10/16 = 0.625rem) */
+}
+
+.message-date-group:last-child {
+    margin-bottom: 0; /* Evitar margen en el último grupo */
+}
+
+/* Espaciado entre mensajes individuales */
+.message {
+    margin-bottom: 0.5rem; /* ≈ 8px */
+}
+/* Eliminar margen en el último mensaje de cada grupo */
+.message-date-group .date-messages > .message:last-child,
+.messages-container > .message:last-child {
+    margin-bottom: 0;
+}
+
+.messages-container {
+    flex: 1;
+    overflow-y: auto; /* ← Scroll interno */
+    padding: var(--space-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xxs);
+    background: var(--bg-secondary);
+    min-height: 0; /* ← Esencial para que funcione el scroll en flex/grid */
+}
+
+/* ✅ Corrección para scroll en modal */
+#chatModal .messages-container {
+    height: 100%;
+    min-height: 0; /* Crucial para que flex y grid funcionen bien */
+}
+
+/* ✅ Asegurar altura calculable para scroll */
+.message-date-group {
+    display: flex;
+    flex-direction: column;
+    /*  min-height: 0; /* ← Clave para que scrollHeight funcione */
+}
+
+.date-header {
+    flex-shrink: 0; /* Evita que el header se encoja */
+}
+
+.date-messages {
+    flex: 1;
+    min-height: 0; /* ← Clave para hijos con scroll */
+    overflow-y: auto; /* Opcional: si quieres scroll interno por grupo */
+}
+
+/* Badge de mensajes no leídos */
+.chat-unread-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #ff4d4d;
+    color: white;
+    border-radius: 12px;
+    min-width: 20px;
+    height: 20px;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-shadow: 0 0 4px rgba(0,0,0,0.3);
+    font-weight: bold;
+    pointer-events: none;
+}
+
+/* 🖥️ Ajuste para pantallas PC de resolución media */
+@media (min-width: 1201px) and (max-width: 1400px) {
+    .chat-main-grid {
+        grid-template-columns: 280px 1fr 250px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .chat-main-grid {
+        grid-template-columns: 260px 1fr;
+        grid-template-areas: "sidebar messages";
+    }
+    .chat-info-sidebar {
+        display: none;
+    }
+}
+
+/* 💬 Asegurar que los mensajes no se desborden */
+.message-text {
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+/* [Mantener todos tus estilos existentes de login, forms, etc.] */

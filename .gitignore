@@ -14,6 +14,7 @@ temp/
 error_log
 cache/
 tmp/
+/extraccion_contratos/*.*
 
 # === Archivos del sistema ===
 Thumbs.db
@@ -24,3 +25,4 @@ node_modules/
 vendor/
 PDF/
 QR_BASE/
+extraccion_contratos/
