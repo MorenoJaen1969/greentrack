@@ -26,7 +26,7 @@ window.loadChatModal = function() {
         })
         .then(checkData => {
             if (checkData.valid) {
-                // === Renderizar el chat ===
+                // === Renderizar el chat === 
                 modal.innerHTML = `
                 <div class="chat-app-container" style="width:100%;height:100%;margin:0;padding:0;background:white;">
                     <div class="chat-header">
@@ -103,6 +103,7 @@ window.loadChatModal = function() {
                     userEmail: checkData.userEmail,
                     userName: checkData.userName,
                     userToken: checkData.userToken,
+                    userId: checkData.userId,
                     baseUrl: '<?= RUTA_REAL ?>',
                     authType: 'session'
                 };

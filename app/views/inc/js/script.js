@@ -906,7 +906,6 @@ console.log("Proceso para finalizar el servicio");
             const intervaloPolling = setInterval(async () => {
                 intentos++;
                 document.getElementById('contador-polling').textContent = `Attempts: ${intentos}`;
-                console.log(`🔍 Polling intento ${intentos}`);
 
                 try {
                     const res = await fetch('/app/ajax/serviciosAjax.php', {

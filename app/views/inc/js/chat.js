@@ -5,13 +5,13 @@
 // */
 
 // Bandera global para evitar listeners duplicados
-if (typeof window.chatListenersInitialized === 'undefined') {
+if (typeof window.chatListenersInitialized === "undefined") {
     window.chatListenersInitialized = false;
 }
 
 class GreenTrackChat {
     constructor() {
-        console.log('🔧 Inicializando GreenTrackChat (modo AJAX)');
+        console.log("🔧 Inicializando GreenTrackChat (modo AJAX)");
         this.config = window.chatConfig;
         this.contacts = [];
         this.currentChat = null;
@@ -21,10 +21,17 @@ class GreenTrackChat {
         // Sonido de notificación
         this.notificationSound = null;
         this.initializeChat();
+
+        this.lastChatInteraction = Date.now(); // ← nueva
+        this.INTERACTION_TIMEOUT = 5 * 60 * 1000; // 5 minutos
     }
 
+    registerChatInteraction() {
+        this.lastChatInteraction = Date.now();
+    }    
+
     initializeChat() {
-        const messagesContainer = document.getElementById('messagesContainer');
+        const messagesContainer = document.getElementById("messagesContainer");
         if (messagesContainer) {
             messagesContainer.innerHTML = `
                 <div class="welcome-message">
@@ -38,18 +45,20 @@ class GreenTrackChat {
         }
 
         // Intercepta imágenes pegadas y las sube automáticamente
-        const messageInput = document.getElementById('messageInput');
+        const messageInput = document.getElementById("messageInput");
         if (messageInput) {
-            messageInput.addEventListener('paste', async (e) => {
+            messageInput.addEventListener("paste", async (e) => {
                 const items = e.clipboardData?.items;
                 if (!items) return;
 
                 for (let i = 0; i < items.length; i++) {
-                    if (items[i].type.indexOf('image') === 0) {
+                    if (items[i].type.indexOf("image") === 0) {
                         e.preventDefault();
                         const blob = items[i].getAsFile();
                         if (blob) {
-                            const file = new File([blob], 'pasted-image.png', { type: 'image/png' });
+                            const file = new File([blob], "pasted-image.png", {
+                                type: "image/png",
+                            });
                             await this.uploadFileAndInsert(file);
                         }
                         break;
@@ -62,24 +71,30 @@ class GreenTrackChat {
         // Permitir reproducción de audio incluso sin interacción
         if (this.notificationSound) {
             const unlockAudio = () => {
-                this.notificationSound.play().catch(() => {}).then(() => {
-                    this.notificationSound.pause();
-                    this.notificationSound.currentTime = 0;
-                });
-                document.removeEventListener('click', unlockAudio);
-                document.removeEventListener('touchstart', unlockAudio);
+                this.notificationSound
+                    .play()
+                    .catch(() => {})
+                    .then(() => {
+                        this.notificationSound.pause();
+                        this.notificationSound.currentTime = 0;
+                    });
+                document.removeEventListener("click", unlockAudio);
+                document.removeEventListener("touchstart", unlockAudio);
             };
-            document.addEventListener('click', unlockAudio, { once: true });
-            document.addEventListener('touchstart', unlockAudio, { once: true });
+            document.addEventListener("click", unlockAudio, { once: true });
+            document.addEventListener("touchstart", unlockAudio, {
+                once: true,
+            });
         }
 
+        this.sendHeartbeat(); // Inmediato al iniciar
         // Iniciar verificación de mensajes no leídos cada 10s
         setInterval(() => this.checkUnreadMessages(), 10000);
         this.checkUnreadMessages(); // ejecutar inmediatamente
 
         this.loadContacts();
         this.setupEventListeners();
-        console.log('✅ Chat inicializado para:', this.config.userName);
+        console.log("✅ Chat inicializado para:", this.config.userName);
     }
 
     startPolling() {
@@ -97,33 +112,35 @@ class GreenTrackChat {
     }
 
     updateUnreadBadge(count) {
-        const btn = document.getElementById('btn-chat-toggle');
+        const btn = document.getElementById("btn-chat-toggle");
         if (!btn) return;
 
-        const existingBadge = btn.querySelector('.chat-unread-badge');
+        const existingBadge = btn.querySelector(".chat-unread-badge");
         if (existingBadge) existingBadge.remove();
 
         if (count > 0) {
-            const badge = document.createElement('span');
-            badge.className = 'chat-unread-badge';
-            badge.textContent = count > 99 ? '99+' : count;
+            const badge = document.createElement("span");
+            badge.className = "chat-unread-badge";
+            badge.textContent = count > 99 ? "99+" : count;
             btn.appendChild(badge);
         }
-    }    
+    }
 
     playNotificationSound() {
         if (document.hasFocus() && this.currentChat) return; // si el chat está abierto, no sonar
         if (this.notificationSound) {
-            this.notificationSound.play().catch(e => console.warn('Audio play blocked:', e));
+            this.notificationSound
+                .play()
+                .catch((e) => console.warn("Audio play blocked:", e));
         }
-    }    
+    }
 
     updateTabTitle(count) {
         // Eliminar cualquier prefijo de conteo existente
-        let cleanTitle = document.title.replace(/^\(\d+\+?\)\s*/, '');
-        
+        let cleanTitle = document.title.replace(/^\(\d+\+?\)\s*/, "");
+
         if (count > 0) {
-            const displayCount = count > 99 ? '99+' : count;
+            const displayCount = count > 99 ? "99+" : count;
             document.title = `(${displayCount}) ${cleanTitle}`;
         } else {
             document.title = cleanTitle;
@@ -132,7 +149,9 @@ class GreenTrackChat {
 
     initNotificationSound() {
         if (!this.notificationSound) {
-            this.notificationSound = new Audio('/app/views/sounds/new-notification-010-352755.mp3');
+            this.notificationSound = new Audio(
+                "/app/views/sounds/new-notification-010-352755.mp3"
+            );
         }
     }
 
@@ -140,13 +159,13 @@ class GreenTrackChat {
         if (!this.config?.userToken) return;
 
         try {
-            const res = await fetch('../app/ajax/contactsAjax.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+            const res = await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    modulo_contacts: 'unread_count',
-                    token: this.config.userToken
-                })
+                    modulo_contacts: "unread_count",
+                    token: this.config.userToken,
+                }),
             });
             const data = await res.json();
             const count = data.success ? data.count : 0;
@@ -160,58 +179,144 @@ class GreenTrackChat {
             this.unreadCount = count;
             this.updateUnreadBadge(count);
         } catch (e) {
-            console.error('Error checking unread messages:', e);
+            console.error("Error checking unread messages:", e);
         }
     }
-    
+
     async loadContacts() {
+        const container = document.getElementById("contactsList");
+        if (container && container.children.length === 0) {
+            container.innerHTML =
+                '<div class="loading-contacts">Loading contacts...</div>';
+        }
+
         if (!this.config || !this.config.userToken) {
-            console.error('❌ Token no disponible para cargar contactos');
+            console.error("❌ Token no disponible");
+            if (container)
+                container.innerHTML = '<div class="error">No session</div>';
             return;
         }
+
         try {
-            const res = await fetch('../app/ajax/contactsAjax.php', {
-                method: 'POST',
+            const res = await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.config.userToken}`
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${this.config.userToken}`,
                 },
-                body: JSON.stringify({ modulo_contacts: 'contactos' })
+                body: JSON.stringify({ modulo_contacts: "contactos" }),
             });
             if (res.ok) {
                 const data = await res.json();
                 if (data.success) {
                     this.contacts = data.data.contacts || [];
-                    this.renderContacts();
+                    this.renderContacts(); // ← ahora renderiza SIN duplicar
                 }
             }
         } catch (e) {
-            console.error('Error al cargar contactos:', e);
+            console.error("Error al cargar contactos:", e);
+            if (container)
+                container.innerHTML =
+                    '<div class="error">Failed to load contacts</div>';
         }
     }
 
     renderContacts() {
-        const container = document.getElementById('contactsList');
-        if (!container) return;
+        const container = document.getElementById("contactsList");
+        if (!container || !this.contacts) return;
 
-        container.innerHTML = this.contacts.map(contact => { 
-            const unreadBadge = contact.unread > 0 ? 
-                `<span class="contact-unread-badge">${contact.unread > 99 ? '99+' : contact.unread}</span>` : '';
-                
-            return `
-                <div class="contact-item" data-id="${contact.id}" data-email="${contact.email}">
-                    <img src="../app/views/img/avatars/${contact.email}.jpg" class="contact-avatar" onerror="this.src='../app/views/img/avatars/default.png'">
+        // Eliminar loading si existe
+        const loading = container.querySelector(".loading-contacts");
+        if (loading) loading.remove();
+
+        // Procesar cada contacto recibido
+        this.contacts.forEach((contact) => {
+            const contactId = `contact-${contact.id}`;
+            let contactEl = document.getElementById(contactId);
+
+            // ✅ Si no existe, crearlo
+            if (!contactEl) {
+                contactEl = document.createElement("div");
+                contactEl.id = contactId;
+                contactEl.className = "contact-item";
+                contactEl.dataset.id = contact.id;
+                contactEl.dataset.email = contact.email;
+
+                // Crear estructura base con IDs
+                contactEl.innerHTML = `
+                    <img id="avatar-${contact.id}" 
+                        src="../app/views/img/avatars/${contact.email}.jpg" 
+                        width="40" height="40"
+                        class="contact-avatar"
+                        onerror="this.src='../app/views/img/avatars/default.png'">
                     <div class="contact-details">
-                        <div class="contact-name">${this.escapeHTML(contact.nombre)}</div>
-                        <div class="contact-status">${contact.status === 'online' ? '🟢 Online' : '⚫ Offline'}</div>
+                    <div id="name-${contact.id}" class="contact-name">${this.escapeHTML(contact.nombre)}</div>
+                    <div id="status-${contact.id}" class="contact-status"></div>
                     </div>
-                    ${unreadBadge}
-                </div>
-            `;
-        }).join('');
-        
-        container.querySelectorAll('.contact-item').forEach(item => {
-            item.addEventListener('click', () => this.selectChat(item));
+                    <!-- El badge se crea/elimina dinámicamente -->
+                `;
+                contactEl.addEventListener("click", () => this.selectChat(contactEl));
+                container.appendChild(contactEl);
+            }
+
+            // ✅ Actualizar nombre (por si cambió)
+            const nameEl = document.getElementById(`name-${contact.id}`);
+            if (nameEl && nameEl.textContent !== contact.nombre) {
+                nameEl.textContent = contact.nombre;
+            }
+
+            // ✅ Actualizar estado por dispositivos (CON SOPORTE PARA "EN PAUSA")
+            const statusEl = document.getElementById(`status-${contact.id}`);
+            if (statusEl) {
+                const deviceLines = [];
+
+                // --- PC ---
+                const pc = contact.dispositivos?.pc; // será 'activo', 'pausa' o null/undefined
+                if (pc === 'active') {
+                    deviceLines.push('🟢 PC: Online');
+                } else if (pc === 'pause') {
+                    deviceLines.push('⏸️ PC: On pause');
+                }
+                // si pc es null/undefined → no se muestra (offline)
+
+                // --- Móvil ---
+                const movil = contact.dispositivos?.movil;
+                // En móvil, no usamos "pausa" (siempre se considera atento)
+                if (movil === 'active' || movil === 'pause') {
+                    deviceLines.push('📱 Mobile: Online');
+                }
+
+                const statusHTML = deviceLines.length > 0 
+                    ? deviceLines.join('<br>') 
+                    : '⚫ Offline';
+
+                if (statusEl.innerHTML !== statusHTML) {
+                    statusEl.innerHTML = statusHTML;
+                }
+            }
+
+            // ✅ Actualizar badge de no leídos
+            const badgeId = `badge-${contact.id}`;
+            let badgeEl = document.getElementById(badgeId);
+            if (contact.unread > 0) {
+                if (!badgeEl) {
+                    badgeEl = document.createElement("span");
+                    badgeEl.id = badgeId;
+                    badgeEl.className = "contact-unread-badge";
+                    contactEl.appendChild(badgeEl);
+                }
+                badgeEl.textContent = contact.unread > 99 ? "99+" : contact.unread;
+            } else if (badgeEl) {
+                badgeEl.remove();
+            }
+        });
+
+        // ✅ Eliminar contactos que ya no están en la lista
+        const currentIds = new Set(this.contacts.map((c) => `contact-${c.id}`));
+        document.querySelectorAll(".contact-item").forEach((el) => {
+            if (!currentIds.has(el.id)) {
+                el.remove();
+            }
         });
     }
 
@@ -219,38 +324,63 @@ class GreenTrackChat {
         if (window.chatListenersInitialized) return;
         window.chatListenersInitialized = true;
 
+        // Registrar interacción al usar el chat
+        const messageInput = document.getElementById('messageInput');
+        if (messageInput) {
+            ['focus', 'input', 'keydown'].forEach(eventType => {
+            messageInput.addEventListener(eventType, () => this.registerChatInteraction());
+            });
+        }
+
+        // Al seleccionar un contacto
+        document.querySelectorAll('.contact-item').forEach(item => {
+            item.addEventListener('click', () => {
+            this.selectChat(item);
+            this.registerChatInteraction();
+            });
+        });
+
         // Botón de envío
-        document.addEventListener('click', (e) => {
-            const sendBtn = e.target.closest('#sendBtn');
+        document.addEventListener("click", (e) => {
+            const sendBtn = e.target.closest("#sendBtn");
             if (sendBtn && this.currentChat) {
-                console.log('Enviando mensaje...'); // ← Añade esto para depurar
+                console.log("Enviando mensaje..."); // ← Añade esto para depurar
                 this.sendMessage();
             }
         });
 
-        // Ctrl+B, Ctrl+I, Ctrl+U para formato
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                const input = document.getElementById('messageInput');
+        // Ctrl+B, Ctrl+I, Ctrl+U para formato (versión moderna, sin execCommand)
+        document.addEventListener("keydown", (e) => {
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+                const input = document.getElementById("messageInput");
                 if (!input || !input.contains(document.activeElement)) return;
 
-                if (e.key === 'b' || e.key === 'B') {
+                let command = null;
+                if (e.key === "b" || e.key === "B") {
+                    command = "bold";
+                } else if (e.key === "i" || e.key === "I") {
+                    command = "italic";
+                } else if (e.key === "u" || e.key === "U") {
+                    command = "underline";
+                }
+
+                if (command) {
                     e.preventDefault();
-                    document.execCommand('bold', false, null);
-                } else if (e.key === 'i' || e.key === 'I') {
-                    e.preventDefault();
-                    document.execCommand('italic', false, null);
-                } else if (e.key === 'u' || e.key === 'U') {
-                    e.preventDefault();
-                    document.execCommand('underline', false, null);
+                    // Llamar al método existente de la instancia
+                    if (
+                        typeof window.chatApp !== "undefined" &&
+                        window.chatApp instanceof GreenTrackChat
+                    ) {
+                        window.chatApp.applyFormat(command);
+                    }
                 }
             }
         });
 
         // Enter para enviar
-        document.addEventListener('keydown', (e) => {
-            const input = document.getElementById('messageInput');
-            if (input && e.key === 'Enter' && !e.shiftKey) {
+        document.addEventListener("keydown", (e) => {
+            const input = document.getElementById("messageInput");
+            if (input && e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 if (this.currentChat) {
                     this.sendMessage();
@@ -259,25 +389,25 @@ class GreenTrackChat {
         });
 
         // Cerrar chat
-        document.addEventListener('click', (e) => {
-            const closeBtn = e.target.closest('#closeChatBtn');
+        document.addEventListener("click", (e) => {
+            const closeBtn = e.target.closest("#closeChatBtn");
             if (closeBtn) {
-                const modal = document.getElementById('chatModal');
-                const toggleBtn = document.getElementById('btn-chat-toggle');
-                if (modal) modal.style.display = 'none';
-                if (toggleBtn) toggleBtn.style.display = 'flex';
+                const modal = document.getElementById("chatModal");
+                const toggleBtn = document.getElementById("btn-chat-toggle");
+                if (modal) modal.style.display = "none";
+                if (toggleBtn) toggleBtn.style.display = "flex";
                 this.stopPolling();
             }
         });
 
         // Logout
-        const logoutBtn = document.getElementById('logoutChatBtn');
+        const logoutBtn = document.getElementById("logoutChatBtn");
         if (logoutBtn) {
-            logoutBtn.addEventListener('click', async () => {
+            logoutBtn.addEventListener("click", async () => {
                 const confirmado = await suiteConfirm(
-                    'Confirm Logout',
-                    'Do you want to close the chat session?',
-                    { aceptar: 'Yes, logout', cancelar: 'Cancel' }
+                    "Confirm Logout",
+                    "Do you want to close the chat session?",
+                    { aceptar: "Yes, logout", cancelar: "Cancel" }
                 );
                 if (confirmado) {
                     this.logoutFromChat();
@@ -285,8 +415,8 @@ class GreenTrackChat {
             });
         }
 
-        document.addEventListener('click', (e) => {
-            const formatBtn = e.target.closest('.format-btn');
+        document.addEventListener("click", (e) => {
+            const formatBtn = e.target.closest(".format-btn");
             if (formatBtn && this.currentChat) {
                 const command = formatBtn.dataset.command;
                 this.applyFormat(command);
@@ -294,10 +424,26 @@ class GreenTrackChat {
         });
 
         // Insertar imagen desde URL
-        document.getElementById('insertImageFile')?.addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*'; // ← Solo imágenes
+        document
+            .getElementById("insertImageFile")
+            ?.addEventListener("click", () => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = "image/*"; // ← Solo imágenes
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        this.uploadFileAndInsert(file);
+                    }
+                };
+                input.click();
+            });
+
+        // Adjuntar archivo (imagen, audio, video)
+        document.getElementById("attachFile")?.addEventListener("click", () => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/*,audio/*,video/*";
             input.onchange = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -306,29 +452,15 @@ class GreenTrackChat {
             };
             input.click();
         });
-        
-        // Adjuntar archivo (imagen, audio, video)
-        document.getElementById('attachFile')?.addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*,audio/*,video/*';
-            input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    this.uploadFileAndInsert(file);
-                }
-            };
-            input.click();
-        });        
     }
 
     autoResizeTextarea(textarea) {
-        textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+        textarea.style.height = "auto";
+        textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
     }
 
     applyFormat(command) {
-        const input = document.getElementById('messageInput');
+        const input = document.getElementById("messageInput");
         if (!input) return;
         input.focus();
 
@@ -336,7 +468,7 @@ class GreenTrackChat {
         if (!selection || selection.rangeCount === 0) return;
 
         const range = selection.getRangeAt(0);
-        if (range.toString().trim() === '') return; // No aplicar si no hay texto seleccionado
+        if (range.toString().trim() === "") return; // No aplicar si no hay texto seleccionado
 
         // Clonar el contenido seleccionado
         const clonedContents = range.cloneContents();
@@ -358,70 +490,81 @@ class GreenTrackChat {
 
     getTagName(command) {
         switch (command) {
-            case 'bold': return 'strong';
-            case 'italic': return 'em';
-            case 'underline': return 'u';
-            case 'strikeThrough': return 's';
-            default: return 'span';
+            case "bold":
+                return "strong";
+            case "italic":
+                return "em";
+            case "underline":
+                return "u";
+            case "strikeThrough":
+                return "s";
+            default:
+                return "span";
         }
     }
 
     async sendMessage() {
-        console.log('sendMessage() llamado');
-        const input = document.getElementById('messageInput');
+        console.log("sendMessage() llamado");
+        const input = document.getElementById("messageInput");
         if (!input || !this.currentChat) {
-            console.warn('No hay input o no hay chat seleccionado');
+            console.warn("No hay input o no hay chat seleccionado");
             return;
         }
 
         // Obtener HTML del contenteditable
         let content = input.innerHTML.trim();
         // Sanitización básica en el frontend (el backend ya hace la fuerte)
-        content = content.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+        content = content.replace(
+            /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+            ""
+        );
         // Si está vacío o solo tiene <br>
-        if (!content || content === '<br>') {
-            console.warn('Mensaje vacío');
+        if (!content || content === "<br>") {
+            console.warn("Mensaje vacío");
             return;
         }
 
-        console.log('Contenido a enviar:', content);
+        console.log("Contenido a enviar:", content);
         try {
-            const res = await fetch('../app/ajax/contactsAjax.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+            const res = await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    modulo_contacts: 'send_message',
+                    modulo_contacts: "send_message",
                     to: this.currentChat.email,
                     content: content,
-                    token: this.config.userToken
-                })
+                    token: this.config.userToken,
+                }),
             });
             const data = await res.json();
             if (data.success) {
-                input.innerHTML = ''; // Limpiar
+                input.innerHTML = ""; // Limpiar
                 this.scrollToBottom();
             }
         } catch (e) {
-            console.error('Error al enviar mensaje:', e);
+            console.error("Error al enviar mensaje:", e);
         }
     }
 
     selectChat(el) {
         if (this.polling) this.stopPolling();
 
-        document.querySelectorAll('.contact-item').forEach(i => i.classList.remove('active'));
-        el.classList.add('active');
+        document
+            .querySelectorAll(".contact-item")
+            .forEach((i) => i.classList.remove("active"));
+        el.classList.add("active");
 
         const userId = el.dataset.id;
         const userEmail = el.dataset.email;
-        const userName = el.querySelector('.contact-name').textContent;
+        const userName = el.querySelector(".contact-name").textContent;
 
         this.currentChat = { id: userId, email: userEmail, name: userName };
-        document.getElementById('currentChatName').textContent = this.currentChat.name;
+        document.getElementById("currentChatName").textContent =
+            this.currentChat.name;
 
         // ✅ Asegurar que el área de mensaje es visible
-        const messageArea = document.getElementById('messageInputArea');
-        if (messageArea) messageArea.style.display = 'flex';
+        const messageArea = document.getElementById("messageInputArea");
+        if (messageArea) messageArea.style.display = "flex";
 
         // ✅ Limpiar notificaciones al abrir el chat
         this.unreadCount = 0;
@@ -437,45 +580,45 @@ class GreenTrackChat {
 
     async markMessagesAsRead(contactId) {
         try {
-            await fetch('../app/ajax/contactsAjax.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+            await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    modulo_contacts: 'mark_messages_as_read',
+                    modulo_contacts: "mark_messages_as_read",
                     contact_id: contactId,
-                    token: this.config.userToken
-                })
+                    token: this.config.userToken,
+                }),
             });
             // Actualizar lista de contactos para reflejar 0 mensajes
             this.loadContacts();
         } catch (e) {
-            console.error('Error marking as read:', e);
+            console.error("Error marking as read:", e);
         }
     }
 
     async loadChatHistory(contactId) {
         try {
-            const res = await fetch('../app/ajax/contactsAjax.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+            const res = await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    modulo_contacts: 'get_history',
+                    modulo_contacts: "get_history",
                     contact_id: contactId,
-                    token: this.config.userToken
-                })
+                    token: this.config.userToken,
+                }),
             });
             const data = await res.json();
             if (data.success && data.data?.length) {
-                const messages = data.data.map(msg => ({
+                const messages = data.data.map((msg) => ({
                     id: msg.id,
                     user: {
                         id: msg.remitente_id,
                         nombre: msg.remitente_nombre,
-                        email: msg.remitente_email
+                        email: msg.remitente_email,
                     },
                     content: msg.content,
                     timestamp: msg.timestamp,
-                    leido: msg.leido
+                    leido: msg.leido,
                 }));
                 this.renderMessagesWithGroups(messages);
                 this.lastMessageId = data.data[data.data.length - 1].id;
@@ -489,36 +632,36 @@ class GreenTrackChat {
                 this.showNoMessages();
             }
         } catch (e) {
-            console.error('Error al cargar historial:', e);
+            console.error("Error al cargar historial:", e);
         }
     }
 
     async loadNewMessages() {
         if (!this.currentChat) return;
         try {
-            const res = await fetch('../app/ajax/contactsAjax.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+            const res = await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    modulo_contacts: 'get_history_since',
+                    modulo_contacts: "get_history_since",
                     contact_id: this.currentChat.id,
                     since_id: this.lastMessageId,
-                    token: this.config.userToken
-                })
+                    token: this.config.userToken,
+                }),
             });
             const data = await res.json();
             if (data.success && data.data?.length) {
-                const messages = data.data.map(msg => ({
+                const messages = data.data.map((msg) => ({
                     id: msg.id,
                     user: {
                         id: msg.remitente_id,
                         nombre: msg.remitente_nombre,
-                        email: msg.remitente_email
+                        email: msg.remitente_email,
                     },
                     content: msg.content,
-                    timestamp: msg.timestamp
+                    timestamp: msg.timestamp,
                 }));
-                messages.forEach(msg => {
+                messages.forEach((msg) => {
                     if (!document.querySelector(`[data-id="${msg.id}"]`)) {
                         this.addMessageToGroup(msg);
                     }
@@ -526,15 +669,23 @@ class GreenTrackChat {
                 this.lastMessageId = data.data[data.data.length - 1].id;
             }
         } catch (e) {
-            console.error('Error al cargar nuevos mensajes:', e);
+            console.error("Error al cargar nuevos mensajes:", e);
         }
     }
 
     getGroupHeaderText(groupKey) {
-        if (groupKey === 'today') return 'Today';
-        if (groupKey === 'yesterday') return 'Yesterday';
+        if (groupKey === "today") return "Today";
+        if (groupKey === "yesterday") return "Yesterday";
         // Para días de la semana
-        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        const days = [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        ];
 
         if (days.includes(groupKey.toLowerCase())) {
             return groupKey.charAt(0).toUpperCase() + groupKey.slice(1);
@@ -544,14 +695,17 @@ class GreenTrackChat {
     }
 
     renderMessagesWithGroups(messages) {
-        const container = document.getElementById('messagesContainer');
+        const container = document.getElementById("messagesContainer");
         if (!container) return;
 
         const groups = {};
         const unreadByGroup = {};
+        let van = 1;
+
+        console.log("🔄 renderMessagesWithGroups llamado");
 
         // === Paso 1: Agrupar mensajes y contar no leídos ===
-        messages.forEach(msg => {
+        messages.forEach((msg) => {
             const dateKey = this.getMessageGroupKey(msg.timestamp);
             if (!groups[dateKey]) {
                 groups[dateKey] = [];
@@ -559,19 +713,24 @@ class GreenTrackChat {
             }
             groups[dateKey].push(msg);
 
-            // ✅ Verificar si el mensaje está no leído
-            if (msg.leido === 0 || msg.leido === '0') {
+            // ✅ Contar SOLO los mensajes NO PROPIOS que están sin leer
+            const isOwnMessage = msg.user.id == this.config.userId; // Comparación flexible (==)
+            if (!isOwnMessage && (msg.leido === 0 || msg.leido === "0")) {
                 unreadByGroup[dateKey]++;
             }
+            van++;
         });
 
         // === LOG: Mostrar conteo por grupo ===
-        const sortedDates = Object.keys(groups).sort((a, b) => new Date(a) - new Date(b));
-        const lastDate = sortedDates.length > 0 ? sortedDates[sortedDates.length - 1] : null;
+        const sortedDates = Object.keys(groups).sort(
+            (a, b) => new Date(a) - new Date(b)
+        );
+        const lastDate =
+            sortedDates.length > 0 ? sortedDates[sortedDates.length - 1] : null;
 
-        let html = '';
+        let html = "";
 
-        sortedDates.forEach(dateKey => {
+        sortedDates.forEach((dateKey) => {
             // ✅ Aquí aplicas la corrección de zona horaria para la fecha del grupo
             const formattedDate = this.getGroupHeaderText(dateKey);
             const unreadCount = unreadByGroup[dateKey] || 0;
@@ -579,12 +738,16 @@ class GreenTrackChat {
             // === LOG: Detalle por grupo ===
 
             const isOpen = dateKey === lastDate;
-            const displayStyle = isOpen ? 'block' : 'none';
-            const iconClass = isOpen ? 'fas fa-chevron-down' : 'fas fa-chevron-right';
+            const displayStyle = isOpen ? "block" : "none";
+            const iconClass = isOpen
+                ? "fas fa-chevron-down"
+                : "fas fa-chevron-right";
 
-            // ✅ Solo mostrar badge si hay no leídos            
-            const unreadBadge = unreadCount > 0 ? 
-                `<span class="group-unread-badge">${unreadCount}</span>` : '';
+            // ✅ Solo mostrar badge si hay no leídos
+            const unreadBadge =
+                unreadCount > 0
+                    ? `<span class="group-unread-badge">${unreadCount}</span>`
+                    : "";
 
             html += `
                 <div class="message-date-group">
@@ -598,13 +761,17 @@ class GreenTrackChat {
                         </button>
                     </div>
                     <div class="date-messages" id="messages-${dateKey}" style="display: ${displayStyle};">
-                        ${groups[dateKey].map(msg => this.createMessageElement(msg)).join('')}
+                        ${groups[dateKey]
+                            .map((msg) => this.createMessageElement(msg))
+                            .join("")}
                     </div>
                 </div>
             `;
         });
 
-        container.innerHTML = html || `
+        container.innerHTML =
+            html ||
+            `
             <div class="welcome-message">
                 <i class="fas fa-comments"></i>
                 <h3>No messages</h3>
@@ -613,25 +780,41 @@ class GreenTrackChat {
         `;
 
         // Vincular listeners de toggle
-        container.querySelectorAll('.toggle-date-group').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+        container.querySelectorAll(".toggle-date-group").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
                 const dateKey = e.currentTarget.dataset.date;
-                const messagesDiv = document.getElementById(`messages-${dateKey}`);
-                const isOpen = messagesDiv.style.display !== 'none';
-                
+                const messagesDiv = document.getElementById(
+                    `messages-${dateKey}`
+                );
+                const isOpen = messagesDiv.style.display !== "none";
+                const dateHeader = e.currentTarget.closest(".date-header");
+                const unreadBadge = dateHeader?.querySelector(
+                    ".group-unread-badge"
+                );
+
                 if (!isOpen) {
-                    messagesDiv.style.display = 'block';
-                    e.currentTarget.querySelector('i').className = 'fas fa-chevron-down';
-                    
+                    messagesDiv.style.display = "block";
+                    e.currentTarget.querySelector("i").className =
+                        "fas fa-chevron-down";
+
                     // ✅ Marcar mensajes de este grupo como leídos
-                    const messageElements = messagesDiv.querySelectorAll('.message[data-id]');
-                    const messageIds = Array.from(messageElements).map(el => el.dataset.id);
+                    const messageElements =
+                        messagesDiv.querySelectorAll(".message[data-id]");
+                    const messageIds = Array.from(messageElements).map(
+                        (el) => el.dataset.id
+                    );
                     if (messageIds.length > 0) {
-                        this.markMessagesByIdAsRead(messageIds);
+                        this.markMessagesByIdAsRead(messageIds).then(() => {
+                            // ✅ Eliminar el badge visual del grupo tras marcar como leídos
+                            if (unreadBadge) {
+                                unreadBadge.remove();
+                            }
+                        });
                     }
                 } else {
-                    messagesDiv.style.display = 'none';
-                    e.currentTarget.querySelector('i').className = 'fas fa-chevron-right';
+                    messagesDiv.style.display = "none";
+                    e.currentTarget.querySelector("i").className =
+                        "fas fa-chevron-right";
                 }
             });
         });
@@ -640,16 +823,19 @@ class GreenTrackChat {
         if (lastDate) {
             const lastGroup = document.getElementById(`messages-${lastDate}`);
             if (lastGroup && lastGroup.lastElementChild) {
-                lastGroup.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                lastGroup.lastElementChild.scrollIntoView({
+                    behavior: "smooth",
+                    block: "end",
+                });
             }
         }
     }
 
     addMessageToGroup(message) {
-        const container = document.getElementById('messagesContainer');
+        const container = document.getElementById("messagesContainer");
         if (!container) return;
 
-        const dateKey = this.getMessageGroupKey(message.timestamp);        
+        const dateKey = this.getMessageGroupKey(message.timestamp);
         let group = document.getElementById(`messages-${dateKey}`);
 
         if (!group) {
@@ -668,38 +854,50 @@ class GreenTrackChat {
                     </div>
                 </div>
             `;
-            container.insertAdjacentHTML('beforeend', newGroup);
+            container.insertAdjacentHTML("beforeend", newGroup);
 
             // Vincular listener al nuevo botón
             const newBtn = container.querySelector(`[data-date="${dateKey}"]`);
             if (newBtn) {
-                newBtn.addEventListener('click', (e) => {
-                    const messagesDiv = document.getElementById(`messages-${dateKey}`);
-                    const isOpen = messagesDiv.style.display !== 'none';
-                    
+                newBtn.addEventListener("click", (e) => {
+                    const messagesDiv = document.getElementById(
+                        `messages-${dateKey}`
+                    );
+                    const isOpen = messagesDiv.style.display !== "none";
+
                     if (!isOpen) {
-                        messagesDiv.style.display = 'block';
-                        e.currentTarget.querySelector('i').className = 'fas fa-chevron-down';
-                        
+                        messagesDiv.style.display = "block";
+                        e.currentTarget.querySelector("i").className =
+                            "fas fa-chevron-down";
+
                         // ✅ Marcar mensajes de este grupo como leídos
-                        const messageElements = messagesDiv.querySelectorAll('.message[data-id]');
-                        const messageIds = Array.from(messageElements).map(el => el.dataset.id);
+                        const messageElements =
+                            messagesDiv.querySelectorAll(".message[data-id]");
+                        const messageIds = Array.from(messageElements).map(
+                            (el) => el.dataset.id
+                        );
                         if (messageIds.length > 0) {
                             this.markMessagesByIdAsRead(messageIds);
                         }
                     } else {
-                        messagesDiv.style.display = 'none';
-                        e.currentTarget.querySelector('i').className = 'fas fa-chevron-right';
+                        messagesDiv.style.display = "none";
+                        e.currentTarget.querySelector("i").className =
+                            "fas fa-chevron-right";
                     }
                 });
             }
         } else {
             // Añadir mensaje al grupo existente
-            group.insertAdjacentHTML('beforeend', this.createMessageElement(message));
+            group.insertAdjacentHTML(
+                "beforeend",
+                this.createMessageElement(message)
+            );
             const lastMsg = group.lastElementChild;
-            const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 1;
+            const isScrolledToBottom =
+                container.scrollHeight - container.clientHeight <=
+                container.scrollTop + 1;
             if (isScrolledToBottom) {
-                lastMsg.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                lastMsg.scrollIntoView({ behavior: "smooth", block: "end" });
             }
         }
 
@@ -712,11 +910,17 @@ class GreenTrackChat {
         const isOwn = message.user.email === this.config.userEmail;
         // ✅ Insertar HTML directamente (el backend ya lo sanitizó)
         return `
-            <div class="message ${isOwn ? 'own-message' : ''}" data-id="${message.id}">
-                <img src="../app/views/img/avatars/${message.user.email}.jpg" class="message-avatar" onerror="this.src='../app/views/img/avatars/default.png'">
+            <div class="message ${isOwn ? "own-message" : ""}" data-id="${
+            message.id
+        }">
+                <img src="../app/views/img/avatars/${
+                    message.user.email
+                }.jpg" class="message-avatar" onerror="this.src='../app/views/img/avatars/default.png'">
                 <div class="message-content">
                     <div class="message-text">${message.content}</div>
-                    <div class="message-time">${this.formatTime(message.timestamp)}</div>
+                    <div class="message-time">${this.formatTime(
+                        message.timestamp
+                    )}</div>
                 </div>
             </div>
         `;
@@ -724,8 +928,8 @@ class GreenTrackChat {
 
     getMessageGroupKey(timestamp) {
         // Parsear timestamp del servidor (formato: "2025-12-10 14:30:00")
-        const [datePart] = timestamp.split(' ');
-        const [Y, M, D] = datePart.split('-').map(Number);
+        const [datePart] = timestamp.split(" ");
+        const [Y, M, D] = datePart.split("-").map(Number);
 
         // Asumir que el servidor envía hora en Chicago (UTC-6 en invierno)
         // Convertir a UTC para comparar con la fecha local del cliente
@@ -733,40 +937,54 @@ class GreenTrackChat {
         const msgDate = new Date(utcTime);
 
         const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const today = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate()
+        );
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
 
-        const msgDay = new Date(msgDate.getFullYear(), msgDate.getMonth(), msgDate.getDate());
+        const msgDay = new Date(
+            msgDate.getFullYear(),
+            msgDate.getMonth(),
+            msgDate.getDate()
+        );
 
         // 1. Hoy
         if (msgDay.getTime() === today.getTime()) {
-            return 'today';
+            return "today";
         }
 
         // 2. Ayer
         if (msgDay.getTime() === yesterday.getTime()) {
-            return 'yesterday';
+            return "yesterday";
         }
 
         // 3. Esta semana (últimos 7 días)
         const sevenDaysAgo = new Date(today);
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         if (msgDay >= sevenDaysAgo) {
-            return msgDay.toLocaleDateString('en-US', { weekday: 'long' });
+            return msgDay.toLocaleDateString("en-US", { weekday: "long" });
         }
 
         // 4. Este año (pero fuera de esta semana)
         if (msgDate.getFullYear() === now.getFullYear()) {
-            return msgDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long' });
+            return msgDate.toLocaleDateString("en-US", {
+                day: "numeric",
+                month: "long",
+            });
         }
 
         // 5. Años anteriores
-        return msgDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        return msgDate.toLocaleDateString("en-US", {
+            month: "long",
+            year: "numeric",
+        });
     }
 
     showNoMessages() {
-        const container = document.getElementById('messagesContainer');
+        const container = document.getElementById("messagesContainer");
         if (container) {
             container.innerHTML = `
                 <div class="welcome-message">
@@ -780,21 +998,39 @@ class GreenTrackChat {
 
     formatTime(dateTimeString) {
         // Si no es un string válido o no contiene espacio, retornar guión
-        if (typeof dateTimeString !== 'string' || !dateTimeString.includes(' ')) {
-            return '—';
+        if (
+            typeof dateTimeString !== "string" ||
+            !dateTimeString.includes(" ")
+        ) {
+            return "—";
         }
 
-        const [datePart, timePart] = dateTimeString.split(' ');
-        const [Y, M, D] = datePart.split('-').map(Number);
-        const [h, m, s] = (timePart || '00:00:00').split(':').map(Number);
+        const [datePart, timePart] = dateTimeString.split(" ");
+        const [Y, M, D] = datePart.split("-").map(Number);
+        const [h, m, s] = (timePart || "00:00:00").split(":").map(Number);
 
         // Validar que los componentes sean números válidos y dentro de rangos razonables
         if (
-            isNaN(Y) || isNaN(M) || isNaN(D) || isNaN(h) || isNaN(m) || isNaN(s) ||
-            Y < 1970 || Y > 2100 || M < 1 || M > 12 || D < 1 || D > 31 ||
-            h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59
+            isNaN(Y) ||
+            isNaN(M) ||
+            isNaN(D) ||
+            isNaN(h) ||
+            isNaN(m) ||
+            isNaN(s) ||
+            Y < 1970 ||
+            Y > 2100 ||
+            M < 1 ||
+            M > 12 ||
+            D < 1 ||
+            D > 31 ||
+            h < 0 ||
+            h > 23 ||
+            m < 0 ||
+            m > 59 ||
+            s < 0 ||
+            s > 59
         ) {
-            return '—';
+            return "—";
         }
 
         // Asumir que la hora del servidor es Chicago (UTC-6 en invierno)
@@ -804,52 +1040,52 @@ class GreenTrackChat {
         // Verificar que la fecha sea válida
         const date = new Date(utcTimestamp);
         if (isNaN(date.getTime())) {
-            return '—';
+            return "—";
         }
 
         // Formatear en la zona horaria del cliente
-        return date.toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit'
+        return date.toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
         });
     }
 
     escapeHTML(text) {
-        const div = document.createElement('div');
+        const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
     }
 
     displayIncomingMessage(message) {
-        const container = document.getElementById('messagesContainer');
+        const container = document.getElementById("messagesContainer");
         if (!container) return;
 
         const html = this.createMessageElement(message);
-        container.insertAdjacentHTML('beforeend', html);
+        container.insertAdjacentHTML("beforeend", html);
 
         // Scroll inteligente
         this.scrollToBottom();
     }
 
     scrollToBottom() {
-        const container = document.getElementById('messagesContainer');
+        const container = document.getElementById("messagesContainer");
         if (!container) return;
 
         const lastMessage = container.lastElementChild?.lastElementChild;
         if (lastMessage) {
             lastMessage.scrollIntoView({
-                behavior: 'smooth',
-                block: 'nearest',
-                inline: 'nearest'
+                behavior: "smooth",
+                block: "nearest",
+                inline: "nearest",
             });
         }
     }
 
     setMessagesContainerHeight() {
-        const messagesArea = document.querySelector('.messages-area');
-        const header = document.querySelector('.messages-header');
-        const inputArea = document.getElementById('messageInputArea');
-        const container = document.getElementById('messagesContainer');
+        const messagesArea = document.querySelector(".messages-area");
+        const header = document.querySelector(".messages-header");
+        const inputArea = document.getElementById("messageInputArea");
+        const container = document.getElementById("messagesContainer");
 
         if (messagesArea && header && inputArea && container) {
             const areaHeight = messagesArea.clientHeight;
@@ -857,47 +1093,50 @@ class GreenTrackChat {
             const inputHeight = inputArea.offsetHeight;
             const padding = 20; // Ajusta según tu diseño
 
-            const containerHeight = areaHeight - headerHeight - inputHeight - padding;
-            container.style.height = containerHeight + 'px';
-            container.style.overflowY = 'auto';
+            const containerHeight =
+                areaHeight - headerHeight - inputHeight - padding;
+            container.style.height = containerHeight + "px";
+            container.style.overflowY = "auto";
         }
     }
 
-    async uploadFileAndInsert(file) { 
-        const formData = new FormData(); 
-        formData.append('file', file); 
-        formData.append('modulo_contacts', 'upload_file'); 
-        
-        try { 
-            const res = await fetch('../app/ajax/contactsAjax.php', { 
-                method: 'POST', 
-                body: formData 
-            }); 
-            const data = await res.json(); 
-            
-            if (data.success && data.url) { 
-                let html = ''; 
-                if (file.type.startsWith('image/')) { 
-                    html = `<img src="${data.url}" alt="Imagen" style="max-width:100%; height:auto;">`; 
-                } else if (file.type.startsWith('audio/')) { 
-                    html = `<audio controls src="${data.url}"></audio>`; 
-                } else if (file.type.startsWith('video/')) { 
-                    html = `<video controls src="${data.url}" style="max-width:100%; height:auto;"></video>`; 
-                } else { 
-                    html = `<a href="${data.url}" target="_blank">📎 ${this.escapeHTML(file.name)}</a>`; 
-                } 
-                this.insertHtmlAtCursor(html); 
-            } else { 
-                alert('Error al subir el archivo.'); 
-            } 
-        } catch (e) { 
-            console.error('Upload error:', e); 
-            suiteAlertInfo('Error', 'The file could not be uploaded.');
-        } 
+    async uploadFileAndInsert(file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("modulo_contacts", "upload_file");
+
+        try {
+            const res = await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (data.success && data.url) {
+                let html = "";
+                if (file.type.startsWith("image/")) {
+                    html = `<img src="${data.url}" alt="Imagen" style="max-width:100%; height:auto;">`;
+                } else if (file.type.startsWith("audio/")) {
+                    html = `<audio controls src="${data.url}"></audio>`;
+                } else if (file.type.startsWith("video/")) {
+                    html = `<video controls src="${data.url}" style="max-width:100%; height:auto;"></video>`;
+                } else {
+                    html = `<a href="${
+                        data.url
+                    }" target="_blank">📎 ${this.escapeHTML(file.name)}</a>`;
+                }
+                this.insertHtmlAtCursor(html);
+            } else {
+                alert("Error al subir el archivo.");
+            }
+        } catch (e) {
+            console.error("Upload error:", e);
+            suiteAlertInfo("Error", "The file could not be uploaded.");
+        }
     }
 
     insertHtmlAtCursor(html) {
-        const input = document.getElementById('messageInput');
+        const input = document.getElementById("messageInput");
         if (!input) return;
         input.focus();
 
@@ -906,7 +1145,7 @@ class GreenTrackChat {
             if (sel.getRangeAt && sel.rangeCount) {
                 const range = sel.getRangeAt(0);
                 range.deleteContents();
-                const el = document.createElement('div');
+                const el = document.createElement("div");
                 el.innerHTML = html;
                 const frag = document.createDocumentFragment();
                 while (el.firstChild) {
@@ -926,54 +1165,54 @@ class GreenTrackChat {
 
     async markMessagesByIdAsRead(messageIds) {
         try {
-            await fetch('../app/ajax/contactsAjax.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+            await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    modulo_contacts: 'mark_messages_as_read',
+                    modulo_contacts: "mark_messages_as_read",
                     message_ids: messageIds,
-                    token: this.config.userToken
-                })
+                    token: this.config.userToken,
+                }),
             });
             // Opcional: actualizar badges de contactos
             this.loadContacts();
         } catch (e) {
-            console.error('Error marking messages as read:', e);
+            console.error("Error marking messages as read:", e);
         }
     }
 
     async logoutFromChat() {
-        const baseUrl = window.chatConfig?.baseUrl || '/';
-        const url = baseUrl + '/app/ajax/usuariosAjax.php';
+        const baseUrl = window.chatConfig?.baseUrl || "/";
+        const url = baseUrl + "/app/ajax/usuariosAjax.php";
 
         const formData = new FormData();
-        formData.append('modulo_usuarios', 'cerrar_sesion');
+        formData.append("modulo_usuarios", "cerrar_sesion");
 
         try {
             const response = await fetch(url, {
-                method: 'POST',
+                method: "POST",
                 body: formData,
-                credentials: 'same-origin',
+                credentials: "same-origin",
                 headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                    "X-Requested-With": "XMLHttpRequest",
+                },
             });
 
             const text = await response.text();
             if (!text.trim()) {
-                throw new Error('Empty response');
+                throw new Error("Empty response");
             }
 
             let json;
             try {
                 json = JSON.parse(text);
             } catch (parseErr) {
-                console.error('Server returned non-JSON response:', text);
-                throw new Error('Server error (check console)');
+                console.error("Server returned non-JSON response:", text);
+                throw new Error("Server error (check console)");
             }
 
             if (!json.success) {
-                throw new Error(json.message || 'Logout failed');
+                throw new Error(json.message || "Logout failed");
             }
 
             // ✅ Limpiar estado global
@@ -982,24 +1221,23 @@ class GreenTrackChat {
             window.chatListenersInitialized = false;
 
             // ✅ Limpiar y cerrar UI
-            const modal = document.getElementById('chatModal');
-            const btn = document.getElementById('btn-chat-toggle');
+            const modal = document.getElementById("chatModal");
+            const btn = document.getElementById("btn-chat-toggle");
             if (modal) {
-                modal.innerHTML = '';        // ← ESTO ES CLAVE
-                modal.style.display = 'none';
+                modal.innerHTML = ""; // ← ESTO ES CLAVE
+                modal.style.display = "none";
             }
-            if (btn) btn.style.display = 'flex';
+            if (btn) btn.style.display = "flex";
 
-            suiteAlertInfo('Action Close', 'Chat session closed.');
-
+            suiteAlertInfo("Action Close", "Chat session closed.");
         } catch (e) {
-            console.error('Logout failed:', e);
-            suiteAlertInfo('Error', 'Could not close chat session.');
+            console.error("Logout failed:", e);
+            suiteAlertInfo("Error", "Could not close chat session.");
         }
     }
 
     initRichEditor() {
-        const editorElement = document.getElementById('editor');
+        const editorElement = document.getElementById("editor");
         if (!editorElement) return;
 
         // Barra de herramientas (opcional)
@@ -1012,7 +1250,7 @@ class GreenTrackChat {
                 <button type="button" data-command="emoji" title="Emoji">😊</button>
             </div>
         `;
-        editorElement.insertAdjacentHTML('beforebegin', toolbarHtml);
+        editorElement.insertAdjacentHTML("beforebegin", toolbarHtml);
 
         this.richEditor = new Tiptap.Editor({
             element: editorElement,
@@ -1020,20 +1258,27 @@ class GreenTrackChat {
                 Tiptap.StarterKit,
                 Tiptap.Emoji.configure({
                     enableShortcodes: true,
-                })
+                }),
             ],
-            content: '',
-            autofocus: false
+            content: "",
+            autofocus: false,
         });
 
         // Configurar botones de toolbar
-        document.querySelectorAll('.tiptap-toolbar button').forEach(btn => {
+        document.querySelectorAll(".tiptap-toolbar button").forEach((btn) => {
             const command = btn.dataset.command;
-            btn.addEventListener('click', () => {
-                if (command === 'emoji') {
+            btn.addEventListener("click", () => {
+                if (command === "emoji") {
                     // Emoji picker básico (puedes expandirlo)
-                    const emoji = prompt('Insert emoji or shortcode (e.g. :smile:)');
-                    if (emoji) this.richEditor.chain().focus().insertContent(emoji).run();
+                    const emoji = prompt(
+                        "Insert emoji or shortcode (e.g. :smile:)"
+                    );
+                    if (emoji)
+                        this.richEditor
+                            .chain()
+                            .focus()
+                            .insertContent(emoji)
+                            .run();
                 } else if (this.richEditor.can().toggleMark(command)) {
                     this.richEditor.commands.toggleMark(command);
                 }
@@ -1041,30 +1286,79 @@ class GreenTrackChat {
         });
     }
 
-    updateStatus(status, type = 'info') {
-        const statusElement = document.getElementById('userStatus');
+    updateStatus(status, type = "info") {
+        const statusElement = document.getElementById("userStatus");
         if (statusElement) {
             statusElement.textContent = status;
             statusElement.className = `user-status status-${type}`;
         }
     }
-   
+
+    displayIncomingMessage(message) {
+        const container = document.getElementById("messagesContainer");
+        if (!container) return;
+        const html = this.createMessageElement(message);
+
+        // ✅ CORRECTO: solo agrega el nuevo HTML, sin tocar el existente
+        container.insertAdjacentHTML("beforeend", html);
+
+        // Ajuste de scroll (mejorado)
+        if (
+            container.scrollHeight - container.clientHeight <=
+            container.scrollTop + 5
+        ) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+
+    // Método para enviar heartbeat
+    sendHeartbeat() {
+        if (!this.config?.userToken) return;
+
+        // Detectar si es móvil o PC
+        const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const dispositivo = isMobile ? "movil" : "pc";
+
+        // Para móvil, siempre "activo"
+        // Para PC, depende de la interacción
+        let modo = 'active';
+        if (!isMobile) {
+            const inactividad = Date.now() - this.lastChatInteraction;
+            modo = (inactividad < this.INTERACTION_TIMEOUT) ? 'active' : 'pause';
+        }
+
+        const data = {
+            modulo_usuarios: "heartbeat",
+            token: this.config.userToken,
+            dispositivo: dispositivo,
+            modo: modo,
+        };
+
+        const baseUrl = window.chatConfig?.baseUrl || "/";
+        const url = baseUrl + "/app/ajax/usuariosAjax.php";
+
+        fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        }).catch((err) => {
+            console.warn("Heartbeat fallido:", err);
+        });
+    }
+
+    // Llamar cada 45 segundos (menos que el umbral de "online", ej: 60s)
+    startHeartbeat() {
+        this.sendHeartbeat(); // Inmediato al iniciar
+        this.heartbeatInterval = setInterval(() => {
+            this.sendHeartbeat();
+        }, 45000);
+    }
+
+    // Detener al salir
+    stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    }
 }
-
-// Cargar y ejecutar chat.js
-// let chatScript = document.createElement('script');
-// chatScript.src = window.CHAT_CONFIG.baseUrl + '/app/views/inc/js/chat.js?v=' + window.CHAT_CONFIG.timestamp;
-// chatScript.onload = () => {
-//     // ✅ Inicializar explícitamente
-//     if (typeof GreenTrackChat !== 'undefined') {
-//         window.chatApp = new GreenTrackChat();
-//     }
-// };
-// document.head.appendChild(chatScript);
-
-
-// document.addEventListener('DOMContentLoaded', () => {
-//     if (window.chatConfig) {
-//         window.chatApp = new GreenTrackChat();
-//     }
-// });

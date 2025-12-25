@@ -55,7 +55,7 @@ class contratosController extends mainModel
 			@chgrp($this->logFile, 'www-data');
 
 			@chown($this->errorLogFile, 'www-data');
-			@chgrp($this->errorLogFile, 'www-data');
+			@chgrp($this->errorLogFile, 'www-data'); 
 		}
 
 		// rotación automatica de log (Elimina logs > XX dias)

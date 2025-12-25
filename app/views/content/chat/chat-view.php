@@ -20,7 +20,7 @@ if (!defined('APP_R_PROY')) {
         $testPath = $current . '/config/app.php';
         if (file_exists($testPath)) {
             define('APP_R_PROY', $current . '/');
-            $found = true;
+            $found = true; 
             break;
         }
         $current = dirname($current);

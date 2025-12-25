@@ -225,6 +225,7 @@ class contactsController extends mainModel
     private function getAvailableContacts($userId)
     {
         $this->log("Proceso getAvailableContacts ");
+        
         // Paso 1: Obtener todos los usuarios ejecutivos activos (excepto el usuario actual)
         $stmt = "
             SELECT id, nombre, email, chat_avatar as avatar, chat_estado as status, 'contact' as type,
@@ -234,7 +235,9 @@ class contactsController extends mainModel
                     ELSE 3 
                 END as status_order
             FROM usuarios_ejecutivos
-            WHERE id != :v_userId AND activo = 1 AND chat_activo = 1
+            WHERE id != :v_userId AND activo = 1 
+                AND chat_activo = 1
+                AND es_sistema = 0   -- ← EXCLUIR USUARIO SISTEMA DE LA LISTA DE CONTACTOS
             ORDER BY status_order, nombre";
         $param = [
             ':v_userId' => $userId
@@ -266,7 +269,38 @@ class contactsController extends mainModel
         $unreadList = $this->ejecutarConsulta($stmt2, "", $param2, "fetchAll");
         $this->log("Resultado en la variable unreadList: " . json_encode($unreadList));
 
-        // Paso 3: mapear conteo a contactos
+        // === Paso 3: Obtener sesiones móviles activas (últimos 5 minutos) ===
+        $contactIds = array_column($contacts, 'id');
+        $movilActivo = [];
+        if (!empty($contactIds)) {
+            $placeholders = str_repeat('?,', count($contactIds) - 1) . '?';
+            $stmtMovil = "SELECT user_id
+                FROM sesiones_activas
+                WHERE user_id IN ($placeholders)
+                    AND dispositivo = 'movil'
+                    AND ultima_actividad >= NOW() - INTERVAL 3600 SECOND";
+            $resultado = $this->ejecutarConsulta($stmtMovil, "", $contactIds, "fetchAll");
+            foreach ($resultado as $row) {
+                $movilActivo[$row['user_id']] = true;
+            }
+        }
+
+        // === Paso 4: Obtener modo de PC (para "En Pausa") ===
+        $pcModo = [];
+        if (!empty($contactIds)) {
+            $stmtPC = "
+                SELECT user_id, modo
+                FROM sesiones_activas
+                WHERE user_id IN ($placeholders)
+                    AND dispositivo = 'pc'
+                    AND ultima_actividad >= NOW() - INTERVAL 3600 SECOND";
+            $resultadoPC = $this->ejecutarConsulta($stmtPC, "", $contactIds, "fetchAll");
+            foreach ($resultadoPC as $row) {
+                $pcModo[$row['user_id']] = $row['modo'];
+            }
+        }
+
+        // Paso 5: mapear conteo a contactos
         $unreadMap = [];
         foreach ($unreadList as $row) {
             $unreadMap[$row['contact_id']] = (int)$row['unread'];
@@ -274,6 +308,21 @@ class contactsController extends mainModel
 
         foreach ($contacts as &$contact) {
             $contact['unread'] = $unreadMap[$contact['id']] ?? 0;
+
+            $dispositivos = ['pc' => null, 'movil' => null];
+
+            // 🖥️ PC: basado en chat_estado
+            if ($contact['status'] === 'online') {
+                // Si hay modo reciente, usarlo; si no, asumir 'activo'
+                $dispositivos['pc'] = $pcModo[$contact['id']] ?? 'activo';
+            }
+
+            // 📱 Móvil: basado SOLO en sesiones_activas
+            if (!empty($movilActivo[$contact['id']])) {
+                $dispositivos['movil'] = 'active';
+            }
+
+            $contact['dispositivos'] = $dispositivos;
         }
 
         $this->log("Resultado del arreglo final: " . json_encode($contacts));
@@ -901,4 +950,4 @@ class contactsController extends mainModel
         }
         exit();
     }
-}
+}   

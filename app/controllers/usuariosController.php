@@ -193,7 +193,10 @@ class usuariosController extends mainModel
 		$this->log("Consulta de validacion de usuario " . $sql);
 		
 		$result = $this->ejecutarConsulta($sql, '', $params);
-
+		$user_id = $result['id_user'];
+		$dispositivo = $_SERVER['HTTP_USER_AGENT'];
+		$token_sesion =  $result['token'];
+		
 		$this->log("Resultado de validacion de usuario " . json_encode($result));
 
 		if (!$result || count($result) === 0) {
@@ -227,5 +230,67 @@ class usuariosController extends mainModel
 			return $result;
 		}
 	}
+	
+	public function heartbeat($token, $dispositivo, $modo){
+		// ✅ Paso 1: Verificar si ya existe una sesión para este usuario + dispositivo
+
+		$usuario_actual = $this->getUserByToken($token);
+		$user_id = $usuario_actual['id'];
+
+		$sql = "SELECT id 
+			FROM sesiones_activas
+			WHERE user_id = :v_user_id AND dispositivo = :v_dispositivo 
+			LIMIT 1";
+
+		$params = [
+			':v_user_id' => $user_id,
+			':v_dispositivo' => $dispositivo
+		];
+
+		$this->log("Consulta de Dispositivo del Usuario " . $sql);
+		
+		$result = $this->ejecutarConsulta($sql, '', $params);
+
+		if ($result) {
+			// ✅ Paso 2a: Actualizar si ya existe
+			$ultima_actividad = date('Y-m-d H:i:s');
+
+			$datos = [
+				['campo_nombre' => 'ultima_actividad', 'campo_marcador' => ':ultima_actividad', 'campo_valor' => $ultima_actividad],
+				['campo_nombre' => 'token_sesion', 'campo_marcador' => ':token_sesion', 'campo_valor' => $token]
+			];
+			$condicion = [
+				[
+					'condicion_campo' => 'user_id',
+					'condicion_operador' => '=', 
+					'condicion_marcador' => ':user_id',
+					'condicion_valor' => $user_id
+				],
+				[
+					'condicion_campo' => 'dispositivo',
+					'condicion_operador' => '=', 
+					'condicion_marcador' => ':dispositivo',
+					'condicion_valor' => $dispositivo
+				]
+			];
+			$this->actualizarDatos('sesiones_activas', $datos, $condicion);
+
+		} else {
+			// ✅ Paso 2b: Insertar si no existe
+			$ultima_actividad = date('Y-m-d H:i:s');
+			$logNota = [
+				['campo_nombre' => 'user_id', 'campo_marcador' => ':user_id', 'campo_valor' => $user_id],
+				['campo_nombre' => 'dispositivo', 'campo_marcador' => ':dispositivo', 'campo_valor' => $dispositivo],
+				['campo_nombre' => 'token_sesion', 'campo_marcador' => ':token_sesion', 'campo_valor' => $token],
+				['campo_nombre' => 'ultima_actividad', 'campo_marcador' => ':ultima_actividad', 'campo_valor' => $ultima_actividad],
+				['campo_nombre' => 'modo', 'campo_marcador' => ':modo', 'campo_valor' => $modo]
+			];
+			$this->guardarDatos('sesiones_activas', $logNota);
+		}			
+		return true;
+	}
+	
+	
+	
 
 }

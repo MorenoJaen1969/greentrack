@@ -9,7 +9,7 @@ while (ob_get_level()) {
 }
 
 // === 2. Iniciar sesión ===
-require_once "../views/inc/session_start.php";
+require_once "../views/inc/session_start.php"; 
 
 // === 3. Cargar configuración y autoload ===
 require_once "../../config/app.php";
@@ -175,6 +175,15 @@ try {
             echo json_encode(['success' => true]);
             exit(); // Asegura que no se imprime nada más                                    
 
+        case 'heartbeat':
+            $token = $inputData['token'];
+            $dispositivo = $inputData['dispositivo'];
+            $modo = $inputData['modo'] ?? 'active'; // 'active' o 'pause'
+            
+            $resultado = $controller->heartbeat($token, $dispositivo, $modo);
+            echo json_encode(['success' => true]);            
+            exit();
+            
         default:
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Módulo no válido: ' . $modulo]);

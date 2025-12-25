@@ -862,6 +862,20 @@
     pointer-events: none;
 }
 
+.contact-avatar {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    background: #f0f0f0; /* color de fondo mientras carga */
+    border-radius: 50%;
+}
+
+.contact-status {
+    font-size: 0.85em;
+    color: #555;
+    line-height: 1.3;
+}
+
 /* 🖥️ Ajuste para pantallas PC de resolución media */
 @media (min-width: 1201px) and (max-width: 1400px) {
     .chat-main-grid {
