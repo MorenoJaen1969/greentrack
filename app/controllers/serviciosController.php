@@ -1,5 +1,7 @@
 <?php
+
 namespace app\controllers;
+
 require_once APP_R_PROY . 'app/models/mainModel.php';
 require_once APP_R_PROY . 'app/models/datosGenerales.php';
 require_once APP_R_PROY . 'app/controllers/usuariosController.php';
@@ -9,52 +11,38 @@ use app\models\datosGenerales;
 use app\controllers\usuariosController;
 
 use \Exception;
+
 class serviciosController extends mainModel
 {
 	private $log_path;
 	private $logFile;
 	private $errorLogFile;
-
 	private $mapa_base;
 	private $umbral_metros;
 	private $umbral_minutos;
-
 	private $id_status_cancelado;
 	private $id_status_activo;
 	private $id_status_historico;
 	private $id_status_finalizado;
 	private $id_status_replanificado;
 
-	private $o_f;
-
-	private $DGcontroller;
-
 	public function __construct()
 	{
-		// ¡ESTA LÍNEA ES CRUCIAL!
 		parent::__construct();
 
-		// Nombre del controlador actual abreviado para reconocer el archivo
-		$nom_controlador = "serviciosController";
-		// ____________________________________________________________________
-
-		$this->log_path = APP_R_PROY . 'app/logs/greentrack/';
+		$nom_controlador = 'serviciosController';
+		$this->log_path = APP_R_PROY . 'app/logs/servicios/';
 
 		if (!file_exists($this->log_path)) {
 			mkdir($this->log_path, 0775, true);
-			chgrp($this->log_path, 'www-data');
-			chmod($this->log_path, 0775); // Asegurarse de que el directorio sea legible y escribible
+			@chgrp($this->log_path, 'www-data');
+			@chmod($this->log_path, 0775);
 		}
 
 		$this->logFile = $this->log_path . $nom_controlador . '_' . date('Y-m-d') . '.log';
 		$this->errorLogFile = $this->log_path . $nom_controlador . '_error_' . date('Y-m-d') . '.log';
 
-		$this->initializeLogFile(file: $this->logFile);
-		$this->initializeLogFile($this->errorLogFile);
-
 		$this->verificarPermisos();
-
-		// rotación automatica de log (Elimina logs > XX dias)
 		$this->rotarLogs(15);
 
 		$this->id_status_cancelado = 47;
@@ -62,38 +50,8 @@ class serviciosController extends mainModel
 		$this->id_status_historico = 39;
 		$this->id_status_activo = 37;
 		$this->id_status_replanificado = 40;
-
-		$this->DGcontroller = new datosGenerales();
-		$arre_DG = $this->DGcontroller->datos_para_gps();
-
-		$this->mapa_base = $arre_DG['config']['mapa_base'] ?? 'OSM';
-		$this->umbral_metros = (int) ($arre_DG['config']['umbral_metros'] ?? 150);
-		$this->umbral_minutos = (int) ($arre_DG['config']['umbral_minutos'] ?? 5);
-
-		// if (isset($_COOKIE['clang'])) {
-		// 	$this->idioma_act = $_COOKIE['clang'];
-		// } else {
-		//	$this->idioma_act = "en";
-		// }
-		// $this->o_f = new otras_fun();
-		// $this->idioma_ctrol = $this->o_f->cargar_idioma($this->idioma_act);
 	}
 
-	private function initializeLogFile($file)
-	{
-		if (!file_exists($file)) {
-			$initialContent = "[" . date('Y-m-d H:i:s') . "] Archivo de log iniciado" . PHP_EOL;
-			$created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
-			if ($created === false) {
-				error_log("No se pudo crear el archivo de log: " . $file);
-			} else {
-				chmod($file, 0644); // Asegurarse de que el archivo sea legible y escribible
-			}
-			if (!is_writable($file)) {
-				throw new \Exception("El archivo de log no es escribible: " . $file);
-			}
-		}
-	}
 
 	private function verificarPermisos()
 	{
@@ -117,6 +75,10 @@ class serviciosController extends mainModel
 	private function log($message, $isError = false)
 	{
 		$file = $isError ? $this->errorLogFile : $this->logFile;
+		if (empty($file)) {
+			// Si no hay archivo de log configurado, evitar fallos en ambiente de pruebas
+			return;
+		}
 		if (!file_exists($file)) {
 			$initialContent = "[" . date('Y-m-d H:i:s') . "] Archivo de log iniciado" . PHP_EOL;
 			$created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
@@ -132,6 +94,9 @@ class serviciosController extends mainModel
 
 	private function logWithBacktrace($message, $isError = true)
 	{
+		if (empty($this->errorLogFile)) {
+			return;
+		}
 		$backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
 		$caller = $backtrace[1] ?? $backtrace[0];
 		$logMessage = sprintf("[%s] %s - Called from %s::%s (Line %d)%s%s", date('Y-m-d H:i:s'), $message, $caller['class'] ?? '', $caller['function'], $caller['line'], PHP_EOL, "Stack trace:" . PHP_EOL . json_encode($backtrace, JSON_PRETTY_PRINT));
@@ -281,7 +246,6 @@ class serviciosController extends mainModel
 
 			http_response_code(200);
 			echo json_encode($resultado, JSON_PRETTY_PRINT);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en listarServicios: " . $e->getMessage(), true);
 			http_response_code(500);
@@ -309,7 +273,6 @@ class serviciosController extends mainModel
 
 			http_response_code(200);
 			echo json_encode(['status' => 'ok', 'message' => 'Servicio finalizado']);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en finalizarServicio: " . $e->getMessage(), true);
 			http_response_code(500);
@@ -333,7 +296,7 @@ class serviciosController extends mainModel
 				'saturday' => 'SATURDAY'
 			];
 
-			$dia_actual = $diasMap[strtolower(date('l'))]; // Ej: 'TUESDAY'
+			$dia_actual = $diasMap[strtolower(date('l'))]; // Ej: 'TUESDAY' 
 
 			$this->log("Día actual: " . $dia_actual);
 
@@ -343,32 +306,11 @@ class serviciosController extends mainModel
 				$fecha_programada2 = date('Y-m-d');
 			}
 
-			$query = "SELECT
-						s.id_servicio, 
-						s.id_cliente,
-						c.nombre as cliente,
-						s.id_direccion,
-						s.id_truck,
-						s.id_crew_1,
-						s.id_crew_2,
-						s.id_crew_3,
-						s.id_crew_4,
-						s.id_status,
-						t.color AS crew_color_principal,
-						s.dia_servicio,
-						s.finalizado,
-						s.estado_servicio,    
-						s.estado_visita,
-						s.hora_aviso_usuario,
-						s.hora_finalizado,
-						s.tipo_dia,
-						s.hora_inicio_gps,
-						s.hora_fin_gps,
-						d.direccion, 
-						d.id_geofence, 
-						d.lat, 
-						d.lng, 
-						t.nombre as truck,
+			$query = "SELECT 
+						s.id_servicio, s.id_cliente, c.nombre as cliente, s.id_direccion, s.id_truck, s.id_crew_1, s.id_crew_2,
+						s.id_crew_3, s.id_crew_4, s.id_status, t.color AS crew_color_principal, s.dia_servicio, s.finalizado,
+						s.estado_servicio, s.estado_visita, s.hora_aviso_usuario, s.hora_finalizado, s.tipo_dia, s.hora_inicio_gps,
+						s.hora_fin_gps, d.direccion, d.id_geofence, d.lat, d.lng, t.nombre as truck,
 						CASE 
 							WHEN s.id_status = 37 AND s.hora_aviso_usuario IS NOT NULL THEN 'Service started'
 							WHEN s.id_status = 38 
@@ -386,21 +328,21 @@ class serviciosController extends mainModel
 							ELSE 'Pendiente'
 						END AS s_status,
 						CASE 
-						    WHEN s.hora_inicio_gps IS NOT NULL AND s.hora_fin_gps IS NOT NULL THEN 
-						        CONCAT('Service Performed (', TIME_FORMAT(TIMEDIFF(s.hora_fin_gps, s.hora_inicio_gps), '%H:%i:%s'), ')')
-						    WHEN s.hora_inicio_gps IS NOT NULL AND s.hora_fin_gps IS NULL THEN 
-						        CONCAT('Started (', TIMESTAMPDIFF(MINUTE, s.hora_inicio_gps, NOW()), ' min ago)')
-						    WHEN s.hora_inicio_gps IS NULL AND s.hora_fin_gps IS NOT NULL THEN 
-						        'Finished'
-						    WHEN s.hora_inicio_gps IS NULL AND s.hora_fin_gps IS NULL THEN 
-						        'Not yet attended'
+							WHEN s.hora_inicio_gps IS NOT NULL AND s.hora_fin_gps IS NOT NULL THEN 
+								CONCAT('Service Performed (', TIME_FORMAT(TIMEDIFF(s.hora_fin_gps, s.hora_inicio_gps), '%H:%i:%s'), ')')
+							WHEN s.hora_inicio_gps IS NOT NULL AND s.hora_fin_gps IS NULL THEN 
+								CONCAT('Started (', TIMESTAMPDIFF(MINUTE, s.hora_inicio_gps, NOW()), ' min ago)')
+							WHEN s.hora_inicio_gps IS NULL AND s.hora_fin_gps IS NOT NULL THEN 
+								'Finished'
+							WHEN s.hora_inicio_gps IS NULL AND s.hora_fin_gps IS NULL THEN 
+								'Not yet attended'
 						END AS status_m2
 					FROM servicios AS s
 					LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
 					LEFT JOIN direcciones AS d ON s.id_direccion = d.id_direccion
 					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
 					WHERE s.id_status != $this->id_status_historico
-					AND s.id_servicio IN (
+						AND s.id_servicio IN (
 							SELECT DISTINCT id_servicio 
 							FROM servicios 
 							WHERE id_status != $this->id_status_historico
@@ -494,11 +436,11 @@ class serviciosController extends mainModel
 
 
 				// Solo aplica la validación de día si es tipo "semanal"
-//				if ($s['tipo_dia'] === 'semanal' && $s['dia_servicio']) {
-//					if ($s['dia_servicio'] !== $dia_actual) {
-//						$registro['estado_visita'] = 'replanificado';
-//					}
-//				}
+				//				if ($s['tipo_dia'] === 'semanal' && $s['dia_servicio']) { 
+				//					if ($s['dia_servicio'] !== $dia_actual) {
+				//						$registro['estado_visita'] = 'replanificado';
+				//					}
+				//				}
 
 				// Si no tiene día asignado
 				if (!$s['dia_servicio']) {
@@ -525,7 +467,9 @@ class serviciosController extends mainModel
 			$truckIdsConServicio = array_unique($truckIdsConServicio);
 
 			// === PASO 2: Obtener TODOS los trucks activos (ajusta id_status según tu lógica) ===
-			$queryTrucks = "SELECT id_truck, nombre, color FROM truck WHERE id_status = 26";
+			$queryTrucks = "SELECT id_truck, nombre, color 
+				FROM truck 
+				WHERE id_status = 26";
 			$camionesActivos = $this->ejecutarConsulta($queryTrucks, '', [], 'fetchAll');
 
 			// === PASO 3: Filtrar los que NO tienen servicio hoy ===
@@ -545,6 +489,19 @@ class serviciosController extends mainModel
 					$numB = (int) preg_replace('/[^0-9]/', '', $b['truck']);
 					return $numA <=> $numB;
 				});
+			} else {
+				foreach ($camionesActivos as $camion) {
+					$vehiculosSinServicio[] = [
+						'id_truck' => $camion['id_truck'],
+						'truck' => $camion['nombre'],
+						'color_truck' => $camion['color']
+					];
+				}
+				usort($vehiculosSinServicio, function ($a, $b) {
+					$numA = (int) preg_replace('/[^0-9]/', '', $a['truck']);
+					$numB = (int) preg_replace('/[^0-9]/', '', $b['truck']);
+					return $numA <=> $numB;
+				});
 			}
 
 			// === PASO 4: Enviar AMBOS conjuntos en un solo JSON (solo echo, sin return) ===
@@ -553,7 +510,6 @@ class serviciosController extends mainModel
 				'servicios' => $resultado,
 				'vehiculosSinServicio' => $vehiculosSinServicio
 			], JSON_PRETTY_PRINT);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en listarServiciosConEstado: " . $e->getMessage(), true);
 			http_response_code(500);
@@ -683,7 +639,6 @@ class serviciosController extends mainModel
 
 			http_response_code(200);
 			echo json_encode($resultado, JSON_PRETTY_PRINT);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en listarServiciosConEstado: " . $e->getMessage(), true);
 			http_response_code(500);
@@ -742,8 +697,8 @@ class serviciosController extends mainModel
 					ORDER BY c.nombre ASC";
 
 			// quite esta linea por que contratos esta vacio:
-// ct.day_work AS dia_servicio_ct 
-// 					LEFT JOIN contratos AS ct ON s.id_cliente = ct.id_cliente
+			// ct.day_work AS dia_servicio_ct 
+			// 					LEFT JOIN contratos AS ct ON s.id_cliente = ct.id_cliente
 
 			$params = [
 				':v_fecha_programada' => date('Y-m-d')
@@ -824,13 +779,11 @@ class serviciosController extends mainModel
 
 			http_response_code(200);
 			echo json_encode($resultado, JSON_PRETTY_PRINT);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en listarServiciosParaModal: " . $e->getMessage(), true);
 			http_response_code(500);
 			echo json_encode(['error' => 'Error al cargar servicios para Modal']);
 		}
-
 	}
 
 	private function clienteTrabajaEsteDia($id_cliente, $dia_servicio)
@@ -915,7 +868,6 @@ class serviciosController extends mainModel
 				http_response_code(200);
 				echo json_encode(['historial' => $historial]);
 			}
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en obtenerHistorialCliente: " . $e->getMessage(), true);
 			http_response_code(500);
@@ -1161,7 +1113,6 @@ class serviciosController extends mainModel
 
 			http_response_code(200);
 			echo json_encode(['success' => true, 'message' => 'Estado y historial actualizados']);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en actualizarEstadoConHistorial: " . $e->getMessage(), true);
 			http_response_code(500);
@@ -1239,9 +1190,143 @@ class serviciosController extends mainModel
 
 				$resultados = $this->actualizarDatos('servicios', $datos, $condicion);
 
-				http_response_code(200);
-				echo json_encode(['success' => 'ok', 'message' => $resultados . ' Record Update completed']);
+				// Preparar respuesta base
+				$response = ['success' => 'ok', 'message' => $resultados . ' Record Update completed'];
 
+				// Si el servicio fue marcado como finalizado, revisar si hay clientes que "deberían" estar en rutas
+				// pero no están asignados (misma lógica que en listarServicios_despachos)
+				try {
+					// Obtener fecha_programada del servicio
+					$srv = $this->ejecutarConsulta("SELECT fecha_programada FROM servicios WHERE id_servicio = :id", '', [':id' => $id_servicio]);
+					$fecha_programada_srv = $srv['fecha_programada'] ?? date('Y-m-d');
+
+					// Determinar día en inglés con helper existente
+					$dayWord = $this->obtenerDiaSemana($fecha_programada_srv);
+
+					$sinRutaSQL = "SELECT DISTINCT ct.id_contrato, ct.id_cliente, c.nombre AS cliente, ct.id_direccion, d.direccion, di.dia_ingles AS day_work,
+						se.fecha_programada AS ultimo_servicio, COALESCE(DATEDIFF(:v_fecha01, se.fecha_programada), -1) AS dias, fs.concepto
+						FROM contratos ct
+						LEFT JOIN clientes c ON ct.id_cliente = c.id_cliente
+						LEFT JOIN direcciones d ON ct.id_direccion = d.id_direccion
+						LEFT JOIN dias_semana di ON ct.id_dia_semana = di.id_dia_semana
+						LEFT JOIN frecuencia_servicio fs ON fs.id_frecuencia_servicio = ct.id_frecuencia_servicio
+						LEFT JOIN (
+							SELECT id_servicio, id_cliente, fecha_programada,
+								ROW_NUMBER() OVER (PARTITION BY id_cliente ORDER BY fecha_programada DESC, id_servicio DESC) AS rn
+							FROM servicios
+						) AS se ON se.id_cliente = ct.id_cliente AND se.rn = 1
+						LEFT JOIN rutas_direcciones rd ON d.id_direccion = rd.id_direccion
+						LEFT JOIN rutas_zonas_cuadricula rz ON rd.id_ruta = rz.id_ruta
+						LEFT JOIN route_day_assignments rda ON rz.id_ruta = rda.id_ruta AND rda.day_of_week = :v_day
+						WHERE ct.id_status = 18
+							AND di.dia_ingles = :v_day_work
+							AND (
+								CASE ct.id_frecuencia_servicio
+									WHEN 1 THEN DATEDIFF(:v_fecha02, se.fecha_programada) >= 7
+									WHEN 2 THEN DATEDIFF(:v_fecha03, se.fecha_programada) >= 14
+									WHEN 3 THEN DATEDIFF(:v_fecha04, se.fecha_programada) >= 21
+									WHEN 4 THEN
+										CASE ct.mensual_calendario
+											WHEN 1 THEN :v_fecha05 >= DATE_ADD(se.fecha_programada, INTERVAL 1 MONTH)
+											ELSE DATEDIFF(:v_fecha06, se.fecha_programada) >= 28
+										END
+									ELSE DATEDIFF(:v_fecha07, se.fecha_programada) >= 7
+								END
+							)
+							AND rda.id_ruta IS NULL
+						ORDER BY c.nombre";
+
+					$paramsSinRuta = [
+						':v_fecha01' => $fecha_programada_srv,
+						':v_day_work' => strtoupper($dayWord),
+						':v_fecha02' => $fecha_programada_srv,
+						':v_fecha03' => $fecha_programada_srv,
+						':v_fecha04' => $fecha_programada_srv,
+						':v_fecha05' => $fecha_programada_srv,
+						':v_fecha06' => $fecha_programada_srv,
+						':v_fecha07' => $fecha_programada_srv,
+						':v_day' => strtolower($dayWord)
+					];
+
+					$sinRuta = $this->ejecutarConsulta($sinRutaSQL, '', $paramsSinRuta, 'fetchAll');
+
+					$htmlNoRoute = '';
+					if ($sinRuta) {
+						$htmlNoRoute .= '<div class="sinruta-header"><strong>Possible services for this date with no route assigned. (' . count($sinRuta) . ')</strong></div>';
+						$htmlNoRoute .= '<ul style="list-style: none; padding-left:0;">';
+						$textParts = [];
+						foreach ($sinRuta as $sr) {
+							$nombre = htmlspecialchars($sr['cliente'] ?? '—');
+							$dir = htmlspecialchars($sr['direccion'] ?? '—');
+							$ultimo = !empty($sr['ultimo_servicio']) && $sr['ultimo_servicio'] !== '0000-00-00' ? (new \DateTime($sr['ultimo_servicio']))->format('m/d/Y') : '—';
+							$htmlNoRoute .= '<li style="padding:6px 0; border-bottom:1px solid #eee;">' . $nombre . ' — ' . $dir . ' <small style="color:#666;">(Last: ' . $ultimo . ')</small></li>';
+							$textParts[] = $nombre . ' — ' . $dir;
+						}
+						$htmlNoRoute .= '</ul>';
+
+						// Generar mensaje en chat del sistema
+						try {
+							$currentUserId = $_SESSION['user_id'] ?? null;
+							// Buscar o crear sala sistema_despacho
+							$room = $this->ejecutarConsulta("SELECT id FROM chat_salas WHERE nombre = :n LIMIT 1", '', [':n' => 'sistema_despacho']);
+							if (!$room) {
+								$datosSala = [
+									['campo_nombre' => 'nombre', 'campo_marcador' => ':nombre', 'campo_valor' => 'sistema_despacho'],
+									['campo_nombre' => 'descripcion', 'campo_marcador' => ':descripcion', 'campo_valor' => 'Sala del sistema para notificaciones de despacho'],
+									['campo_nombre' => 'creado_por', 'campo_marcador' => ':creado_por', 'campo_valor' => $currentUserId ?? 0],
+									['campo_nombre' => 'fecha_creacion', 'campo_marcador' => ':fecha_creacion', 'campo_valor' => date('Y-m-d H:i:s')],
+									['campo_nombre' => 'activo', 'campo_marcador' => ':activo', 'campo_valor' => 1]
+								];
+								$newSalaId = $this->guardarDatos('chat_salas', $datosSala);
+								$roomId = $newSalaId;
+							} else {
+								$roomId = $room['id'];
+							}
+
+							// Añadir usuarios activos a la sala si no están
+							$users = $this->ejecutarConsulta("SELECT id FROM usuarios_ejecutivos WHERE activo = 1", '', [], 'fetchAll');
+							if (!empty($users)) {
+								foreach ($users as $u) {
+									$exists = $this->ejecutarConsulta("SELECT 1 FROM chat_usuarios_salas WHERE sala_id = :s AND usuario_id = :u LIMIT 1", '', [':s' => $roomId, ':u' => $u['id']]);
+									if (!$exists) {
+										$datosUsu = [
+											['campo_nombre' => 'sala_id', 'campo_marcador' => ':sala_id', 'campo_valor' => $roomId],
+											['campo_nombre' => 'usuario_id', 'campo_marcador' => ':usuario_id', 'campo_valor' => $u['id']],
+											['campo_nombre' => 'rol', 'campo_marcador' => ':rol', 'campo_valor' => 'member'],
+											['campo_nombre' => 'fecha_union', 'campo_marcador' => ':fecha_union', 'campo_valor' => date('Y-m-d H:i:s')]
+										];
+										$this->guardarDatos('chat_usuarios_salas', $datosUsu);
+									}
+								}
+							}
+
+							// Insertar mensaje con resumen
+							$maxShow = 15;
+							$textPreview = implode('; ', array_slice($textParts, 0, $maxShow));
+							if (count($textParts) > $maxShow) $textPreview .= '... (+' . (count($textParts) - $maxShow) . ' más)';
+							$msg = "[SISTEMA] Durante la marca de servicio para " . $fecha_programada_srv . " se detectaron " . count($sinRuta) . " clientes que deberían estar en rutas pero no lo están: " . $textPreview;
+
+							$datosMsg = [
+								['campo_nombre' => 'sala_id', 'campo_marcador' => ':sala_id', 'campo_valor' => $roomId],
+								['campo_nombre' => 'usuario_id', 'campo_marcador' => ':usuario_id', 'campo_valor' => $currentUserId ?? 0],
+								['campo_nombre' => 'mensaje', 'campo_marcador' => ':mensaje', 'campo_valor' => $msg],
+								['campo_nombre' => 'fecha_envio', 'campo_marcador' => ':fecha_envio', 'campo_valor' => date('Y-m-d H:i:s')]
+							];
+							$this->guardarDatos('chat_mensajes', $datosMsg);
+						} catch (Exception $e) {
+							$this->logWithBacktrace('Error creando mensaje sistema: ' . $e->getMessage(), true);
+						}
+					} else {
+						$htmlNoRoute = '<p style="color: #888;">No missing services detected.</p>';
+					}
+
+					$response['html_no_route'] = $htmlNoRoute;
+				} catch (Exception $e) {
+					$this->logWithBacktrace('Error calculando sin ruta tras actualizar estado: ' . $e->getMessage(), true);
+				}
+
+				http_response_code(200);
+				echo json_encode($response);
 			} catch (Exception $e) {
 				$this->logWithBacktrace("Error en finalizarServicio: " . $e->getMessage(), true);
 				http_response_code(500);
@@ -1252,7 +1337,6 @@ class serviciosController extends mainModel
 
 			http_response_code(200);
 			echo json_encode(['success' => true, 'message' => 'Estado actualizado']);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en actualizarEstadoServicio: " . $e->getMessage(), true);
 			http_response_code(500);
@@ -1313,7 +1397,6 @@ class serviciosController extends mainModel
 
 			http_response_code(200);
 			echo json_encode($result);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en obtenerServicioDetalle: " . $e->getMessage(), true);
 			http_response_code(500);
@@ -1338,12 +1421,10 @@ class serviciosController extends mainModel
 			}
 
 			return $result['valor_nuevo'];
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en obtenerCrewIntegrantes: " . $e->getMessage(), true);
 			return '';
 		}
-
 	}
 
 	private function obtenerCrewIntegrantes($id_servicio)
@@ -1383,7 +1464,6 @@ class serviciosController extends mainModel
 			}
 
 			return $integrantes;
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en obtenerCrewIntegrantes: " . $e->getMessage(), true);
 			return [];
@@ -1450,7 +1530,6 @@ class serviciosController extends mainModel
 
 			http_response_code(200);
 			echo json_encode($result);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en obtenerHistorialServicio: " . $e->getMessage(), true);
 			http_response_code(500);
@@ -1674,7 +1753,6 @@ class serviciosController extends mainModel
 			http_response_code(500);
 			echo json_encode(['error' => 'Error al cargar historial']);
 		}
-
 	}
 
 	public function obtener_direcciones($cantidad)
@@ -1696,12 +1774,10 @@ class serviciosController extends mainModel
 		try {
 			$resultado = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
 			return $resultado;
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error crítico en Direcciones Motor1: " . $e->getMessage(), true);
 			return [];
 		}
-
 	}
 
 	public function act_lat_long_direcciones($id_servicio, $lat, $lon)
@@ -1718,12 +1794,10 @@ class serviciosController extends mainModel
 		try {
 			$resultado = $this->ejecutarConsulta($update, '', $params);
 			return $resultado;
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error crítico al actualizar Direcciones Motor1: " . $e->getMessage(), true);
 			return [];
 		}
-
 	}
 	/**
 	 * Actualiza hora_inicio_gps, hora_fin_gps y tiempo_servicio para un servicio
@@ -2115,7 +2189,6 @@ class serviciosController extends mainModel
 				'message' => "✅ Reconciliación completa.\n$actualizados servicios actualizados de $procesados procesados.",
 				'detalles' => compact('procesados', 'actualizados')
 			];
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en reconciliación: " . $e->getMessage());
 			return [
@@ -2274,7 +2347,6 @@ class serviciosController extends mainModel
 							];
 						}
 					}
-
 				} else {
 					// Fuera del radio → reiniciar ventana
 					$ventana_actual = [];
@@ -2619,7 +2691,6 @@ class serviciosController extends mainModel
 				'success' => true,
 				'data' => array_values($servicios)
 			]);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en listar_para_geoferencia: " . $e->getMessage());
 			echo json_encode([
@@ -2628,7 +2699,6 @@ class serviciosController extends mainModel
 			]);
 		}
 		exit();
-
 	}
 
 	public function listarVehiculos()
@@ -2645,7 +2715,6 @@ class serviciosController extends mainModel
 				'success' => true,
 				'data' => array_values($vehiculos)
 			]);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en listarVehiculos: " . $e->getMessage());
 			echo json_encode([
@@ -2688,7 +2757,6 @@ class serviciosController extends mainModel
 				'success' => true,
 				'data' => $truck_act // No uses array_values aquí
 			]);
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en dato_actual_de_truck: " . $e->getMessage());
 			echo json_encode([
@@ -2747,13 +2815,11 @@ class serviciosController extends mainModel
 				echo json_encode(['error' => 'fail', 'message' => 'Servicio Actualizado Fallo'], JSON_PRETTY_PRINT);
 				exit; // Salir inmediatamente después de enviar el JSON
 			}
-
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error en finalizarServicio: " . $e->getMessage(), true);
 			http_response_code(500);
 			echo json_encode(['error' => 'No se pudo finalizar']);
 		}
-
 	}
 
 	public function reconciliar_datos_historicos_final()
@@ -2898,7 +2964,6 @@ class serviciosController extends mainModel
 				'message' => 'Reconciliación histórica completada.',
 				'detalles' => $detalles
 			];
-
 		} catch (Exception $e) {
 			return [
 				'success' => false,
@@ -3058,9 +3123,27 @@ class serviciosController extends mainModel
 	{
 		$this->log("Inicio: listarServicios_despachos");
 
+		// 1) Revisar dias_no_actividad
+		$checkDiaSQL = "SELECT COUNT(*) AS cnt FROM dias_no_actividad WHERE fecha = :v_fecha";
+		$params = [
+			':v_fecha' => $fecha
+		];
+		$cntRes = $this->ejecutarConsulta($checkDiaSQL, '', $params);
+		if (!empty($cntRes) && isset($cntRes['cnt']) && $cntRes['cnt'] > 0) {
+			// Día no laborable: no editable
+			http_response_code(response_code: 200);
+			echo json_encode(
+				[
+					'success' => false,
+					'mess' => 'The calculation day has been scheduled as a non-working day.'
+				]
+			);
+			return;
+		}
+
 		$si_existe = $this->verificar_servicio($fecha);
 
-		if ($si_existe)	{
+		if ($si_existe) {
 			try {
 				// Obtener el día actual en formato inglés (como en la BD)
 				$dia_actual = $this->obtenerDiaSemana($fecha);
@@ -3075,13 +3158,14 @@ class serviciosController extends mainModel
 
 				$query = "SELECT s.id_servicio, s.id_cliente, c.nombre AS cliente, s.id_direccion, d.direccion, ct.id_dia_semana, di.dia_ingles AS day_work,
 							s.fecha_programada AS ultimo_servicio, fs.concepto, s.hora_aviso_usuario, s.hora_finalizado, s.hora_inicio_gps, 
-							s.hora_fin_gps, ct.mensual_calendario
+							s.hora_fin_gps, ct.mensual_calendario, ct.id_ruta, ru.nombre_ruta
 						FROM servicios s
 						LEFT JOIN contratos ct ON ct.id_contrato = s.id_contrato
 						LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
 						LEFT JOIN direcciones AS d ON s.id_direccion = d.id_direccion
 						LEFT JOIN dias_semana AS di ON di.id_dia_semana = ct.id_dia_semana
 						LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = ct.id_frecuencia_servicio 
+						LEFT JOIN rutas AS ru ON ct.id_ruta = ru.id_ruta
 						WHERE s.fecha_programada = :v_fecha01 AND
 							s.id_status != $this->id_status_historico
 						ORDER BY s.id_servicio
@@ -3120,8 +3204,8 @@ class serviciosController extends mainModel
 							FROM servicios s
 							WHERE s.fecha_programada = :v_fecha02
 						)
-					ORDER BY di.dia_ingles, c.nombre";				
-				
+					ORDER BY di.dia_ingles, c.nombre";
+
 				$params = [
 					':v_fecha01' => $fecha_programada2,
 					':v_fecha02' => $fecha_programada2
@@ -3154,192 +3238,453 @@ class serviciosController extends mainModel
 					'html_no_asignados' => $htmlNoAsignados ?: '<p style="color: #888;">No items</p>',
 					'editable' => false
 				]);
-
 			} catch (Exception $e) {
 				$this->logWithBacktrace("Error en listarServiciosConEstado: " . $e->getMessage(), true);
 				http_response_code(500);
 				echo json_encode(['error' => 'Error al cargar servicios']);
 			}
 		} else {
-		
 			try {
 				// Obtener el día actual en formato inglés (como en la BD)
 				$dia_actual = $this->obtenerDiaSemana($fecha);
 
-				$this->log("Día actual: " . $dia_actual);
+				$this->log("Día actual para calculo de Predespacho: " . $dia_actual);
 
 				if ($fecha) {
 					$fecha_programada2 = $fecha;
 				} else {
 					$fecha_programada2 = date('Y-m-d');
 				}
+				$dayWord = $this->obtenerDiaSemana($fecha_programada2);
 
-				$query = "SELECT DISTINCT ct.id_cliente, c.nombre AS cliente, ct.id_direccion, d.direccion, ct.id_dia_semana, di.dia_ingles AS day_work,
-							se.id_servicio, se.fecha_programada AS 'ultimo_servicio', DATEDIFF(:v_fecha01, se.fecha_programada) AS dias, fs.concepto,
-							se.hora_aviso_usuario, se.hora_finalizado, se.hora_inicio_gps, se.hora_fin_gps, ct.mensual_calendario      
+				if (!$this->busca_preservicio($fecha_programada2)) {
+					// === NUEVA LÓGICA: Generar preservicios basados en route_day_assignments (si no existen servicios)
+					// 2) Limpiar preservicios pendientes para esta fecha (evitar duplicados)
+					try {
+						$delSQL = "DELETE FROM preservicios WHERE fecha_programada = :v_fecha AND transferred = 0";
+						$this->ejecutarConsulta($delSQL, '', [':v_fecha' => $fecha_programada2]);
+					} catch (Exception $e) {
+						$this->logWithBacktrace("No se pudo limpiar preservicios antiguos: " . $e->getMessage(), true);
+					}
+
+					// 3) Obtener rutas asignadas para el día
+					$rutasSQL = "SELECT rda.id_ruta, r.nombre_ruta 
+									FROM route_day_assignments AS rda 
+									LEFT JOIN rutas r ON r.id_ruta = rda.id_ruta 
+									WHERE rda.day_of_week = :v_day 
+									ORDER BY r.nombre_ruta";
+
+					$rutas = $this->ejecutarConsulta($rutasSQL, '', [':v_day' => $dayWord], 'fetchAll');
+
+					// 4) Por cada ruta, obtener clientes compatibles y crear preservicios
+					if ($rutas) {
+						foreach ($rutas as $ruta) {
+							$id_ruta = $ruta['id_ruta'];
+							$clientesSQL = "SELECT ct.id_contrato, ct.id_cliente, ct.id_direccion, c.nombre AS cliente, d.direccion, ct.retraso_invierno,
+									d.lat, d.lng, di.dia_ingles AS dia_servicio, fs.concepto, ct.id_ruta, rd.orden_en_ruta,	rd.tiempo_servicio
+								FROM rutas_direcciones rd
+								JOIN direcciones d ON rd.id_direccion = d.id_direccion
+								JOIN contratos ct ON ct.id_direccion = d.id_direccion
+								JOIN clientes c ON c.id_cliente = ct.id_cliente 
+								JOIN dias_semana di ON ct.id_dia_semana = di.id_dia_semana
+								JOIN frecuencia_servicio fs ON fs.id_frecuencia_servicio = ct.id_frecuencia_servicio
+								WHERE ct.id_status = 18 AND rd.id_ruta = :v_id_ruta AND di.dia_ingles = :v_dia_ingles
+								ORDER BY rd.orden_en_ruta";
+
+							$paramsClientes = [':v_id_ruta' => $id_ruta, ':v_dia_ingles' => $dayWord];
+							$clientes = $this->ejecutarConsulta($clientesSQL, '', $paramsClientes, 'fetchAll');
+
+							if ($clientes) {
+								foreach ($clientes as $cl) {
+									$meta = [
+										'origin' => 'route_day_assignment',
+										'route_id' => $id_ruta,
+										'route_name' => $ruta['nombre_ruta'] ?? null,
+										'contract_id' => $cl['id_contrato'] ?? null
+									];
+
+									$datos = [
+										['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $cl['id_cliente']],
+										['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $cl['id_direccion']],
+										['campo_nombre' => 'fecha_programada', 'campo_marcador' => ':fecha_programada', 'campo_valor' => $fecha_programada2],
+										['campo_nombre' => 'dia_servicio', 'campo_marcador' => ':dia_servicio', 'campo_valor' => $cl['dia_servicio'] ?? $dayWord],
+										['campo_nombre' => 'estado_servicio', 'campo_marcador' => ':estado_servicio', 'campo_valor' => 'pendiente'],
+										['campo_nombre' => 'id_status', 'campo_marcador' => ':id_status', 'campo_valor' => 37],
+										['campo_nombre' => 'id_ruta', 'campo_marcador' => ':id_ruta', 'campo_valor' => $cl['id_ruta']],
+										['campo_nombre' => 'created_meta', 'campo_marcador' => ':created_meta', 'campo_valor' => json_encode($meta)],
+										['campo_nombre' => 'retraso_invierno', 'campo_marcador' => ':retraso_invierno', 'campo_valor' => $cl['retraso_invierno']],
+										['campo_nombre' => 'orden_en_ruta', 'campo_marcador' => ':orden_en_ruta', 'campo_valor' => $cl['orden_en_ruta']],
+										['campo_nombre' => 'tiempo_servicio', 'campo_marcador' => ':tiempo_servicio', 'campo_valor' => $cl['tiempo_servicio']]
+									];
+
+									try {
+										$this->guardarDatos('preservicios', $datos);
+									} catch (Exception $e) {
+										$this->logWithBacktrace("Error guardando preservicio: " . $e->getMessage(), true);
+									}
+								}
+								// fin foreach clientes
+							}
+						}
+						// fin foreach rutas
+					}
+
+					// 5) Incluir servicios reprogramados (id_status = replanificado) que ya apunten a la fecha
+					$reprogSQL = "SELECT s.id_servicio, s.id_cliente, s.id_direccion, s.fecha_programada, s.id_status, s.id_truck, 
+							s.id_crew_1, s.id_crew_2, s.id_crew_3, s.id_crew_4, c.tiempo_servicio, 99 as orden_en_ruta, c.retraso_invierno
+						FROM servicios s
+						LEFT JOIN contratos c ON c.id_cliente = s.id_cliente AND c.id_direccion = s.id_direccion
+						WHERE s.id_status = :v_replanificado 
+							AND DATE(s.fecha_programada) = :v_fecha";
+					$params = [
+						':v_replanificado' => $this->id_status_replanificado,
+						':v_fecha' => $fecha_programada2
+					];
+					$reprog = $this->ejecutarConsulta($reprogSQL, '', $params, 'fetchAll');
+					if ($reprog) {
+						foreach ($reprog as $r) {
+							$meta = ['origin' => 'reprogrammed', 'source_servicio' => $r['id_servicio']];
+							$datos = [
+								['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $r['id_cliente']],
+								['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $r['id_direccion']],
+								['campo_nombre' => 'fecha_programada', 'campo_marcador' => ':fecha_programada', 'campo_valor' => $fecha_programada2],
+								['campo_nombre' => 'dia_servicio', 'campo_marcador' => ':dia_servicio', 'campo_valor' => $dayWord],
+								['campo_nombre' => 'estado_servicio', 'campo_marcador' => ':estado_servicio', 'campo_valor' => 'reprogramado'],
+								['campo_nombre' => 'id_status', 'campo_marcador' => ':id_status', 'campo_valor' => $r['id_status']],
+								['campo_nombre' => 'created_meta', 'campo_marcador' => ':created_meta', 'campo_valor' => json_encode($meta)],
+								['campo_nombre' => 'retraso_invierno', 'campo_marcador' => ':retraso_invierno', 'campo_valor' => $r['retraso_invierno']],
+								['campo_nombre' => 'orden_en_ruta', 'campo_marcador' => ':orden_en_ruta', 'campo_valor' => $r['orden_en_ruta']],
+								['campo_nombre' => 'tiempo_servicio', 'campo_marcador' => ':tiempo_servicio', 'campo_valor' => $r['tiempo_servicio']]
+							];
+							try {
+								$this->guardarDatos('preservicios', $datos);
+							} catch (Exception $e) {
+								$this->logWithBacktrace("Error guardando preservicio reprogramado: " . $e->getMessage(), true);
+							}
+						}
+					}
+				}
+
+				// 6) Ahora leer todos los preservicios creados para la fecha y renderizarlos como no-asignados (editable)
+				$fetchPresSQL = "SELECT p.*, c.nombre AS cliente, d.direccion, d.id_geofence, d.lat, d.lng, 
+						p.id_ruta, p.id_ruta_new, ru.nombre_ruta, ru_n.nombre_ruta AS nombre_ruta_new
+					FROM preservicios p
+					LEFT JOIN clientes c ON p.id_cliente = c.id_cliente
+					LEFT JOIN direcciones d ON p.id_direccion = d.id_direccion
+					LEFT JOIN rutas ru ON p.id_ruta = ru.id_ruta
+					LEFT JOIN rutas ru_n ON p.id_ruta_new = ru_n.id_ruta
+					WHERE DATE(p.fecha_programada) = :v_fecha_programada 
+						AND p.transferred = 0
+					ORDER BY p.id_ruta, p.orden_en_ruta";
+
+				$params = [
+					':v_fecha_programada' => $fecha_programada2
+				];
+
+				$preservs = $this->ejecutarConsulta($fetchPresSQL, '', $params, 'fetchAll');
+
+				$htmlAsignados = '';
+				$htmlNoAsignados = '';
+				$htmlTotalTiempo = '';
+
+				// Los preservicios generados deben mostrarse en el panel izquierdo (asignados)
+				if ($preservs) {
+					foreach ($preservs as $item) {
+						// Enriquecer con último servicio y datos de frecuencia/concepto
+						try {
+							if ($item['id_ruta_new'] == null) {
+								$campo = "'' AS id_ruta_new, '' AS nombre_ruta_new ";
+							} else {
+								$campo = $item['id_ruta_new'] . " AS id_ruta_new";
+								if ($item['nombre_ruta_new'] == null) {
+									$campo .= ", '' AS nombre_ruta_new";
+								} else {
+									$campo .= ", '" . $item['nombre_ruta_new'] . "' AS nombre_ruta_new";
+								}
+							}
+							$lastSQL = "SELECT se.id_servicio, se.fecha_programada AS ultimo_servicio, 
+									COALESCE(DATEDIFF(:v_fecha_cons, se.fecha_programada), -1) AS dias,
+									se.hora_aviso_usuario, se.hora_finalizado, se.hora_inicio_gps, se.hora_fin_gps,
+									se.id_status, fs.id_frecuencia_servicio, fs.concepto, 
+									ct.id_ruta, ru.nombre_ruta, ru.color_ruta, ct.retraso_invierno
+									" . $campo . "
+								FROM servicios se
+								LEFT JOIN contratos ct ON se.id_cliente = ct.id_cliente AND se.id_direccion = ct.id_direccion
+								LEFT JOIN frecuencia_servicio fs ON ct.id_frecuencia_servicio = fs.id_frecuencia_servicio
+								LEFT JOIN rutas ru ON ct.id_ruta = ru.id_ruta
+								WHERE se.id_cliente = :v_id_cliente
+								ORDER BY se.fecha_programada DESC, se.id_servicio DESC
+								LIMIT 1";
+
+							$paramsLast = [
+								':v_id_cliente' => $item['id_cliente'],
+								':v_fecha_cons' => $fecha_programada2
+							];
+							$se = $this->ejecutarConsulta($lastSQL, '', $paramsLast);
+
+							if ($se && is_array($se)) {
+								$item['ultimo_servicio'] = $se['ultimo_servicio'] ?? null;
+								$item['dias'] = isset($se['dias']) ? $se['dias'] : null;
+								$item['hora_aviso_usuario'] = $se['hora_aviso_usuario'] ?? null;
+								$item['hora_finalizado'] = $se['hora_finalizado'] ?? null;
+								$item['hora_inicio_gps'] = $se['hora_inicio_gps'] ?? null;
+								$item['hora_fin_gps'] = $se['hora_fin_gps'] ?? null;
+								$item['id_frecuencia_servicio'] = $se['id_frecuencia_servicio'] ?? null;
+								$item['concepto'] = $se['concepto'] ?? ($item['concepto'] ?? null);
+								$item['id_status'] = $se['id_status'] ?? null;
+								if ($item['id_ruta'] == null && $item['id_ruta_new'] != null) {
+									$item['nombre_ruta'] = $item['nombre_ruta_new'] ?? null;
+								} else {
+									if ($item['id_ruta'] != null && $item['id_ruta_new'] != null) {
+										$item['nombre_ruta'] = $item['nombre_ruta_new'] ?? null;
+									} else {
+										$item['nombre_ruta'] = $se['nombre_ruta'] ?? null;
+									}
+								}
+								$item['color_ruta'] = $se['color_ruta'] ?? null;
+							} else {
+								// No hay servicio previo: marcar como nuevo
+								$item['ultimo_servicio'] = null;
+								$item['dias'] = null;
+								$item['hora_aviso_usuario'] = null;
+								$item['hora_finalizado'] = null;
+								$item['hora_inicio_gps'] = null;
+								$item['hora_fin_gps'] = null;
+								$item['id_frecuencia_servicio'] = $item['id_frecuencia_servicio'] ?? null;
+								$item['concepto'] = $item['concepto'] ?? null;
+								$item['id_status'] = null;
+								$item['nombre_ruta'] = null;
+								$item['color_ruta'] = null;
+							}
+						} catch (Exception $e) {
+							$this->logWithBacktrace("Error obteniendo ultimo servicio para cliente {$item['id_cliente']}: " . $e->getMessage(), true);
+						}
+
+						// Asegurar campo day_work usado por renderItemDespacho
+						$item['day_work'] = $item['day_work'] ?? $item['dia_servicio'] ?? $dayWord;
+
+						$htmlAsignados .= $this->renderItemDespacho($item, 'asignado', false, true);
+					}
+
+					// === Calcular tiempo total por ruta ===
+					$rutasTiempos = [];
+
+					foreach ($preservs as $item) {
+						// Solo considerar preservicios asignados a una ruta
+						if ($item['id_ruta'] === null || $item['id_ruta'] == 0) {
+							continue;
+						}
+
+						$idRuta = $item['id_ruta'];
+						$nombreRuta = $item['nombre_ruta'] ?? "Ruta {$idRuta}";
+						$tiempoMinutos = (int)($item['tiempo_servicio'] ?? 0);
+
+						if (!isset($rutasTiempos[$idRuta])) {
+							$rutasTiempos[$idRuta] = [
+								'nombre' => $nombreRuta,
+								'total_minutos' => 0,
+								'servicios' => 0
+							];
+						}
+
+						$rutasTiempos[$idRuta]['total_minutos'] += $tiempoMinutos;
+						$rutasTiempos[$idRuta]['servicios']++;
+					}
+
+					// === Generar HTML ===
+					if (!empty($rutasTiempos)) {
+						$htmlTotalTiempo .= '<ul class="lista-tiempo-rutas" style="list-style: none; padding: 0; margin: 10px 0;">';
+						foreach ($rutasTiempos as $datos) {
+							$horaFormateada = $this->minutosAHora($datos['total_minutos']);
+							$htmlTotalTiempo .= "<li style=\"padding: 4px 0; border-bottom: 1px solid #eee;\">
+								<strong>{$datos['nombre']}</strong> ({$datos['servicios']} servicios) 
+								&nbsp; <em style=\"color: #27ae60;\">⏱️ {$horaFormateada}</em>
+							</li>";
+						}
+						$htmlTotalTiempo .= '</ul>';
+					} else {
+						$htmlTotalTiempo = '<p style="color: #888; font-style: italic;">No hay rutas asignadas</p>';
+					}					
+				} else {
+					$htmlAsignados = '<p style="color: #888;">No items</p>';
+				}
+
+				// Los contratos no asignados (disponibles)
+				// Nuevo comportamiento solicitado: tomar TODOS los contratos activos (ct.id_status = 18)
+				// que NO estén en preservicios para la fecha, sin aplicar análisis de frecuencia/días/servicios.
+				try {
+					$noAsignadosSQL = "SELECT DISTINCT ct.id_contrato, ct.id_cliente, c.nombre AS cliente, ct.id_direccion, d.direccion, 
+							di.dia_ingles AS day_work, se.id_servicio, se.fecha_programada AS ultimo_servicio, se.hora_aviso_usuario, 
+							se.hora_finalizado, se.hora_inicio_gps, se.hora_fin_gps, fs.id_frecuencia_servicio, fs.concepto, ct.id_ruta, ru.nombre_ruta, ru.color_ruta,
+							COALESCE(FLOOR(TIME_TO_SEC(ct.tiempo_servicio) / 60), 0) AS tiempo_servicio
 						FROM contratos ct
-						LEFT JOIN clientes AS c ON ct.id_cliente = c.id_cliente
-						LEFT JOIN direcciones AS d ON ct.id_direccion = d.id_direccion
-						LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = ct.id_frecuencia_servicio
-						LEFT JOIN dias_semana AS di ON di.id_dia_semana = ct.id_dia_semana
+						LEFT JOIN clientes c ON ct.id_cliente = c.id_cliente
+						LEFT JOIN direcciones d ON ct.id_direccion = d.id_direccion
+						LEFT JOIN frecuencia_servicio fs ON fs.id_frecuencia_servicio = ct.id_frecuencia_servicio
+						LEFT JOIN dias_semana di ON di.id_dia_semana = ct.id_dia_semana
+						LEFT JOIN rutas ru ON ct.id_ruta = ru.id_ruta
 						LEFT JOIN (
-							SELECT 
-								id_servicio,
-								id_cliente,
-								fecha_programada,
-								hora_aviso_usuario,
-								hora_finalizado,
-								hora_inicio_gps,
-								hora_fin_gps,
+							SELECT id_servicio, id_cliente, fecha_programada, hora_aviso_usuario, hora_finalizado, hora_inicio_gps, hora_fin_gps,
 								ROW_NUMBER() OVER (PARTITION BY id_cliente ORDER BY fecha_programada DESC, id_servicio DESC) AS rn
 							FROM servicios
 						) AS se ON se.id_cliente = ct.id_cliente AND se.rn = 1
-						WHERE ct.id_status = 18 AND di.dia_ingles = :v_day_work AND (
-							CASE ct.id_frecuencia_servicio
-							WHEN 1 THEN DATEDIFF(:v_fecha02, se.fecha_programada) >= 7
-							WHEN 2 THEN DATEDIFF(:v_fecha03, se.fecha_programada) >= 14
-							WHEN 3 THEN DATEDIFF(:v_fecha04, se.fecha_programada) >= 21
-							WHEN 4 THEN
-								CASE ct.mensual_calendario
-								WHEN 1 THEN :v_fecha05 >= DATE_ADD(se.fecha_programada, INTERVAL 1 MONTH)
-								ELSE DATEDIFF(:v_fecha06, se.fecha_programada) >= 28
-								END
-							ELSE DATEDIFF(:v_fecha07, se.fecha_programada) >= 7
-							END
+						WHERE ct.id_status = 18
+						AND ct.id_cliente NOT IN (
+							SELECT DISTINCT p.id_cliente 
+							FROM preservicios p 
+							WHERE DATE(p.fecha_programada) = :v_fecha_pres 
+								AND p.transferred = 0
 						)
-						ORDER BY ct.id_cliente;
-					";
+						ORDER BY di.dia_ingles, c.nombre";
 
-				$params = [
-					':v_fecha01' => $fecha_programada2,
-					':v_day_work' => $dia_actual,
-					':v_fecha02' => $fecha_programada2,
-					':v_fecha03' => $fecha_programada2,
-					':v_fecha04' => $fecha_programada2,
-					':v_fecha05' => $fecha_programada2,
-					':v_fecha06' => $fecha_programada2,
-					':v_fecha07' => $fecha_programada2
-				];
+					$paramsNoAsig = [
+						':v_fecha_pres' => $fecha_programada2
+					];
 
-				$this->log("Consulta de listarServicios_despachos(): " . $query);
-				$this->log("Parametros: " . json_encode($params));
+					$noAsignados = $this->ejecutarConsulta($noAsignadosSQL, '', $paramsNoAsig, 'fetchAll');
 
-				$asignados = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
+					if ($noAsignados) {
+						foreach ($noAsignados as $item) {
+							$htmlNoAsignados .= $this->renderItemDespacho($item, 'no-asignado', false, false);
+						}
+					} else {
+						$htmlNoAsignados = '<p style="color: #888;">No items</p>';
+					}
+				} catch (Exception $e) {
+					$this->logWithBacktrace("Error recalculando no-asignados (simplificado): " . $e->getMessage(), true);
+					$htmlNoAsignados = '<p style="color: #888;">Error calculating available contracts</p>';
+				}
 
-				$this->log("Resultado de la consulta: " . print_r($asignados, true));
-
-				$query = "SELECT DISTINCT ct.id_cliente, c.nombre AS cliente, ct.id_direccion, d.direccion, ct.id_dia_semana, di.dia_ingles AS day_work,
-							se.id_servicio, se.fecha_programada AS ultimo_servicio, COALESCE(DATEDIFF(:v_fecha01, se.fecha_programada), -1) AS dias, fs.id_frecuencia_servicio, 
-							fs.concepto, se.hora_aviso_usuario, se.hora_finalizado, se.hora_inicio_gps, se.hora_fin_gps, ct.mensual_calendario            
+				// 7) Construir lista de contratos que deberían ser hoy pero NO pertenecen a ninguna ruta asignada
+				try {
+					$sinRutaSQL = "SELECT DISTINCT ct.id_contrato, ct.id_cliente, c.nombre AS cliente, ct.id_direccion, d.direccion, di.dia_ingles AS day_work,
+						se.fecha_programada AS ultimo_servicio, COALESCE(DATEDIFF(:v_fecha01, se.fecha_programada), -1) AS dias, fs.concepto
 						FROM contratos ct
-						LEFT JOIN clientes AS c ON ct.id_cliente = c.id_cliente
-						LEFT JOIN direcciones AS d ON ct.id_direccion = d.id_direccion
-						LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = ct.id_frecuencia_servicio
-						LEFT JOIN dias_semana AS di ON di.id_dia_semana = ct.id_dia_semana
+						LEFT JOIN clientes c ON ct.id_cliente = c.id_cliente
+						LEFT JOIN direcciones d ON ct.id_direccion = d.id_direccion
+						LEFT JOIN dias_semana di ON ct.id_dia_semana = di.id_dia_semana
+						LEFT JOIN frecuencia_servicio fs ON fs.id_frecuencia_servicio = ct.id_frecuencia_servicio
 						LEFT JOIN (
-							SELECT 
-								id_servicio,
-								id_cliente,
-								fecha_programada,
-								hora_aviso_usuario,
-								hora_finalizado,
-								hora_inicio_gps,
-								hora_fin_gps,
+							SELECT id_servicio, id_cliente, fecha_programada,
 								ROW_NUMBER() OVER (PARTITION BY id_cliente ORDER BY fecha_programada DESC, id_servicio DESC) AS rn
 							FROM servicios
-							) AS se 
-								ON se.id_cliente = ct.id_cliente AND se.rn = 1
+						) AS se ON se.id_cliente = ct.id_cliente AND se.rn = 1
+						LEFT JOIN rutas_direcciones rd ON d.id_direccion = rd.id_direccion
+						LEFT JOIN rutas_zonas_cuadricula rz ON rd.id_ruta = rz.id_ruta
+						LEFT JOIN route_day_assignments rda ON rz.id_ruta = rda.id_ruta AND rda.day_of_week = :v_day
 						WHERE ct.id_status = 18
-							AND ct.id_cliente NOT IN (
-								SELECT DISTINCT ct.id_cliente      
-									FROM contratos ct
-									LEFT JOIN clientes AS c ON ct.id_cliente = c.id_cliente
-									LEFT JOIN direcciones AS d ON ct.id_direccion = d.id_direccion
-									LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = ct.id_frecuencia_servicio
-									LEFT JOIN dias_semana AS di ON di.id_dia_semana = ct.id_dia_semana
-									LEFT JOIN (
-										SELECT 
-											id_servicio,
-											id_cliente,
-											fecha_programada,
-											ROW_NUMBER() OVER (PARTITION BY id_cliente ORDER BY fecha_programada DESC, id_servicio DESC) AS rn
-										FROM servicios
-									) AS se ON se.id_cliente = ct.id_cliente AND se.rn = 1
-									WHERE ct.id_status = 18 AND di.dia_ingles = :v_day_work AND (
-											CASE ct.id_frecuencia_servicio
-											WHEN 1 THEN DATEDIFF(:v_fecha02, se.fecha_programada) >= 7
-											WHEN 2 THEN DATEDIFF(:v_fecha03, se.fecha_programada) >= 14
-											WHEN 3 THEN DATEDIFF(:v_fecha04, se.fecha_programada) >= 21
-											WHEN 4 THEN
-												CASE ct.mensual_calendario
-												WHEN 1 THEN :v_fecha05 >= DATE_ADD(se.fecha_programada, INTERVAL 1 MONTH)
-												ELSE DATEDIFF(:v_fecha06, se.fecha_programada) >= 28
-												END
-											ELSE DATEDIFF(:v_fecha07, se.fecha_programada) >= 7
-											END
-										)
-									ORDER BY ct.id_cliente
+							AND di.dia_ingles = :v_day_work
+							AND (
+								CASE ct.id_frecuencia_servicio
+									WHEN 1 THEN DATEDIFF(:v_fecha02, se.fecha_programada) >= 7
+									WHEN 2 THEN DATEDIFF(:v_fecha03, se.fecha_programada) >= 14
+									WHEN 3 THEN DATEDIFF(:v_fecha04, se.fecha_programada) >= 21
+									WHEN 4 THEN
+										CASE ct.mensual_calendario
+											WHEN 1 THEN :v_fecha05 >= DATE_ADD(se.fecha_programada, INTERVAL 1 MONTH)
+											ELSE DATEDIFF(:v_fecha06, se.fecha_programada) >= 28
+										END
+									ELSE DATEDIFF(:v_fecha07, se.fecha_programada) >= 7
+								END
 							)
-						ORDER BY di.dia_ingles, c.nombre;";
+							AND ct.id_cliente NOT IN (
+								SELECT DISTINCT p.id_cliente 
+								FROM preservicios p 
+								WHERE p.fecha_programada = :v_fecha_programada 
+								AND p.transferred = 0
+							)
+							AND rda.id_ruta IS NULL
+						ORDER BY di.dia_ingles, c.nombre";
 
-				$params = [
-					':v_fecha01' => $fecha_programada2,
-					':v_day_work' => $dia_actual,
-					':v_fecha02' => $fecha_programada2,
-					':v_fecha03' => $fecha_programada2,
-					':v_fecha04' => $fecha_programada2,
-					':v_fecha05' => $fecha_programada2,
-					':v_fecha06' => $fecha_programada2,
-					':v_fecha07' => $fecha_programada2
-				];
+					$paramsSinRuta = [
+						':v_fecha01' => $fecha_programada2,
+						':v_day_work' => strtoupper($dayWord),
+						':v_fecha02' => $fecha_programada2,
+						':v_fecha03' => $fecha_programada2,
+						':v_fecha04' => $fecha_programada2,
+						':v_fecha05' => $fecha_programada2,
+						':v_fecha06' => $fecha_programada2,
+						':v_fecha07' => $fecha_programada2,
+						':v_day' => strtolower($dayWord),
+						':v_fecha_programada' => date($fecha_programada2)
+					];
+					$sinRuta = $this->ejecutarConsulta($sinRutaSQL, '', $paramsSinRuta, 'fetchAll');
 
-				$this->log("Consulta de listarServicios_despachos Descartados(): " . $query);
-
-				$disponibles = $this->ejecutarConsulta($query, '', $params, 'fetchAll');
-
-				// Supongamos que ya tienes $asignados y $noAsignados
-				$htmlAsignados = '';
-				foreach ($asignados as $item) {
-					$htmlAsignados .= $this->renderItemDespacho($item, 'asignado', $si_existe, true);
+					$htmlNoRoute = '';
+					if ($sinRuta) {
+						$htmlNoRoute .= '<div class="sinruta-header"><strong>Possible services for this date with no route assigned. (' . count($sinRuta) . ')</strong></div>';
+						$htmlNoRoute .= '<ul style="list-style: none; padding-left:0;">';
+						foreach ($sinRuta as $sr) {
+							$nombre = htmlspecialchars($sr['cliente'] ?? '—');
+							$dir = htmlspecialchars($sr['direccion'] ?? '—');
+							$ultimo = !empty($sr['ultimo_servicio']) && $sr['ultimo_servicio'] !== '0000-00-00' ? (new \DateTime($sr['ultimo_servicio']))->format('m/d/Y') : '—';
+							$htmlNoRoute .= '<li style="padding:6px 0; border-bottom:1px solid #eee;">' . $nombre . ' — ' . $dir . ' <small style="color:#666;">(Last: ' . $ultimo . ')</small></li>';
+						}
+						$htmlNoRoute .= '</ul>';
+					} else {
+						$htmlNoRoute = '<p style="color: #888;">No missing services detected.</p>';
+					}
+				} catch (Exception $e) {
+					$this->logWithBacktrace("Error generando lista sin ruta: " . $e->getMessage(), true);
+					$htmlNoRoute = '<p style="color: #888;">Error generating missing schedule.</p>';
 				}
 
-				$this->log("HTML registros asignados: " . $htmlAsignados);
-
-				$htmlNoAsignados = '';
-				foreach ($disponibles as $item) {
-					$htmlNoAsignados .= $this->renderItemDespacho($item, 'no-asignado', $si_existe, false);
-				}
-
-				$this->log("HTML registros No asignados: " . $htmlNoAsignados);
-
-				// Responder con HTML
-				// === PASO 4: Enviar AMBOS conjuntos en un solo JSON (solo echo, sin return) ===
 				http_response_code(response_code: 200);
 				echo json_encode([
-					'html_asignados' => $htmlAsignados ?: '<p style="color: #888;">No items</p>',
-					'html_no_asignados' => $htmlNoAsignados ?: '<p style="color: #888;">No items</p>',
+					'html_asignados' => $htmlAsignados,
+					'html_no_asignados' => $htmlNoAsignados,
+					'html_no_route' => $htmlNoRoute,
+					'htmlTotalTiempo' => $htmlTotalTiempo,
 					'editable' => true
 				]);
 
+				return;
 			} catch (Exception $e) {
 				$this->logWithBacktrace("Error en listarServiciosConEstado: " . $e->getMessage(), true);
 				http_response_code(500);
-				echo json_encode(['error' => 'Error al cargar servicios']);
+				echo json_encode(['error' => 'Error al cargar Preservicios']);
 			}
 		}
 	}
 
-	// archivo: serviciosAjax.php (o tu controlador)
+	// === Convertir minutos a HH:mm:ss ===
+	public function minutosAHora($minutos) {
+		$horas = floor($minutos / 60);
+		$min = $minutos % 60;
+		return sprintf('%d:%02d:00', $horas, $min);
+	}
+
+	private function busca_preservicio($fecha_programada2)
+	{
+		$sql_pre = "SELECT COUNT(*) AS conteo
+						FROM preservicios
+						WHERE fecha_programada = :v_fecha_programa";
+		$param = [
+			":v_fecha_programa" => $fecha_programada2
+		];
+
+		$result = $this->ejecutarConsulta($sql_pre, '', $param);
+
+		return $result['conteo'] > 0;
+	}
 
 	public function renderItemDespacho($item, $tipo, $si_existe, $p_assing)
 	{
 		// Sanitizar
-		if ($si_existe){
+		if ($si_existe) {
 			$cod_servicio = htmlspecialchars($item['id_servicio'] ?? '—');
 		};
 		$nombreCliente = htmlspecialchars($item['cliente'] ?? $item['nombre'] ?? '—');
+		if ($item['tiempo_servicio'] == 0 || empty($item['tiempo_servicio'])) {
+			$tiempo_servicio = 'Unassigned';
+		} else {
+			$tiempo_servicio = htmlspecialchars($item['tiempo_servicio']);
+		}
 		$direccion = htmlspecialchars($item['direccion'] ?? '—');
-		$zona = !empty($item['zona']) ? '<div style="font-size:0.85em; color:#555; margin-top:0.2rem;">Zona: ' . htmlspecialchars($item['zona']) . '</div>' : '';
+		$zona = !empty($item['zona']) ? '<div class="formatoDireccion colorA">Zona: ' . htmlspecialchars($item['zona']) . '</div>' : '';
+
+		$colorRuta = !empty(trim($item['color_ruta'] ?? '')) ? htmlspecialchars($item['color_ruta']) : '#ffffffff';
+		$nombre_ruta = !empty(trim($item['nombre_ruta'] ?? '')) ? htmlspecialchars($item['nombre_ruta']) : '—';
 
 		$dayWork = !empty(trim($item['day_work'] ?? '')) ? htmlspecialchars($item['day_work']) : '—';
 		$concepto = htmlspecialchars($item['concepto'] ?? '—');
@@ -3377,14 +3722,12 @@ class serviciosController extends mainModel
 
 			// Aplicar color según el umbral
 			$colorDias = $diasNum >= $umbral ? '#2c7' : '#a33';
-
 		} elseif (empty($item['ultimo_servicio']) || $item['ultimo_servicio'] === '0000-00-00') {
-			$diasTexto = 'Nuevo cliente';
+			$diasTexto = 'New customer';
 			$colorDias = '#555';
 		}
 
 		$idCliente = (int) ($item['id_cliente'] ?? $item['id'] ?? 0);
-
 
 		$m1_1 = $item['hora_aviso_usuario'];
 		$m1_2 = $item['hora_finalizado'];
@@ -3409,42 +3752,48 @@ class serviciosController extends mainModel
 		$claseColor2 = ($m2_0 === 'X') ? 'con_color' : 'sin_color';
 		$claseColor3 = ($m3_0 === 'X') ? 'con_color' : 'sin_color';
 
-		$html ="
+		$html = "
 			<div class=\"item-despacho dis_elem\" draggable=\"true\" data-id=\"{$idCliente}\" data-tipo=\"{$tipo}\">";
-		if ($p_assing){
-			if ($si_existe){
-				$html .="
-				<div>
-					<div style=\"font-weight: bold; word-break: break-word;\"># Service: {$cod_servicio} - {$nombreCliente}</div>
-					<div style=\"font-size: 0.85em; color: #555;\">{$direccion}</div>
-					{$zona}
-				</div>";
-
-			} else {
-				$html .="
-				<div>
-					<div style=\"font-weight: bold; word-break: break-word;\">{$nombreCliente}</div>
-					<div style=\"font-size: 0.85em; color: #555;\">{$direccion}</div>
-					{$zona}
-				</div>";
-			};
-		} else {
-				$html .="
-				<div>
-					<div style=\"font-weight: bold; word-break: break-word;\">{$nombreCliente}</div>
-					<div style=\"font-size: 0.85em; color: #555;\">{$direccion}</div>
-					{$zona}
-				</div>";
-		};
-		$html .="
-				<div style=\"text-align: center;\">
-					<div style=\"font-weight: bold; color: #2c7;\">{$dayWork}</div>
-					<div style=\"font-size: 0.85em; color: #666;\">{$concepto}</div>
-				</div>
-				<div style=\"text-align: right; font-size: 0.82em; color: #555;\">
-					<div><span style=\"color: #777;\">Last:</span> {$ultimoServicio}</div>
+			if ($p_assing) {
+				if ($si_existe) {
+					$html .= "
 					<div>
-						<span style=\"color: #777;\">Days:</span>
+						<div class=\"formatoNombre dis_orienta\"># Service: {$cod_servicio} - {$nombreCliente} &nbsp;" . 
+						($tiempo_servicio !== 'Unassigned' ? "<div class=\"formatoTiempo\">Service time: {$tiempo_servicio} min</div>" : "") . 
+						"</div>
+						<div class=\"formatoDireccion colorA\">{$direccion}</div>
+						{$zona}
+					</div>";
+				} else {
+					$html .= "
+					<div>
+						<div class=\"formatoNombre dis_orienta\">{$nombreCliente} &nbsp;" . 
+						($tiempo_servicio !== 'Unassigned' ? "<div class=\"formatoTiempo\">Service time: {$tiempo_servicio} min</div>" : "") . 
+						"</div>
+						<div class=\"formatoDireccion colorA\">{$direccion}</div>
+						{$zona}
+					</div>";
+				}
+			} else {
+				$html .= "
+				<div>
+					<div class=\"formatoNombre dis_orienta\">{$nombreCliente} &nbsp;" . 
+					($tiempo_servicio !== 'Unassigned' ? "<div class=\"formatoTiempo\">Service time: {$tiempo_servicio} min</div>" : "") . 
+					"</div>
+					<div class=\"formatoDireccion colorA\">{$direccion}</div>
+					{$zona}
+				</div>";
+			}
+		$html .= "
+				<div style=\"text-align: center;\">
+					<div class=\"formatoRuta\" style=\"background: {$colorRuta};\"><span class=\"colorE\">Route:</span> $nombre_ruta</div>
+					<div class=\"formatoNombre colorC\">{$dayWork}</div>
+					<div class=\"formatoDireccion colorB\">{$concepto}</div>
+				</div>
+				<div class=\"formatoUltSer colorA;\">
+					<div><span class=\"colorD\">Last:</span> {$ultimoServicio}</div>
+					<div>
+						<span class=\"colorD\">Days:</span>
 						<span style=\"color: {$colorDias}; font-weight: bold; margin-left: 0.3rem;\">{$diasTexto}</span>
 					</div>
 				</div>
@@ -3608,9 +3957,114 @@ class serviciosController extends mainModel
 		$htmlAsignados = $this->renderServicio($registro);
 
 		http_response_code(response_code: 200);
-		echo $htmlAsignados ;
+		echo $htmlAsignados;
 	}
 
+	/**
+	 * Añadir preservicios para un listado de clientes en una fecha
+	 * Recibe array de ids de cliente y la fecha (YYYY-MM-DD)
+	 */
+	public function addPreservicios($clientes, $fecha, $id_ruta_new)
+	{
+		try {
+			$created = [];
+			foreach ($clientes as $id_cliente) {
+				$id_cliente = (int)$id_cliente;
+				if ($id_cliente <= 0) continue;
+
+				// Intentar obtener una dirección asociada al contrato del cliente
+				$q = "SELECT ct.id_contrato, ct.id_direccion, di.dia_ingles AS dia_servicio, fs.concepto, ct.id_ruta, 
+							ru.nombre_ruta, ru.color_ruta						
+						FROM contratos ct
+						LEFT JOIN dias_semana di ON ct.id_dia_semana = di.id_dia_semana
+						LEFT JOIN frecuencia_servicio fs ON ct.id_frecuencia_servicio = fs.id_frecuencia_servicio
+						LEFT JOIN rutas ru ON ct.id_ruta = ru.id_ruta
+						WHERE ct.id_cliente = :id_cliente LIMIT 1";
+
+				try {
+					$res = $this->ejecutarConsulta($q, '', [':id_cliente' => $id_cliente]);
+
+					$id_direccion = $res['id_direccion'] ?? null;
+					$dia_servicio = $res['dia_servicio'] ?? $this->obtenerDiaSemana($fecha);
+					$meta = ['origin' => 'manual_from_ui', 'created_by' => $this->usuario_id ?? null];
+					$id_ruta = !empty(trim($res['id_ruta'] ?? '')) ? $res['id_ruta'] : "";
+
+					$datos = [
+						['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $id_cliente],
+						['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $id_direccion],
+						['campo_nombre' => 'fecha_programada', 'campo_marcador' => ':fecha_programada', 'campo_valor' => $fecha],
+						['campo_nombre' => 'dia_servicio', 'campo_marcador' => ':dia_servicio', 'campo_valor' => $dia_servicio],
+						['campo_nombre' => 'estado_servicio', 'campo_marcador' => ':estado_servicio', 'campo_valor' => 'pendiente'],
+						['campo_nombre' => 'id_status', 'campo_marcador' => ':id_status', 'campo_valor' => 37],
+						['campo_nombre' => 'created_meta', 'campo_marcador' => ':created_meta', 'campo_valor' => json_encode($meta)],
+					];
+
+					// ✅ Agregar id_ruta SOLO si no está vacío
+					if (!empty($id_ruta)) {
+						$datos[] = [
+							'campo_nombre' => 'id_ruta',
+							'campo_marcador' => ':id_ruta',
+							'campo_valor' => $id_ruta
+						];
+					}
+
+					if (!empty($id_ruta_new)) {
+						$datos[] = [
+							'campo_nombre' => 'id_ruta_new',
+							'campo_marcador' => ':id_ruta_new',
+							'campo_valor' => $id_ruta_new
+						];
+					}
+
+					try {
+						$id_preservicio = $this->guardarDatos('preservicios', $datos);
+						$created[] = $id_preservicio;
+					} catch (Exception $e) {
+						$this->logWithBacktrace("Error guardando preservicio para cliente {$id_cliente}: " . $e->getMessage(), true);
+					}
+				} catch (Exception $e) {
+					$this->logWithBacktrace("Error ubicando direccion y demas datos del cliente {$id_cliente}: " . $e->getMessage(), true);
+				}
+			}
+
+			echo json_encode(['success' => true, 'created' => $created]);
+			return;
+		} catch (Exception $e) {
+			$this->logWithBacktrace("addPreservicios error: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'Error adding preservicios']);
+			return;
+		}
+	}
+
+	/**
+	 * Eliminar preservicios (pendientes) para una lista de clientes y fecha
+	 */
+	public function removePreservicios(array $clientes, string $fecha)
+	{
+		try {
+			// Sanear lista
+			$clientesInt = array_filter(array_map('intval', $clientes));
+			if (empty($clientesInt)) {
+				echo json_encode(['success' => true, 'deleted' => []]);
+				return;
+			}
+
+			$placeholders = implode(',', array_fill(0, count($clientesInt), '?'));
+			$sql = "DELETE FROM preservicios WHERE DATE(fecha_programada) = ? AND transferred = 0 AND id_cliente IN ($placeholders)";
+			$params = array_merge([$fecha], $clientesInt);
+
+			$this->ejecutarConsulta($sql, '', $params);
+
+			echo json_encode(['success' => true, 'deleted' => $clientesInt]);
+			return;
+		} catch (Exception $e) {
+			$this->logWithBacktrace("removePreservicios error: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode(['error' => 'Error removing preservicios']);
+			return;
+		}
+	}
 	private function renderServicio($registro)
 	{
 		// Reutilizar tus funciones (asegúrate de que estén accesibles)
@@ -3619,7 +4073,7 @@ class serviciosController extends mainModel
 		$colorContraste = $this->getContrastColor($statusBg);
 
 		ob_start(); // Iniciar buffer de salida
-		?>
+?>
 		<h3 style="margin-top:0; color: #333;">Service Detail #<?php echo htmlspecialchars($registro['id_servicio']); ?></h3>
 
 		<div class="fila-dato" style="background: <?php echo $statusBg; ?>; padding: 12px; border-radius: 6px;">
@@ -3689,7 +4143,7 @@ class serviciosController extends mainModel
 
 			</div>
 		</div>
-		<?php
+<?php
 		return ob_get_clean(); // Devolver el HTML generado
 	}
 
@@ -3821,7 +4275,6 @@ class serviciosController extends mainModel
 			}
 
 			return implode(' ', $partes);
-
 		} catch (Exception $e) {
 			return '---';
 		}
@@ -3836,6 +4289,86 @@ class serviciosController extends mainModel
 
 		$result = $this->ejecutarConsulta($sql, '', $param);
 
-		return $result['conteo'] > 0;}
+		return $result['conteo'] > 0;
 	}
+
+	public function verificar_ruta($id_cliente, $fecha)
+	{
+		// 1 - Determinar el d{ia de la semana
+		$timestamp = strtotime($fecha); // Convierte la cadena a un timestamp
+		$dia_semana_numero = date('w', $timestamp) + 1; // 'w' devuelve el día numérico (0 = domingo, 6 = sábado)
+
+		$sql = "SELECT dia_ingles 
+					FROM dias_semana
+					WHERE id_dia_semana = :v_id_dia_semana";
+		$params = [
+			":v_id_dia_semana" => $dia_semana_numero
+		];
+
+		$resultado = $this->ejecutarConsulta($sql, "", $params);
+		$variable_php_upper = strtoupper($resultado['dia_ingles']);
+
+		// 2 - Determinar las Rutas asignadas al dia seleccionado
+		$sql = "SELECT rda.day_of_week, rda.id_ruta, r.nombre_ruta
+					FROM route_day_assignments AS rda
+					LEFT JOIN rutas AS r ON rda.id_ruta = r.id_ruta
+					WHERE UPPER(day_of_week) = :v_day_of_week";
+		$params = [
+			":v_day_of_week" => $variable_php_upper
+		];
+		$rutas = $this->ejecutarConsulta($sql, "", $params, "fetchAll");
+
+		// 3 - Determinar la ruta asignada al cliente en el contrato
+		$sql = "SELECT c.id_ruta, r.nombre_ruta
+					FROM contratos AS c
+					LEFT JOIN rutas AS r ON c.id_ruta = r.id_ruta
+					WHERE id_cliente = :v_id_cliente";
+		$params = [
+			":v_id_cliente" => $id_cliente
+		];
+		$cliente = $this->ejecutarConsulta($sql, "", $params);
+
+		// 3 - Verifica si la ruta del Contrato del cliente está asignada en las rutas del dia seleccionado
+		$asignado = false;
+		foreach ($rutas as $s) {
+			if ($s["id_ruta"] == $cliente["id_ruta"]) {
+				$asignado = true;
+			}
+		}
+
+		$cliente_format = '';
+		if ($cliente['id_ruta'] !== null) {
+			$cliente_format = '<p>The contract is associated with the route: ' . $cliente['nombre_ruta'] . '</p>';
+		} else {
+			$cliente_format = '<p>The contract does not have an associated route.</p>';
+		}
+
+		// 4 - Responder según corresponda "!$asignado" mostrara las rutas del dia seleccionado
+		if (!$asignado) {
+			$cadena = '';
+
+			$cadena = '<option value="">Select a Route</option>';
+
+			foreach ($rutas as $curr) {
+				$cadena = $cadena . '<option value="' . $curr['id_ruta'] . '"> ';
+				$cadena = $cadena . $curr['nombre_ruta'] . '</option>';
+			}
+			http_response_code(200);
+			echo json_encode([
+				'status' => 'false',
+				'message' => $cadena,
+				'cliente' => $cliente_format
+			]);
+			exit;
+		} else {
+			http_response_code(200);
+			echo json_encode([
+				'status' => 'ok',
+				'message' => 'Assigned Route',
+				'cliente' => $cliente_format
+			]);
+			exit;
+		}
+	}
+}
 ?>

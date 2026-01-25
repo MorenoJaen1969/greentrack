@@ -59,6 +59,7 @@ if (!$modulo) {
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/contactsController.php';
+
 use app\controllers\contactsController;
 
 $controller = new contactsController();
@@ -68,10 +69,11 @@ switch ($modulo) {
     case 'get_history':
         $contact_id = $inputData['contact_id'];
         $token = $inputData['token'];
+        $salaId = $inputData['salaId'];
 
-        $controller->getChatHistoryPublic($token, $contact_id);
-        break;        
-    
+        $controller->getChatHistoryPublic($token, $contact_id, $salaId);
+        break;
+
     case 'contactos':
         $controller->getContacts();
         break;
@@ -87,7 +89,7 @@ switch ($modulo) {
             'success' => true,
             'data' => ['self' => $self]
         ]);
-        break;        
+        break;
 
     case 'get_history_from':
         $controller->getChatHistoryFrom(
@@ -98,11 +100,17 @@ switch ($modulo) {
         break;
 
     case 'send_message':
-        $controller->sendMessage();
+        $salaId = $inputData['sala_id'] ?? null;
+        $toEmail = $inputData['to'] ?? null;
+        $content = $inputData['content'] ?? '';
+        $broadcast = !empty($inputData['broadcast']);
+
+        $controller->sendMessage($salaId, $toEmail, $content, $broadcast);
         break;
-    
+
     case 'get_history_since':
-        $controller->getHistorySince();
+        $salaId = $inputData['sala_id'] ?? null;
+        $controller->getHistorySince($salaId);
         break;
 
     case 'upload_file':
@@ -120,9 +128,15 @@ switch ($modulo) {
 
         $file = $_FILES['file'];
         $allowedTypes = [
-            'image/jpeg', 'image/png', 'image/gif',
-            'audio/mpeg', 'audio/ogg', 'audio/wav',
-            'video/mp4', 'video/webm', 'video/ogg'
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'audio/mpeg',
+            'audio/ogg',
+            'audio/wav',
+            'video/mp4',
+            'video/webm',
+            'video/ogg'
         ];
         $maxSize = 10 * 1024 * 1024; // 10 MB
 
@@ -165,19 +179,27 @@ switch ($modulo) {
         exit();
 
     case 'unread_count':
+        $params = [
+            'success' => false, 
+            'count' => 0
+        ];
         if (!isset($_SESSION['user_valid']) || !$_SESSION['user_valid']) {
-            echo json_encode(['success' => false, 'count' => 0]);
+            echo json_encode($params);
             exit();
         }
         $userId = $_SESSION['user_id'] ?? 0;
         if (!$userId) {
-            echo json_encode(['success' => false, 'count' => 0]);
+            echo json_encode($params);
             exit();
         }
 
         $count = $controller->getNumberChatNew($userId);
 
-        echo json_encode(['success' => true, 'count' => $count]);
+        $params = [
+            'success' => true, 
+            'count' => $count
+        ];
+        echo json_encode($params);
         exit();
 
     case 'mark_messages_as_read':
@@ -201,6 +223,101 @@ switch ($modulo) {
         echo json_encode($result);
         exit();
 
+    case 'listar_salas_usuario':
+        $userId = $inputData['user_id'] ?? null;
+        if (!$userId) break;
+
+        $result = $controller->traer_salas($userId);
+
+        echo json_encode(['success' => true, 'salas' => $result]);
+        break;
+
+    case 'guardar_ultima_sala':
+        $userId = $inputData['user_id'] ?? null;
+        $salaId = $inputData['sala_id'] ?? null;
+
+        if ($userId && $salaId) {
+            $result = $controller->ultima_sala($userId, $salaId);
+            if ($result) {
+                echo json_encode(['success' => true]);
+            } else {
+                echo json_encode(['success' => false]);
+            }
+        } else {
+            echo json_encode(['success' => false]);
+        }
+        break;
+
+    // En chatAjax.php
+    case 'marcar_leidos_por_sala':
+        $salaId = $inputData['sala_id'] ?? null;
+        $userId = $inputData['user_id'] ?? null;
+
+        if ($salaId && $userId) {
+            $result = $controller->marca_leidos_por_sala($userId, $salaId);
+            if ($result) {
+                echo json_encode(['success' => true]);
+            } else {
+                echo json_encode(['success' => false]);
+            }
+        }
+        break;
+
+    // En contactsAjax.php
+    case 'get_room_history':
+        $salaId = (int)($inputData['sala_id'] ?? 0);
+        $token = $inputData['token'];
+        $mensajes = $controller->room_history($salaId, $token);
+
+        echo json_encode(['success' => true, 'data' => $mensajes]);
+        break;
+
+    case 'get_room_members':
+        $salaId = (int)($inputData['sala_id'] ?? 0);
+        $token = $inputData['token'];
+
+        $miembros = $controller->get_room_members($salaId, $token);
+
+        echo json_encode(['success' => true, 'contacts' => $miembros]);
+        break;
+
+    case 'obtener_ultima_sala':
+        $userId = (int)($inputData['user_id'] ?? 0);
+        if (!$userId) {
+            echo json_encode(['success' => false]);
+            return;
+        }
+
+        $salaId = $controller->obtener_ultima_sala($userId);
+
+        echo json_encode([
+            'success' => true,
+            'ultima_sala_id' => $salaId ? (int)$salaId : null
+        ]);
+        break;
+
+    case 'get_unread_count':
+        $token = $inputData['token'] ?? null;
+        $isroom = !empty($inputData['is_room']);
+
+        if ($isroom) {
+            $sala_id = $inputData['sala_id'] ?? null;
+            $cantidad = $controller->messUnreadRoom($token, $sala_id);
+            $cantidad = (int)($cantidad ?? 0);
+            echo json_encode(['success' => true, 'count' => $cantidad]);
+        } else {
+            $sala_id = $inputData['sala_id'] ?? null;
+            $contact_id = $inputData['contact_id'] ?? null;
+            $cantidad = $controller->messUnreadContact($contact_id, $sala_id);
+            if ($cantidad && is_array($cantidad) && isset($cantidad[0]['unread'])) {
+                $noleidos = (int)$cantidad[0]['unread'];
+                echo json_encode(['success' => true, 'count' => $noleidos]);
+            } else {
+                echo json_encode(['success' => true, 'count' => 0]);
+            }
+        }
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Invalid module: ' . $modulo]);
@@ -208,4 +325,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

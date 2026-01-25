@@ -1109,11 +1109,11 @@ error_log("Valor de zip: ". $id_zip . " y " . $zip_usar);
 	{
 		$sql = 'SELECT d.id_direccion, d.direccion, d.lat, d.lng, c.nombre AS cliente_nombre
 			FROM direcciones AS d
-			LEFT JOIN zonas_direcciones zd ON d.id_direccion = zd.id_direccion
+			LEFT JOIN rutas_direcciones rd ON d.id_direccion = rd.id_direccion
 			LEFT JOIN clientes AS c ON d.id_cliente = c.id_cliente
 			WHERE lat IS NOT NULL 
 				AND lng IS NOT NULL
-	          	AND zd.id_direccion IS NULL
+				AND rd.id_direccion IS NULL
 			ORDER BY c.nombre';
 		
 		$data = $this->ejecutarConsulta($sql, "", [], "fetchAll");
@@ -1122,6 +1122,34 @@ error_log("Valor de zip: ". $id_zip . " y " . $zip_usar);
 			'success' => true,
 			'data' => $data
 		]);
+	}
+
+	public function listarDireccionesEnArea($lat_sw, $lng_sw, $lat_ne, $lng_ne) {
+		// Asegura orden correcto de límites
+		$min_lat = min($lat_sw, $lat_ne);
+		$max_lat = max($lat_sw, $lat_ne);
+		$min_lng = min($lng_sw, $lng_ne);
+		$max_lng = max($lng_sw, $lng_ne);
+		$sql = "SELECT d.id_direccion, c.nombre AS cliente_nombre, d.direccion, d.lat, d.lng
+					FROM direcciones d
+					LEFT JOIN clientes c ON d.id_cliente = c.id_cliente
+					LEFT JOIN rutas_direcciones rd ON d.id_direccion = rd.id_direccion
+					WHERE d.lat BETWEEN :min_lat AND :max_lat
+						AND d.lng BETWEEN :min_lng AND :max_lng
+						AND d.lat IS NOT NULL
+						AND d.lng IS NOT NULL
+						AND rd.id_direccion IS NULL
+						AND d.id_cliente IS NOT NULL
+					ORDER BY c.nombre";
+		$param = [
+			':min_lat' => $min_lat,
+			':max_lat' => $max_lat,
+			':min_lng' => $min_lng,
+			':max_lng' => $max_lng
+		];
+		$datos = $this->ejecutarConsulta($sql, '', $param, "fetchAll");
+		$this->log("Arreglo de direcciones " . print_r($datos, true));
+		return $datos;	
 	}
 
 }

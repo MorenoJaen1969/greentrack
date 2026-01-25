@@ -208,36 +208,7 @@ class zonasController extends mainModel
         }
     }
 
-	public function listarDireccionesEnArea($lat_sw, $lng_sw, $lat_ne, $lng_ne) {
-		// Asegura orden correcto de límites
-		$min_lat = min($lat_sw, $lat_ne);
-		$max_lat = max($lat_sw, $lat_ne);
-		$min_lng = min($lng_sw, $lng_ne);
-		$max_lng = max($lng_sw, $lng_ne);
-		$sql = "SELECT d.id_direccion, c.nombre AS cliente_nombre, d.direccion, d.lat, d.lng
-					FROM direcciones d
-					LEFT JOIN clientes c ON d.id_cliente = c.id_cliente
-					LEFT JOIN zonas_direcciones zd ON d.id_direccion = zd.id_direccion
-					WHERE d.lat BETWEEN :min_lat AND :max_lat
-						AND d.lng BETWEEN :min_lng AND :max_lng
-						AND d.lat IS NOT NULL
-						AND d.lng IS NOT NULL
-						AND zd.id_direccion IS NULL
-						AND d.id_cliente IS NOT NULL
-					ORDER BY c.nombre
-		";
-		$param = [
-			':min_lat' => $min_lat,
-			':max_lat' => $max_lat,
-			':min_lng' => $min_lng,
-			':max_lng' => $max_lng
-		];
-		$datos = $this->ejecutarConsulta($sql, '', $param, "fetchAll");
-		$this->log("Arreglo de direcciones " . print_r($datos, true));
-		return $datos;	
-	}
-
-	public function crearZona($lat_sw, $lng_sw, $lat_ne, $lng_ne, $ids_direcciones, $nombre_zona = null) {
+	public function crearZona($lat_sw, $lng_sw, $lat_ne, $lng_ne, $ids_direcciones, $nombre_zona = null, $id_ruta) {
 		if (!$nombre_zona) {
 			$nombre_zona = 'Zona ' . date('Y-m-d H:i');
 		}
@@ -245,11 +216,11 @@ class zonasController extends mainModel
 		return $this->crearZonaConDirecciones(
 			$lat_sw, $lng_sw, $lat_ne, $lng_ne,
 			$nombre_zona,
-			$ids_direcciones
+			$ids_direcciones, $id_ruta
 		);
 	}	
 
-	private function crearZonaConDirecciones($lat_sw, $lng_sw, $lat_ne, $lng_ne, $nombre_zona, $ids_direcciones) {
+	private function crearZonaConDirecciones($lat_sw, $lng_sw, $lat_ne, $lng_ne, $nombre_zona, $ids_direcciones, $id_ruta) {
 		// Normalizar límites (opcional, por seguridad)
 		$min_lat = min($lat_sw, $lat_ne);
 		$max_lat = max($lat_sw, $lat_ne);
@@ -288,42 +259,55 @@ class zonasController extends mainModel
 
 			$id_zona = $this->guardarDatos('zonas_cuadricula', $logZonas);
 		} else {
-		    $id_zona = $resultado['id_zona'];
+			$id_zona = $resultado['id_zona'];
 		}
 
-		try {
-			// Insertar relaciones
-			$sql_rel = "INSERT INTO zonas_direcciones (id_zona, id_direccion) VALUES (?, ?)";
-			foreach ($ids_direcciones as $id_dir) {
-				$datos = [
-					['campo_nombre' => 'id_zona', 'campo_marcador' => ':id_zona', 'campo_valor' => $id_zona],
-					['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $id_dir]
-				];
+        if ($id_ruta !== null) {
+			try {
+				foreach ($ids_direcciones as $id_dir) {
+					// Evitar duplicados
+					$existe = $this->ejecutarConsulta(
+						"SELECT 1 FROM rutas_direcciones WHERE id_ruta = :id_ruta AND id_direccion = :id_dir",
+						'', 
+						[':id_ruta' => $id_ruta, ':id_dir' => $id_dir]
+					);
+					if (!$existe) {
+						$this->guardarDatos('rutas_direcciones', [
+							['campo_nombre' => 'id_ruta', 'campo_marcador' => ':id_ruta', 'campo_valor' => $id_ruta],
+							['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $id_dir],
+							['campo_nombre' => 'activo', 'campo_marcador' => ':activo', 'campo_valor' => 1]
+						]);
+					}
+				}				
 
-				$this->log("Arreglo para crear Zonas Cuadriculas " . print_r($datos, true));
-				$this->guardarDatos('zonas_direcciones', $datos);
+				return $id_zona;
+
+			} catch (Exception $e) {
+				throw new \Exception("El registro no pudo ser creado: " . $e);
 			}
-
-			return $id_zona;
-
-		} catch (Exception $e) {
-			throw new \Exception("El registro no pudo ser creado: " . $e);
 		}
 	}	
 
 	public function listarDireccionesDeZona($id_zona) {
-		$sql = "
-			SELECT d.id_direccion, c.nombre AS cliente_nombre, d.direccion, d.lat, d.lng
-			FROM zonas_direcciones zd
-			JOIN direcciones d ON zd.id_direccion = d.id_direccion
+		$sql = "SELECT d.id_direccion, c.nombre AS cliente_nombre, d.direccion, d.lat, d.lng
+			FROM rutas_direcciones rd
+			JOIN rutas_zonas_cuadricula rzc ON rd.id_ruta = rzc.id_ruta
+			JOIN direcciones d ON rd.id_direccion = d.id_direccion
 			JOIN clientes c ON c.id_cliente = d.id_cliente
-			WHERE zd.id_zona = :id_zona
+			WHERE rzc.id_zona = :id_zona
 		";
-		return $this->ejecutarConsulta($sql, '', [':id_zona' => $id_zona], "fetchAll");
+		$params = [
+			':id_zona' => $id_zona
+		];
+		return $this->ejecutarConsulta($sql, '', $params, "fetchAll");
 	}
 
 	public function eliminarDireccionDeZona($id_zona, $id_direccion) {
-		$sql = "DELETE FROM zonas_direcciones WHERE id_zona = :id_zona AND id_direccion = :id_direccion";
-		$this->ejecutarConsulta($sql, '', [':id_zona' => $id_zona, ':id_direccion' => $id_direccion]);
+		$sql = "DELETE FROM rutas_direcciones 
+			WHERE id_direccion = :id_direccion";
+		$params = [
+			':id_direccion' => $id_direccion
+		];
+		$this->ejecutarConsulta($sql, '', $params);
 	}
 }

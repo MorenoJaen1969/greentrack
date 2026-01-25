@@ -26,8 +26,11 @@ $param_dat = [
 
 $row1 = $contratos->contratoCompleto_contrato($param_dat);
 
-//"id_frecuencia_servicio":2,
-//"concepto":"Bi-weekly",
+if (is_null($row1['id_frecuencia_servicio'])) {
+    $id_frecuencia_servicio = 1;
+} else {
+    $id_frecuencia_servicio = $row1['id_frecuencia_servicio'];
+}
 
 $id_contrato = $row1['id_contrato'];
 $contrato_origen = $row1['contrato_origen'];
@@ -54,10 +57,28 @@ if (is_null($row1['email'])) {
 $id_direccion = $row1['id_direccion'];
 $direccion = $row1['direccion'];
 
+if (is_null($row1['nom_contrato'])) {
+    $nom_contrato = $cliente."'s contract, unidentified";
+} else {
+    $nom_contrato = $row1['nom_contrato'];
+}
+
+if (is_null($row1['retraso_invierno'])) {
+    $retraso_invierno = false;
+} else {
+    $retraso_invierno = $row1['retraso_invierno'];
+}
+
 if (is_null($row1['costo'])) {
     $costo = 0.00;
 } else {
-    $costo = $this->arreglaMonto($this->limpiarCadena($row1['costo']));
+    $costo = $contratos->verifica_num($row1['costo']);
+}
+
+if (is_null($row1['num_semanas'])) {
+    $num_semanas = 0;
+} else {
+    $num_semanas = $row1['num_semanas'];
 }
 
 if (is_null($row1['fecha_ini'])) {
@@ -94,6 +115,9 @@ if (is_null($row1['id_frecuencia_pago'])) {
 
 $id_status = $row1['id_status'];
 $color_status = $row1['color'];
+$id_ruta = $row1['id_ruta'];
+$id_area = $row1['id_area'];
+$fecha_cancelacion = $row1['fecha_cancelacion'];
 
 if ($row1['id_status'] == 21 || $row1['id_status'] == 22) {
     $puede_editar = 'disabled';
@@ -121,6 +145,12 @@ if (is_null($row1['day_work'])) {
     $day_work = $row1['day_work'];
 }
 
+if (is_null($row1['tiempo_servicio'])) {
+    $tiempo_servicio = "00:45:00";
+} else {
+    $tiempo_servicio = $row1['tiempo_servicio'];
+}
+
 //if ($total_servicios > 0) {
 //    $modo_edicion = false;
 //} else {
@@ -130,18 +160,20 @@ $modo_edicion = true;
 $result_status = $status->consultar_status('contratos');
 
 $ruta_status_ajax = RUTA_APP . "/app/ajax/statusAjax.php";
+$ruta_ruta_ajax = RUTA_APP . "/app/ajax/rutas_mapaAjax.php";
 $ruta_frec_pago_ajax = RUTA_APP . "/app/ajax/frec_pagoAjax.php";
 $ruta_clientes_ajax = RUTA_APP . "/app/ajax/clientesAjax.php";
 $ruta_direcciones_ajax = RUTA_APP . "/app/ajax/direccionesAjax.php";
 $ruta_dia_semana_ajax = RUTA_APP . "/app/ajax/dia_semanaAjax.php";
 $ruta_servicios_ajax = RUTA_APP . "/app/ajax/serviciosAjax.php";
-
+$ruta_frecuencia_servicio_ajax = RUTA_APP . "/app/ajax/frec_servicioAjax.php";
+$ruta_facturacion_ajax = RUTA_APP . "/app/ajax/facturacionAjax.php";
+$ruta_areas_ajax = RUTA_APP . "/app/ajax/areasAjax.php";
 
 $ruta_contratos_ajax = RUTA_APP . "/app/ajax/contratosAjax.php";
 $ruta_contratos = RUTA_APP . "/contratos/";
 $encabezadoVista = PROJECT_ROOT . "/app/views/inc/encabezadoVista.php";
 $opcion = "contratosVista";
-
 ?>
 
 <main>
@@ -155,18 +187,19 @@ $opcion = "contratosVista";
     <div class="form-container">
         <form class="FormularioAjax form-horizontal validate-form" action="<?php echo $ruta_contratos_ajax; ?>"
             method="POST" id="update_contrato" name="update_contrato" enctype="multipart/form-data" autocomplete="off">
+
             <input class="form-font" type="hidden" name="modulo_contratos" value="update_contrato">
             <input class="form-font" type="hidden" id="id_contrato" name="id_contrato"
                 value="<?php echo $row1['id_contrato']; ?>">
 
             <div class="tab-container">
                 <div class="tabs-gen">
-                    <button type="button" class="tab-button active tablink" data-tab="tab1"
-                        onclick="openTab(event, 'tab1')">
-                        Contract Details
-                    </button>
-                    <button type="button" class="tab-button tablink" data-tab="tab2" onclick="openTab(event, 'tab2')">
+                    <button type="button" class="tab-button tablink" data-tab="tab1" onclick="openTab(event, 'tab1')">
                         Customer Identification
+                    </button>
+                    <button type="button" class="tab-button active tablink" data-tab="tab2"
+                        onclick="openTab(event, 'tab2')">
+                        Contract Details
                     </button>
                     <button type="button" class="tab-button tablink" data-tab="tab3" onclick="openTab(event, 'tab3')">
                         Notes and Observations
@@ -174,116 +207,12 @@ $opcion = "contratosVista";
                     <button type="button" class="tab-button tablink" data-tab="tab4" onclick="openTab(event, 'tab4')">
                         Distribution of services
                     </button>
+                    <button type="button" class="tab-button tablink" data-tab="tab5" onclick="openTab(event, 'tab5')">
+                        Payment details
+                    </button>
                 </div>
 
-                <div id="tab1" class="tabcontent tab-link">
-                    <!-- Formulario del Local alquilado -->
-                    <h3>Contract Characteristics</h3>
-
-                    <div class="forma01">
-                        <div class="grid_geo">
-                            <div class="grid_geo_01">
-                                <div class="form-group-ct-inline">
-                                    <div class="form-group-ct">
-                                        <label class="ancho_label1" for="id_contrato">Code:</label>
-                                        <input class="form-font" type="text" id="id_contrato" name="id_contrato"
-                                            value="<?php echo $contratos->ceros($id_contrato); ?>"
-                                            placeholder="Contract coding" readonly>
-
-                                        <label class="ancho_label1" for="contrato_origen">Origin code:</label>
-                                        <input class="form-font" type="text" id="contrato_origen" name="contrato_origen"
-                                            value="<?php echo $contrato_origen; ?>"
-                                            placeholder="Code Number of the Printed Contract">
-
-                                        <label for="id_status" class="ancho_label1">Current Status:</label>
-                                        <select class="form-control-co form-font" id="id_status" name="id_status" <?php echo !$modo_edicion ? 'disabled' : ''; ?> required>
-                                            <!-- Se llenará con JS -->
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="grid_geo_02">
-                                <div class="form-group-ct">
-                                    <label for="id_dia_semana" class="ancho_label1">Primary Workday:</label>
-                                    <select class="form-control-co form-especial" id="id_dia_semana"
-                                        name="id_dia_semana" <?php echo !$modo_edicion ? 'disabled' : ''; ?> required>
-                                        <!-- Se llenará con JS -->
-                                    </select>
-                                </div>
-
-                                <div class="form-group-ct">
-                                    <label for="secondary_day" class="ancho_label1">Secondary Workday:</label>
-                                    <select class="form-control-co" id="secondary_day"
-                                        name="secondary_day" <?php echo !$modo_edicion ? 'disabled' : ''; ?> required>
-                                        <!-- Se llenará con JS -->
-                                    </select>
-                                </div>
-
-                            </div>
-                        </div>
-                    </div>
-
-                    <h3>Control dates</h3>
-
-                    <div class="forma01">
-                        <div class="form-group-ct-inline">
-                            <div class="form-group-ct">
-                                <label class="ancho_label1" for="fecha_ini">Start Date:</label>
-                                <input type="date" id="fecha_ini" name="fecha_ini" value="<?php echo $fecha_ini; ?>">
-                            </div>
-                            <div class="form-group-ct">
-                                <label class="ancho_label1" for="fecha_fin">End Date:</label>
-                                <input type="date" id="fecha_fin" name="fecha_fin" value="<?php echo $fecha_fin; ?>">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="forma02">
-                        <div class="form-group-ct-inline">
-                            <div class="form-group-ct">
-                                <div class="form-group-ct">
-                                    <label for="id_frecuencia_pago" class="ancho_label1">Payment Frequency:</label>
-                                    <select class="form-control-co form-font" id="id_frecuencia_pago"
-                                        name="id_frecuencia_pago" <?php echo !$modo_edicion ? 'disabled' : ''; ?>
-                                        required>
-                                        <!-- Se llenará con JS -->
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="form-group-ct">
-                                <label class="ancho_label1" for="costo">Payment Amount:</label>
-                                <input class="alinea_der" type='currency' id="costo" name="costo"
-                                    value="<?php echo $costo; ?>" placeholder="Payment for the period" />
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Detalle de Pagos -->
-                    <h3>Payment details</h3>
-                    <div class="forma03" style="height:12vh;">
-                        <div class="table-container">
-                            <table class="table is-bordered is-striped is-narrow is-hoverable is-fullwidth">
-                                <thead class="cabecera">
-                                    <tr>
-                                        <th class="has-text-centered">#</th>
-                                        <th class="has-text-centered">Invoice Date</th>
-                                        <th class="has-text-centered">Related Service</th>
-                                        <th class="has-text-centered">Time Remaining</th>
-                                        <th class="has-text-centered">Invoice status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr class="has-text-centered">
-                                        <td colspan="7">
-                                            there are no records in the system
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="tab2" class="tabcontent tab-link" style="display:none">
+                <div id="tab1" class="tabcontent tab-link" style="display:none">
                     <!-- Formulario del Arrendatario -->
                     <h3>Customer Details</h3>
 
@@ -330,7 +259,6 @@ $opcion = "contratosVista";
                                         </div>
                                     </div>
                                 </div>
-
                             </div>
                             <div class="form-group-ct">
                                 <label class="ancho_label1" for="email">Email:</label>
@@ -358,22 +286,193 @@ $opcion = "contratosVista";
                                     </select>
                                 </div>
                             </div>
+
+                            <div class="form-group-ct">
+                                <div class="form-group-ct">
+                                    <label for="id_ruta" class="ancho_label1">Associated Route:</label>
+                                    <select class="form-control-co form-font" id="id_ruta" name="id_ruta" <?php echo !$modo_edicion ? 'disabled' : ''; ?> required>
+                                        <!-- Se llenará con JS -->
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab2" class="tabcontent tab-link"  style="display:none">
+                    <!-- Formulario del Local alquilado -->
+                    <div class="form-group-ct-inline">
+                        <h3>Contract Characteristics</h3>
+                        <h3 style="margin-left: auto; color: #6d1a72ff; font-weight: bold;">
+                            <label class="ancho_label1">
+                                <?php if ($id_status == 22 && !empty($fecha_cancelacion)): ?>
+                                    Canceled <?= date('Y-m-d', strtotime($fecha_cancelacion)) ?> | 
+                                <?php endif; ?>
+                                <?= htmlspecialchars($cliente) ?>
+                            </label>
+                        </h3>
+                    </div>
+
+                    <div class="forma01">
+                        <div class="grid_geo">
+                            <div class="grid_geo_01">
+                                <div class="form-group-ct-inline">
+                                    <div class="form-group-ct">
+                                        <div class="form-group-ct-inline">
+                                            <label class="ancho_label1" for="id_contrato_a">Code:</label>
+                                            <input class="form-font" type="text" id="id_contrato_a" name="id_contrato_a"
+                                                value="<?php echo $contratos->ceros($id_contrato); ?>"
+                                                placeholder="Contract coding" readonly>
+                                        </div>    
+                                        <div class="form-group-ct-inline">
+                                            <label class="ancho_label1" for="nom_contrato">Contract Name:</label>
+                                            <input class="form-font" type="text" id="nom_contrato" name="nom_contrato"
+                                                value="<?php echo $nom_contrato; ?>"
+                                                placeholder="Contract name">
+                                        </div>    
+                                        <div class="form-group-ct-inline">
+                                            <label class="ancho_label1" for="contrato_origen">Origin code:</label>
+                                            <input class="form-font" type="text" id="contrato_origen" name="contrato_origen"
+                                                value="<?php echo $contrato_origen; ?>"
+                                                placeholder="Code Number of the Printed Contract">
+                                        </div>    
+                                        <div class="form-group-ct-inline">
+                                            <label for="id_status" class="ancho_label1">Current Status:</label>
+                                            <select class="form-control-co form-font" id="id_status" name="id_status" <?php echo !$modo_edicion ? 'disabled' : ''; ?> required>
+                                                <!-- Se llenará con JS -->
+                                            </select>
+                                        </div>
+                                        <div class="form-group-ct-inline grid_vert">
+                                            <div class="form-group-ct grid_vert_01">
+                                                <label class="ancho_label5" for="tiempo_servicio">Time required to perform the service:</label>
+                                                <input 
+                                                    type="text" 
+                                                    class="form-font time-hhmmss" 
+                                                    id="tiempo_servicio" 
+                                                    name="tiempo_servicio"
+                                                    placeholder="HH:mm:ss"
+                                                    maxlength="8"
+                                                    value="<?php echo htmlspecialchars($tiempo_servicio); ?>"
+                                                >
+                                            </div>
+                                            <div class="form-group-ct grid_vert_02">
+                                                <label class="ancho_label5" for="retraso_invierno">Use extended hours for Winter:</label>
+                                                <div class="switch-container">
+                                                    <span class="switch-label off">OFF</span>
+                                                    <input 
+                                                        type="checkbox" 
+                                                        id="retraso_invierno" 
+                                                        name="retraso_invierno"
+                                                        class="switch-input"
+                                                        value="1"
+                                                        <?php echo ($retraso_invierno == 1 ? 'checked' : ''); ?>>
+                                                    <label for="retraso_invierno" class="switch-track"></label>
+                                                    <span class="switch-label on">ON</span>
+                                                </div>
+                                            </div>                                            
+                                        </div>
+                                        <div class="form-group-ct-inline">
+                                            <label for="id_area" class="ancho_label1">Service Area:</label>
+                                            <select class="form-control-co form-font" id="id_area" name="id_area" <?php echo !$modo_edicion ? 'disabled' : ''; ?> required>
+                                                <!-- Se llenará con JS -->
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="grid_geo_02">
+                                <div class="form-group-ct">
+                                    <label for="id_dia_semana" class="ancho_label5">Primary Workday:</label>
+                                    <select class="form-control-co form-especial" id="id_dia_semana"
+                                        name="id_dia_semana" <?php echo !$modo_edicion ? 'disabled' : ''; ?> required>
+                                        <!-- Se llenará con JS -->
+                                    </select>
+                                </div>
+
+                                <div class="form-group-ct">
+                                    <label for="secondary_day" class="ancho_label5">Secondary Workday:</label>
+                                    <select class="form-control-co" id="secondary_day"
+                                        name="secondary_day" <?php echo !$modo_edicion ? 'disabled' : ''; ?> required>
+                                        <!-- Se llenará con JS -->
+                                    </select>
+                                </div>
+
+                            </div>
                         </div>
                     </div>
 
+                    <h3>Control dates</h3>
+
+                    <div class="forma01">
+                        <div class="form-group-ct-inline">
+                            <div class="form-group-ct">
+                                <label class="ancho_label1" for="fecha_ini">Start Date:</label>
+                                <input type="date" id="fecha_ini" name="fecha_ini" value="<?php echo $fecha_ini; ?>">
+                            </div>
+                            <div class="form-group-ct">
+                                <label class="ancho_label1" for="fecha_fin">End Date:</label>
+                                <input type="date" id="fecha_fin" name="fecha_fin" value="<?php echo $fecha_fin; ?>">
+                            </div>
+
+                            <div class="form-group-ct">
+                                <label class="ancho_label1 widthField" for="num_semanas">Number of services in the period:</label>
+                                <input type="number" id="num_semanas" name="num_semanas" value="<?php echo $num_semanas; ?>">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="forma02">
+                        <div class="form-group-ct-inline">
+                            <div class="form-group-ct">
+                                <div class="form-group-ct">
+                                    <label for="id_frecuencia_servicio" class="ancho_label1 widthField">Service Frequency:</label>
+                                    <select class="form-control-co form-font" id="id_frecuencia_servicio" name="id_frecuencia_servicio" <?php echo !$modo_edicion ? 'disabled' : ''; ?> required>
+                                        <!-- Se llenará con JS -->
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-group-ct">
+                                <div class="form-group-ct">
+                                    <label for="id_frecuencia_pago" class="ancho_label1 widthField">Payment Frequency:</label>
+                                    <select class="form-control-co form-font" id="id_frecuencia_pago"
+                                        name="id_frecuencia_pago" <?php echo !$modo_edicion ? 'disabled' : ''; ?>
+                                        required>
+                                        <!-- Se llenará con JS -->
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-group-ct">
+                                <label class="ancho_label1 widthField" for="costo">Payment Amount:</label>
+                                <input class="alinea_der" type='currency' id="costo" name="costo"
+                                    value="<?php echo $costo; ?>" placeholder="Payment for the period" />
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="tab3" class="tabcontent tab-link" style="display:none">
                     <!-- Formulario del detalle del contrato -->
-                    <h3>Notes and Comments</h3>
+                    <div class="form-group-ct-inline">
+                        <h3>Notes and Comments</h3>
+                        <h3 style="margin-left: auto; color: #6d1a72ff; font-weight: bold;">
+                            <label class="ancho_label1">
+                                <?php if ($id_status == 22 && !empty($fecha_cancelacion)): ?>
+                                    Canceled <?= date('Y-m-d', strtotime($fecha_cancelacion)) ?> | 
+                                <?php endif; ?>
+                                <?= htmlspecialchars($cliente) ?>
+                            </label>
+                        </h3>
+                    </div>
+
                     <div class="forma01">
                         <div class="form-group-ct">
                             <label class="ancho_label1" for="notas">Notes:</label>
-                            <textarea id="notas" name="notas" placeholder="Add notes"></textarea>
+                            <textarea class="format_textarea" id="notas" name="notas" placeholder="Add notes"></textarea>
                         </div>
                         <div class="form-group-ct">
                             <label class="ancho_label1" for="observaciones">Comments:</label>
-                            <textarea id="observaciones" name="observaciones" placeholder="Add comments"></textarea>
+                            <textarea class="format_textarea" id="observaciones" name="observaciones" placeholder="Add comments"></textarea>
                         </div>
                     </div>
                 </div>
@@ -382,13 +481,19 @@ $opcion = "contratosVista";
                     <!-- Formulario del detalle del contrato -->
                     <div class="form-group-ct-inline">
                         <h3>Distribution of Services</h3>
-                        <h3 style="margin-left: auto; color: #6d1a72ff; font-weight: bold;"><label
-                                class="ancho_label1"><?php echo $cliente; ?></label></h3>
+                        <h3 style="margin-left: auto; color: #6d1a72ff; font-weight: bold;">
+                            <label class="ancho_label1">
+                                <?php if ($id_status == 22 && !empty($fecha_cancelacion)): ?>
+                                    Canceled <?= date('Y-m-d', strtotime($fecha_cancelacion)) ?> - 
+                                <?php endif; ?>
+                                <?= htmlspecialchars($cliente) ?>
+                            </label>
+                        </h3>
                     </div>
 
                     <!-- Tab Distribution of Services -->
-                    <div id="distribution-tab" class="tab-content">
-                        <div id="loading" class="loading">Cargando servicios...</div>
+                    <div id="distribution-tab" class="table-container" style="height: 60vh;">
+                        <div id="loading" class="loading">Loading services...</div>
                         <table id="servicesGrid" class="excel-style">
                             <thead>
                                 <tr>
@@ -405,6 +510,65 @@ $opcion = "contratosVista";
                             </tbody>
                         </table>
                     </div>
+                </div>
+
+                <div id="tab5" class="tabcontent tab-link" style="display:none">
+                    <!-- Formulario de facturacion de Servicios-->
+                    <div class="form-group-ct-inline">
+                        <h3>Payment details</h3>
+                        <h3 style="margin-left: auto; color: #6d1a72ff; font-weight: bold;">
+                            <label class="ancho_label1">
+                                <?php if ($id_status == 22 && !empty($fecha_cancelacion)): ?>
+                                    Canceled <?= date('Y-m-d', strtotime($fecha_cancelacion)) ?> | 
+                                <?php endif; ?>
+                                <?= htmlspecialchars($cliente) ?>
+                            </label>
+                        </h3>
+                    </div>
+                    <!-- Tab Distribution of Facturacion -->
+                    <div id="facturacion-tab" class="tab-content" style="height: 60vh;">
+                        <div class="facturacion-layout">
+                            <!-- Panel izquierdo: lista de facturas -->
+                            <div class="panel-facturas">
+                                <h3>Invoices</h3>
+                                <div id="facturas-lista" class="facturas-grid">
+                                    <!-- Se llena con JS -->
+                                </div>
+                            </div>
+
+                            <!-- Panel derecho: detalles -->
+                            <div class="panel-detalles">
+                                <h3>Invoice Details</h3>
+                                <div id="detalles-contenedor">
+                                    <p class="mensaje-inicial">Select an invoice to view its details.</p>
+
+                                    <!-- Contenedor de la tabla con scroll -->
+                                    <div id="tabla-detalles-wrapper" style="display: none; height: 350px; overflow-y: auto; border: 1px solid #ddd;">
+                                        <div id="loadingFact" class="loading">Loading services...</div>
+                                        <table class="excel-style tabla_sc">
+                                            <thead>
+                                                <tr>
+                                                    <th class="text_center">Service</th>
+                                                    <th class="text_center">Concept</th>
+                                                    <th class="text_derecha">Total</th>                                            
+                                                </tr>
+                                            </thead>
+                                        </table>
+
+                                        <!-- Cuerpo con scroll -->
+                                        <div id="cuerpo-detalles-scroll" style="overflow-y: auto; max-height: 300px;">
+                                            <table class="excel-style tabla_sc">
+                                                <tbody id="cuerpo-detalles">
+                                                    <!-- Se llena con JS -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>                    
                 </div>
 
                 <button type="submit" class="btn-submit" id="submitBtn" <?php echo $puede_editar; ?>>
@@ -459,17 +623,39 @@ $opcion = "contratosVista";
 <script src="<?= RUTA_REAL ?>/app/views/inc/js/func_comm.js?v=<?= time() ?>"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js?v=<?= time() ?>"></script>
 <script type="text/javascript">
+    let arreglo_frases_g = [];
+    var p01 = "Are you sure";
+    var p02 = "Do you confirm that you want to save the changes you have made?";
+    var p03 = "Yes, Save";
+    var p04 = "Do not save";
+    var p05 = "Response error";
+
+    arreglo_frases_g = [
+        p01,
+        p02,
+        p03,
+        p04,
+        p05
+    ];
+
     let r_retorno = "<?php echo $ruta_retorno . "/" . $pagina_retorno; ?>";
 
+    const ruta_frecuencia_servicio_ajax = "<?php echo $ruta_frecuencia_servicio_ajax; ?>";
     const ruta_contratos_ajax = "<?php echo $ruta_contratos_ajax; ?>";
     const ruta_status_ajax = "<?php echo $ruta_status_ajax; ?>";
+    const ruta_areas_ajax = "<?php echo $ruta_areas_ajax; ?>";
+    const ruta_ruta_ajax = "<?php echo $ruta_ruta_ajax; ?>";
     const ruta_frec_pago_ajax = "<?php echo $ruta_frec_pago_ajax; ?>";
     const ruta_clientes_ajax = "<?php echo $ruta_clientes_ajax; ?>";
     const ruta_direcciones_ajax = "<?php echo $ruta_direcciones_ajax; ?>";
     const ruta_dia_semana_ajax = "<?php echo $ruta_dia_semana_ajax; ?>";
     const ruta_servicios_ajax = "<?php echo $ruta_servicios_ajax; ?>";
-
+    const ruta_facturacion_ajax = "<?php echo $ruta_facturacion_ajax; ?>";
+    
     const ruta_retorno = r_retorno;
+
+    // Variable global para mantener las facturas
+    let facturasGlobales = [];
 
     // === ABRIR PESTAÑAS ===
     function openTab(evt, tabName) {
@@ -480,7 +666,7 @@ $opcion = "contratosVista";
         tab.style.display = "block";
         if (evt) evt.currentTarget.classList.add("active");
 
-        if (tabName === 'tab4') {
+        if (tabName === 'tab4' || tabName === 'tab5' ) {
             submitBtn.style.display = 'none';
         } else {
             submitBtn.style.display = 'block';
@@ -497,7 +683,7 @@ $opcion = "contratosVista";
     }
 
     function showTab(index) {
-        ["tab1", "tab2", "tab3", "tab4"].forEach((id, i) => {
+        ["tab1", "tab2", "tab3", "tab4", "tab5"].forEach((id, i) => {
             document.getElementById(id).style.display = (i + 1 === index) ? "block" : "none";
         });
         const errorDiv = document.querySelector('#form-errors');
@@ -529,6 +715,35 @@ $opcion = "contratosVista";
     // Fecha actual en formato YYYY-MM-DD
     const TODAY = new Date().toISOString().split('T')[0];
 
+    async function loadAndRenderFacturacion(){
+        try {
+            const id_contrato = "<?php echo $row1['id_contrato'];?>";
+            const res = await fetch(ruta_facturacion_ajax, 
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        modulo_facturacion: 'distribucion_facturacion',
+                        id_contrato: id_contrato
+                    })
+                }
+            );
+
+            if (res.ok) {
+                const respuesta = await res.json();
+                const facturas = respuesta.facturas || [];
+
+                renderGridF(facturas);
+                document.getElementById('loadingFact').style.display = 'none';
+            }
+        } catch (err) {
+            console.error('Error al cargar facturacion TAB5:', err);
+            document.getElementById('loadingFact').textContent = 'Error loading';
+        }
+    }   
+
     async function loadAndRenderServices() {
         try {
             const res = await fetch(ruta_contratos_ajax,
@@ -546,21 +761,152 @@ $opcion = "contratosVista";
             if (res.ok) {
                 const respuesta = await res.json();
                 const services = respuesta.services || [];
+                const all_status = respuesta.all_status || [];
 
-                renderGrid(services);
+                renderGrid(services, all_status);
                 document.getElementById('loading').style.display = 'none';
             }
         } catch (err) {
             console.error('Error al cargar servicios:', err);
-            document.getElementById('loading').textContent = 'Error al cargar';
+            document.getElementById('loading').textContent = 'Error loading';
         }
     }
 
-    function renderGrid(services) {
-        // Agrupar por mes (clave: YYYY-MM)
+    // Función principal para renderizar facturas
+    function renderGridF(facturas) {
+        facturasGlobales = facturas;
+        const contenedor = document.getElementById('facturas-lista');
+        contenedor.innerHTML = '';
+
+        if (facturas.length === 0) {
+            contenedor.innerHTML = '<p style="text-align: center; color: #7f8c8d;">No invoices are available.</p>';
+            return;
+        }
+
+        // Ordenar por fecha de vencimiento (más recientes primero)
+        const facturasOrdenadas = [...facturas].sort((a, b) => 
+            new Date(b.fecha_vencimiento) - new Date(a.fecha_vencimiento)
+        );
+
+        facturasOrdenadas.forEach(factura => {
+            const item = document.createElement('div');
+            item.className = 'factura-item';
+            item.dataset.idFactura = factura.id_factura;
+
+            // Formatear fechas
+            const periodo = `${formatDate(factura.periodo_inicio)} - ${formatDate(factura.periodo_fin)}`;
+            
+            item.innerHTML = `
+                <div class="grid_fact">
+                    <div class="grid_fact_01">
+                        <div class="factura-id">
+                            <span class="numero-factura">Invoice # ${factura.id_factura}</span>
+                        </div>
+                        <div class="factura-periodo">${periodo}</div>
+                        <div class="factura-monto">$${parseFloat(factura.monto_total).toFixed(2)}</div>
+                        <div class="factura-estado estado-${factura.estado}">${factura.estado}</div>
+                    </div>
+                    <div class="grid_fact_02">
+                        <div>${factura.concepto}</div>
+                    </div>
+                    <div class="grid_fact_03">
+                        <div>${factura.asiento ? `# Journal Entry ${factura.asiento}` : '—' }</div>
+                    </div>
+                </div>
+            `;
+
+            // Evento de clic
+            item.addEventListener('click', () => {
+                // Remover clase selected de todos
+                document.querySelectorAll('.factura-item').forEach(el => {
+                    el.classList.remove('selected');
+                });
+                // Añadir a este
+                item.classList.add('selected');
+                // Mostrar detalles
+                mostrarDetallesFactura(factura);
+            });
+
+            contenedor.appendChild(item);
+        });
+
+        // Seleccionar la primera factura automáticamente
+        if (facturasOrdenadas.length > 0) {
+            const primerItem = contenedor.querySelector('.factura-item');
+            if (primerItem) {
+                primerItem.classList.add('selected');
+                mostrarDetallesFactura(facturasOrdenadas[0]);
+            }
+        }
+    }
+
+    // Función para mostrar detalles
+    function mostrarDetallesFactura(factura) {
+        const contenedor = document.getElementById('detalles-contenedor');
+        const wrapper = document.getElementById('tabla-detalles-wrapper');
+        const cuerpo = document.getElementById('cuerpo-detalles');
+        const mensaje = contenedor.querySelector('.mensaje-inicial');
+
+        mensaje.style.display = 'none';
+        wrapper.style.display = 'block';
+        cuerpo.innerHTML = '';
+
+        if (!factura.detalle_f || factura.detalle_f.length === 0) {
+            cuerpo.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No details are available.</td></tr>';
+            return;
+        }
+
+        factura.detalle_f.forEach(detalle => {
+            const fila = document.createElement('tr');
+            fila.innerHTML = `
+                <td style="text-align: center;">
+                    ${detalle.id_servicio 
+                        ? `<span class="service-number-link" 
+                                onclick="viewServiceDetail('${detalle.id_servicio}')" 
+                                style="font-size: 3.5em; font-weight: bold; cursor: pointer; color: #2c3e50; text-decoration: underline;">
+                                ${detalle.id_servicio}
+                            </span>`
+                        : '—'
+                    }
+                </td>
+                <td>${detalle.concepto}</td>
+                <td>$${parseFloat(detalle.subtotal).toFixed(2)}</td>
+            `;
+            cuerpo.appendChild(fila);
+        });
+    }
+
+    // Función auxiliar para formatear fechas
+    function formatDate(dateString) {
+        if (!dateString || dateString === '0000-00-00') return '—';
+        
+        // Dividir la cadena "YYYY-MM-DD"
+        const [year, month, day] = dateString.split('-').map(Number);
+        
+        // Crear fecha en la zona local (no UTC)
+        const date = new Date(year, month - 1, day); // Meses en JS son 0-11
+        
+        // Formatear en inglés (mm/dd/yyyy)
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+    }
+
+    function renderGrid(services, all_status) {
+        // Filtrar servicios: excluir los posteriores a fecha_cancelacion
+        const filteredServices = services.filter(s => {
+            if (!s.fecha_cancelacion) return true; // no está cancelado → incluir
+            const serviceDate = new Date(s.service_date);
+            const cancelDate = new Date(s.fecha_cancelacion);
+            return serviceDate <= cancelDate; // solo incluir si es <= fecha_cancelacion
+        });
+
+        // Agrupar por mes (clave: YYYY-MM) 
         const grouped = {};
 
-        services.forEach(s => {
+        filteredServices.forEach(s => {
             const d = new Date(s.service_date);
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
             if (!grouped[key]) grouped[key] = [];
@@ -575,7 +921,10 @@ $opcion = "contratosVista";
             .forEach(monthKey => {
                 const [year, month] = monthKey.split('-').map(Number);
                 const firstDay = new Date(year, month - 1, 1);
-                const monthName = firstDay.toLocaleString('default', { month: 'long', year: 'numeric' });
+                const monthName = firstDay.toLocaleString('en-US', { 
+                    month: 'long', 
+                    year: 'numeric' 
+                });
 
                 const row = document.createElement('tr');
                 const th = document.createElement('td');
@@ -598,7 +947,7 @@ $opcion = "contratosVista";
                     const weekIndex = getWeekIndexInMonth(new Date(s.service_date), new Date(year, month - 1, 1));
                     if (weekIndex < 5) {
                         cells[weekIndex].classList.remove('empty');
-                        cells[weekIndex].innerHTML = buildServiceCell(s);
+                        cells[weekIndex].innerHTML = buildServiceCell(s, all_status);
                     }
                 });
 
@@ -614,16 +963,21 @@ $opcion = "contratosVista";
         return Math.floor(diffDays / 7);
     }
 
-    function buildServiceCell(service) {
+    function buildServiceCell(service, all_status) {
+        // Buscar el objeto de estado correspondiente
+        const statusInfo = all_status.find(st => st.id_status == service.id_status) || 
+                        { status: 'Unknown', color: '#95a5a6' };
+
         const isPast = service.service_date < TODAY;
-        const isEditable = !isPast && !service.is_done;
+        const isEditable = !isPast && (service.id_status == 37); // asumiendo 37 = Activo
+
         const dateClass = isPast ? 'past' : 'editable';
         const badgeClass = isPast ? 'service-number-badge past' : 'service-number-badge';
 
-        // --- Corrección: Parsear la fecha como local, evitando desfase ---
-        const parts = service.service_date.split('-'); // ['2025', '11', '17']
-        const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])); // Año, Mes (0-indexado), Día
-        const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' }); // Monday, Tuesday...
+        // --- Parsear fecha ---
+        const parts = service.service_date.split('-');
+        const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
 
         let html = `
             <div class="elemnto_hor">
@@ -632,25 +986,32 @@ $opcion = "contratosVista";
             </div>
         `;
 
-        if (service.is_done) {
-            html += `<div class="elemnto_hor_for">
-                        <span class="service-done">✔ Done</span>`;
+        if (service.is_done || [38, 39].includes(service.id_status)) {
+            html += `<div class="elemnto_hor_for">`;
             if (service.service_number) {
                 html += `<span class="service-number" onclick="viewServiceDetail('${service.service_number}')">${service.service_number}</span>`;
             }
-            html += `<div>`;
+            // ✅ Mostrar estado con color de fondo
+            html += `<span class="service-status-badge" style="background-color: ${statusInfo.color}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; margin-left: 6px;">
+                        ${statusInfo.status}
+                    </span>`;
+            html += `</div>`;
         } else {
             if (isEditable) {
                 html += `<div class="elemnto_hor_for">
-                            <button class="mark-done" onclick="markAsDone(${service.id})">Reschedule</button>`;
+                            <button class="mark-done" onclick="markAsDone(${service.id})">Reschedule</button>
+                        </div>`;
             } else {
+                html += `<div class="elemnto_hor_for">`;
                 if (service.service_number) {
-                    html += `<div class="elemnto_hor_for">
-                                <span class="service-unrealized">✘ Unrealized</span>`;
                     html += `<span class="service-number" onclick="viewServiceDetail('${service.service_number}')">${service.service_number}</span>`;
                 }
+                // ✅ Mostrar estado incluso si no está hecho
+                html += `<span class="service-status-badge" style="background-color: ${statusInfo.color}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; margin-left: 6px;">
+                            ${statusInfo.status}
+                        </span>`;
+                html += `</div>`;
             }
-            html += `<div>`;
         }
 
         return `<div>${html}</div>`;
@@ -706,6 +1067,24 @@ $opcion = "contratosVista";
             .catch(err => alert('Error al marcar como completado'));
     }
 
+    async function cargar_id_frecuencia_servicio(id_frecuencia_servicio, ruta) {
+        try {
+            const res = await fetch(ruta,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        modulo_frecuencia_servicio: 'crear_select',
+                        id_frecuencia_servicio: id_frecuencia_servicio
+                    })
+                }
+            );
+            if (res.ok) document.getElementById('id_frecuencia_servicio').innerHTML = await res.text();
+        } catch (err) { console.error("Error al cargar Frecuencia de Servicio:", err); }
+    }
+
     async function cargar_id_status(id_status, ruta) {
         try {
             const res = await fetch(ruta,
@@ -723,6 +1102,42 @@ $opcion = "contratosVista";
             );
             if (res.ok) document.getElementById('id_status').innerHTML = await res.text();
         } catch (err) { console.error("Error al cargar Status:", err); }
+    }
+
+    async function cargar_id_area(id_area, ruta) {
+        try {
+            const res = await fetch(ruta,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        modulo_areas: 'crear_select',
+                        id_area: id_area
+                    })
+                }
+            );
+            if (res.ok) document.getElementById('id_area').innerHTML = await res.text();
+        } catch (err) { console.error("Error al cargar Area:", err); }
+    }
+
+    async function cargar_id_ruta(id_ruta, ruta) {
+        try {
+            const res = await fetch(ruta,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        modulo_rutas: 'crear_select',
+                        id_ruta: id_ruta
+                    })
+                }
+            );
+            if (res.ok) document.getElementById('id_ruta').innerHTML = await res.text();
+        } catch (err) { console.error("Error al cargar Ruta:", err); }
     }
 
     async function cargar_id_frecuencia_pago(id_frecuencia_pago, ruta) {
@@ -820,10 +1235,78 @@ $opcion = "contratosVista";
     document.addEventListener('DOMContentLoaded', async () => {
         suiteLoading('show');
 
+        try {
+            const id_contrato = "<?php echo $row1['id_contrato'];?>";
+            const res = await fetch(ruta_facturacion_ajax, 
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        modulo_facturacion: 'generar_facturacion',
+                        id_contrato: id_contrato
+                    })
+                }
+            );
+
+            if (res.ok) {
+                const respuesta = await res.json();
+                if (respuesta.success !== true) {
+                    await suiteAlertError("Error", respuesta.mess);
+                }
+            }
+        } catch (err) { 
+            console.error("Error al cargar facturacion:", err); 
+        }
+
         openTab(null, 'tab1');
+
+        const timeInput = document.getElementById('tiempo_servicio');
+        if (!timeInput) return;
+
+        timeInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, ''); // Elimina todo lo que no sea número
+
+            // Limitar a 6 dígitos (HHmmss)
+            if (value.length > 6) {
+                value = value.slice(0, 6);
+            }
+
+            // Formatear como HH:mm:ss
+            let formatted = '';
+            if (value.length >= 1) formatted += value.slice(0, 2); // HH
+            if (value.length >= 3) formatted += ':' + value.slice(2, 4); // :mm
+            if (value.length >= 5) formatted += ':' + value.slice(4, 6); // :ss
+
+            e.target.value = formatted;
+        });
+
+        // Validación al enviar el formulario (opcional)
+        const form = timeInput.closest('form');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                const val = timeInput.value;
+                const regex = /^([0-1][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/;
+                if (val && !regex.test(val)) {
+                    alert('Please enter a valid time in HH:mm:ss format (e.g., 01:30:45)');
+                    e.preventDefault();
+                    timeInput.focus();
+                }
+            });
+        }        
+
+        let id_frecuencia_servicio = "<?php echo $id_frecuencia_servicio; ?>"
+        await cargar_id_frecuencia_servicio(id_frecuencia_servicio, ruta_frecuencia_servicio_ajax);
 
         let id_status = "<?php echo $id_status; ?>"
         await cargar_id_status(id_status, ruta_status_ajax);
+
+        let id_area = "<?php echo $id_area; ?>"
+        await cargar_id_area(id_area, ruta_areas_ajax);
+
+        let id_ruta = "<?php echo $id_ruta; ?>"
+        await cargar_id_ruta(id_ruta, ruta_ruta_ajax);
 
         let id_frecuencia_pago = "<?php echo $id_frecuencia_pago; ?>"
         await cargar_id_frecuencia_pago(id_frecuencia_pago, ruta_frec_pago_ajax);
@@ -859,15 +1342,23 @@ $opcion = "contratosVista";
             const confirmado = await suiteConfirm(
                 arreglo_frases_g[0],
                 arreglo_frases_g[1],
-                { aceptar: arreglo_frases_g[2], cancelar: arreglo_frases_g[3] }
+                { 
+                    aceptar: arreglo_frases_g[2], 
+                    cancelar: arreglo_frases_g[3] 
+                }
             );
             if (!confirmado) return;
 
-            const form = document.getElementById("update_direccion");
+            const form = document.getElementById("update_contrato");
             const data = new FormData(form);
 
             try {
-                const res = await fetch(form.action, { method: form.method, body: data });
+                const res = await fetch(form.action, 
+                    { 
+                        method: form.method, 
+                        body: data
+                    }
+                );
                 const text = await res.text();
                 const json = JSON.parse(text);
                 if (json.tipo === 'success') {
@@ -885,6 +1376,7 @@ $opcion = "contratosVista";
         });
 
         loadAndRenderServices();
+        loadAndRenderFacturacion();
 
         suiteLoading('hide');
     });

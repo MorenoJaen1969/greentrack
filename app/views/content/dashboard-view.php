@@ -2,7 +2,7 @@
     <!-- 30% - Carrusel de servicios -->
     <div class="carousel-wrapper">
         <div class="elem_row">
-            <h3 class="carousel-title"> 
+            <h3 class="carousel-title">
                 <div class="grid-t-p">
                     <div class="grid-t-p_01">
                         Daily Itinirary
@@ -103,15 +103,15 @@
         </div>
 
         <!-- Contenedor de los dos paneles -->
-        <div style="display: flex; gap: 0.5rem; justify-content: space-between; width: 100%;">
-            <div class="panel1">
+        <div class="containerServicio">
+            <div id="panel_servicio" class="panel1">
                 <!-- Panel: Servicios Asignados (HOY) -->
                 <div class="lista_despacho">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h4 id="tit_tipo_servcio" style="margin: 0; color: #2c7;">Pre-Assigned</h4>
+                    <div class="titServicios1">
+                        <h4 id="tit_tipo_servicio" style="margin: 0; color: #2c7;">Pre-Assigned</h4>
                         <div>
                             <label for="fecha-despacho">This dispatch is for the day:</label>
-                            <input type="date" id="fecha-despacho" style="font-size: 0.9em; padding: 0.3rem; border: 1px solid #999; border-radius: 4px;">
+                            <input type="date" id="fecha-despacho" class="formatoFecha">
                         </div>
                     </div>
                     <div id="lista-asignados" class="panel-scroll vista_det">
@@ -119,34 +119,36 @@
                     </div>
                 </div>
 
-                <div id="pie_panel_izquierdo" class="pie_despacho caja_resumen">
+                <div id="pie_panel_izquierdo" class="pie_despacho caja_resumen pie_izq-preservicio">
                     <!-- Botón de guardar (opcional, para futura implementación) -->
-                    <div style="text-align: center; margin-top: 1rem;">
-                        <button id="btn-guardar-despacho" class="btn-guardar">Save Dispatch</button>
+                    <div id="totalRegistros" class="pie_izq-preservicio_01"></div>
+                    <div id="htmlTotalTiempo" class="pie_izq-preservicio_02"></div>
+                    <div class="pie_izq-preservicio_03">
+                        <button id="reordenar" class="btn-accion">Reorder</button>
+                        <button id="btn-guardar-despacho" class="btn-accion">Save Dispatch</button>
                     </div>
                 </div>
             </div>
 
             <!-- Botones de control central -->
-            <div style="display: flex; flex-direction: column; justify-content: center; gap: 0.5rem;">
-                <button id="btn-mover-a-asignados" disabled title="Add to Today">></button>
-                <button id="btn-mover-a-no-asignados" disabled title="Remove from Today"><</button>
+            <div class="titServicios2">
+                <div class="boxes">
+                    <button id="btn-mover-a-no-asignados" disabled title="Remove from Today">➡️</button>
+                    <button id="btn-mover-a-asignados" disabled title="Add to Today">⬅️</button>
+                </div>
             </div>
 
-            <div class="panel1">
+            <div id="panel_sinServicio" class="panel1">
                 <!-- Panel: Servicios NO Asignados -->
                 <div class="lista_despacho">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div class="titServicios1">
                         <h4 style="margin-top: 0; color: #a33;">Available for Assignment</h4>
                         <!-- Dentro del panel derecho -->
-                        <div class="elemnto_hor" style="margin-bottom: 0.8rem; width: 20vw;">
-                            <input type="text" id="buscar-no-asignados" 
-                                placeholder="Search for client, address, or frequency..." 
-                                style="width: 100%; margin-right:10px; padding: 0.4rem; font-size: 0.9em; border: 1px solid #ccc; border-radius: 4px;">
-                            <button id="btn-next-coincidencia" 
-                                    style="display: none; padding: 0.4rem 0.6rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                                Next
-                            </button>                            
+                        <div class="elemento_hor searchBTN">
+                            <input type="text" id="buscar-no-asignados"
+                                placeholder="Search for client, address, or frequency..."
+                                class="cajaSearch">
+                            <button id="btn-next-coincidencia" class="botonSearch">🔍</button>
                         </div>
                     </div>
 
@@ -170,7 +172,7 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <span style="font-size: 1.1em; font-weight: bold;">Historical Route</span>
         <button id="btn-abrir-modal-historico" style="background: #2196F3; color: #fff; border: none; border-radius: 6px; 
-                       padding: 6px 12px; cursor: pointer; font-size: 0.95em;">
+                    padding: 6px 12px; cursor: pointer; font-size: 0.95em;">
             View
         </button>
         <!-- <button id="btn-reconciliar-historico">🔄 Reconcile Historical Data</button>         -->
@@ -181,20 +183,20 @@
     <div style="width: 100%; height: 1px; background: #fff; margin: 6px 0; position: relative; overflow: hidden;">
         <div style="background: #fff; height: 100%; width: 90%; margin: 0 auto;"></div>
     </div>
+    <div>Vehicles with Assigned Services</div>
 
     <!-- Contenedor de botones de vehículos Activos (Con servicios)-->
-    <div id="contenedor-vehiculos-historico"
-        style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; width: 100%;">
+    <div id="contenedor-vehiculos-historico" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; width: 100%;">
     </div>
 
     <!-- Línea divisoria con margen -->
     <div style="width: 100%; height: 1px; background: #fff; margin: 6px 0; position: relative; overflow: hidden;">
         <div style="background: #fff; height: 100%; width: 90%; margin: 0 auto;"></div>
     </div>
+    <div>Vehicles without Assigned Services</div>
 
-        <!-- Contenedor de botones de vehículos Activos (Con servicios)-->
-    <div id="contenedor-vehiculos-sin-servicio"
-        style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; width: 100%;">
+    <!-- Contenedor de botones de vehículos Activos (Sin servicios)-->
+    <div id="contenedor-vehiculos-sin-servicio" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; width: 100%;">
     </div>
 
 </div>
@@ -293,10 +295,10 @@
 
             <!-- Botones de control -->
             <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
-                <button id="btn-reiniciar-ruta" title="Restart" style="...">🔄</button>
-                <button id="btn-rapido-atras" title="Backward" style="...">⏪</button>
-                <button id="btn-pausa-reanudar" title="Pause/Play" style="...">⏸️</button>
-                <button id="btn-rapido-adelante" title="Forward" style="...">⏩</button>
+                <button id="btn-reiniciar-ruta" title="Restart">🔄</button>
+                <button id="btn-rapido-atras" title="Backward">⏪</button>
+                <button id="btn-pausa-reanudar" title="Pause/Play">⏸️</button>
+                <button id="btn-rapido-adelante" title="Forward">⏩</button>
                 <span id="estado-reproduccion" style="font-size: 0.9em; color: #555;">Playing...</span>
             </div>
 
@@ -362,10 +364,12 @@
                             <th>Truck</th>
                             <th>Status</th>
                             <th>Duration</th>
-                        </tr>                                    
+                        </tr>
                     </thead>
                     <tbody id="historial-servicio">
-                        <tr><td colspan="4">Loading...</td></tr>
+                        <tr>
+                            <td colspan="4">Loading...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -373,20 +377,45 @@
     </div>
 </div>
 
+<!-- Modal contenedor -->
+<div id="selectModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; padding: 20px; border-radius: 8px; background: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+        <div id="dat_cliente"></div>
+    
+        <h3 style="margin-top: 0; font-size: 1.2em;">Select an option</h3>
+
+        <select id="modalSelect" style="width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <!-- Las opciones se llenarán desde JS -->
+        </select>
+
+        <div style="text-align: right; margin-top: 16px;">
+            <button id="btnCancelar" style="padding: 6px 12px; margin-right: 8px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">
+                Cancel
+            </button>
+            <button id="btnAceptar" style="padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Ok
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Fondo oscuro -->
+<div id="modalOverlay" class="modal-overlay-bg" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;"></div>
+
 <script>
     function sumarUnDiaYEvitarSabado(fecha) {
         // Crear una copia para no modificar la original
         const nuevaFecha = new Date(fecha);
-        
+
         // Sumar 1 día
         nuevaFecha.setDate(nuevaFecha.getDate() + 1);
-        
+
         // Verificar si es sábado (getDay() devuelve 6 para sábado)
         if (nuevaFecha.getDay() === 6) {
             // Si es sábado, sumar 1 día más (para hacerlo domingo)
             nuevaFecha.setDate(nuevaFecha.getDate() + 1);
         }
-        
+
         return nuevaFecha;
     }
 
@@ -395,11 +424,14 @@
         const ahora = new Date();
 
         // Formato: 15 Abr
-        const opcionesFecha = { day: '2-digit', month: 'short' };
+        const opcionesFecha = {
+            day: '2-digit',
+            month: 'short'
+        };
         const fecha = ahora.toLocaleDateString('es-ES', opcionesFecha)
             .replace('.', ''); // Quitar el punto de "abr."
 
-        
+
         // Formato: hh:mm:ss
         const hora = ahora.toLocaleTimeString('es-ES', {
             hour: '2-digit',
@@ -458,8 +490,12 @@
         // Opcional: notificar al backend
         fetch('/app/ajax/usuariosAjax.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ modulo_usuarios: 'cerrar_sesion' })
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                modulo_usuarios: 'cerrar_sesion'
+            })
         }).finally(() => {
             window.location.href = '/'; // Redirigir al login
         });
@@ -471,7 +507,9 @@
         try {
             const response = await fetch('/app/ajax/datosgeneralesAjax.php', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     modulo_DG: 'datos_para_gps'
                 })
@@ -513,7 +551,9 @@
                     }
                 } else {
                     console.warn('⚠️ Config no recibida o error:', data.error);
-                    window.APP_CONFIG = { ...DEFAULT_CONFIG };
+                    window.APP_CONFIG = {
+                        ...DEFAULT_CONFIG
+                    };
                 }
 
                 console.log('✅ APP_CONFIG final:', window.APP_CONFIG);
@@ -535,22 +575,22 @@
     document.addEventListener('DOMContentLoaded', cargarConfigYIniciar);
 
     // Drag & drop para el formulario flotante
-    (function () {
+    (function() {
         const form = document.getElementById('form-flotante-historico');
         let offsetX, offsetY, dragging = false;
-        form.addEventListener('mousedown', function (e) {
+        form.addEventListener('mousedown', function(e) {
             dragging = true;
             offsetX = e.clientX - form.offsetLeft;
             offsetY = e.clientY - form.offsetTop;
             form.style.transition = 'none';
         });
-        document.addEventListener('mousemove', function (e) {
+        document.addEventListener('mousemove', function(e) {
             if (dragging) {
                 form.style.left = (e.clientX - offsetX) + 'px';
                 form.style.top = (e.clientY - offsetY) + 'px';
             }
         });
-        document.addEventListener('mouseup', function () {
+        document.addEventListener('mouseup', function() {
             dragging = false;
             form.style.transition = '';
         });
@@ -566,15 +606,21 @@
     // Actualizar valor de velocidad
     const velocidadInput = document.getElementById('velocidad-historico');
     const velocidadValor = document.getElementById('velocidad-historico-valor');
-    velocidadInput.oninput = () => { velocidadValor.textContent = velocidadInput.value + ' ms'; };
+    velocidadInput.oninput = () => {
+        velocidadValor.textContent = velocidadInput.value + ' ms';
+    };
 
 
     // Cargar vehículos en el select del modal
     async function cargarTrucksHistorico() {
         const res = await fetch('/app/ajax/motor2Ajax.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ modulo_motor2: 'obtener_trucks_activos_hoy' })
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                modulo_motor2: 'obtener_trucks_activos_hoy'
+            })
         });
         const data = await res.json();
         const select = document.getElementById('select-truck-historico');
@@ -588,4 +634,82 @@
             });
         }
     }
+
+    // Dispatch date logic: prevent actions when selected date is today or earlier
+    (function() {
+        window.dispatchConfig = window.dispatchConfig || {
+            dateIsProcessed: false
+        };
+
+        function parseDateOnly(dateStr) {
+            if (!dateStr) return null;
+            // Create date at midnight local time
+            const d = new Date(dateStr + 'T00:00:00');
+            if (isNaN(d.getTime())) return null;
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+
+        function isDateProcessed(dateStr) {
+            const sel = parseDateOnly(dateStr);
+            if (!sel) return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            // Services on or before today are considered processed
+            return sel.getTime() <= today.getTime();
+        }
+
+        function updateDispatchState(dateStr) {
+            const processed = isDateProcessed(dateStr);
+            window.dispatchConfig.dateIsProcessed = processed;
+
+            const btnNo = document.getElementById('btn-mover-a-no-asignados');
+            const btnYes = document.getElementById('btn-mover-a-asignados');
+            if (btnNo) btnNo.disabled = processed;
+            if (btnYes) btnYes.disabled = processed;
+
+            const panel = document.getElementById('panel_sinServicio');
+            if (panel) {
+                if (processed) {
+                    panel.style.cursor = 'not-allowed';
+                } else {
+                    panel.style.cursor = '';
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const fecha = document.getElementById('fecha-despacho');
+            if (fecha) {
+                fecha.addEventListener('change', function(e) {
+                    updateDispatchState(e.target.value);
+                });
+                // initial
+                updateDispatchState(fecha.value);
+            }
+
+            // Prevent drag behavior on panel_sinServicio when processed
+            const panel = document.getElementById('panel_sinServicio');
+            if (panel) {
+                // Block pointer/drag events when processed
+                const blockIfProcessed = function(e) {
+                    if (window.dispatchConfig && window.dispatchConfig.dateIsProcessed) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
+                };
+
+                panel.addEventListener('mousedown', blockIfProcessed, {
+                    passive: false
+                });
+                panel.addEventListener('touchstart', blockIfProcessed, {
+                    passive: false
+                });
+                panel.addEventListener('dragstart', blockIfProcessed, {
+                    passive: false
+                });
+            }
+        });
+    })();
 </script>

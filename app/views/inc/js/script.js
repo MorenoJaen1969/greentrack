@@ -17,7 +17,7 @@
 
 // Función para aplicar efecto visual al marcador
 // Al inicio de tu script, después de crear el mapa
-window.mapMarkers = {}; 
+window.mapMarkers = {};
 
 // === Estado de actividades en curso ===
 window.estadoActividades = {}; // truck → { tipo: 'servicio' | 'parada', id_registro: int, inicio: Date }
@@ -231,10 +231,10 @@ function procesarYSistema(serviciosRaw) {
         lng: typeof s.lng === 'string' ? parseFloat(s.lng) : s.lng
     }));
 
-    const serviciosValidos = servicios.filter(s => 
-        typeof s.lat === 'number' && 
-        typeof s.lng === 'number' && 
-        !isNaN(s.lat) && 
+    const serviciosValidos = servicios.filter(s =>
+        typeof s.lat === 'number' &&
+        typeof s.lng === 'number' &&
+        !isNaN(s.lat) &&
         !isNaN(s.lng)
     );
 
@@ -307,7 +307,7 @@ function inicializarMapa() {
     // ✅ Asegurar que APP_CONFIG existe
     if (!window.APP_CONFIG || !window.APP_CONFIG.mapa_base) {
         console.warn('⚠️ APP_CONFIG o mapa_base no definido. Usando ESRI por defecto');
-        window.APP_CONFIG = window.APP_CONFIG || {}; 
+        window.APP_CONFIG = window.APP_CONFIG || {};
         window.APP_CONFIG.mapa_base = 'ESRI'; // valor por defecto
     }
 
@@ -344,7 +344,7 @@ function inicializarMapa() {
     window.map = map;
 
     console.log('✅ Mapa inicializado con éxito');
-}    
+}
 
 function ajustarMarcadoresCercanos(serviciosValidos) {
     const umbralMetros = 5; // Considerar "cercanos" si están a menos de 5m
@@ -424,9 +424,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 modulo_servicios: 'actualizar_hora_gps',
                 id_servicio: id_servicio
             };
-            
+
             if (tipo === 'inicio') {
-                data.hora_inicio_gps = hora; 
+                data.hora_inicio_gps = hora;
             } else if (tipo === 'fin') {
                 data.hora_fin_gps = hora;
                 // Calcular duración y enviar tiempo_servicio
@@ -465,7 +465,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 // === ACTUALIZAR STATUS M2 EN EL MARCADOR ===
-                actualizarStatusM2(id_servicio);                
+                actualizarStatusM2(id_servicio);
 
             } else {
                 console.warn(`⚠️ Error updating GPS time: ${resp.message}`);
@@ -475,7 +475,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    window.addEventListener('servicioIniciado', function(e) {
+    window.addEventListener('servicioIniciado', function (e) {
         const { id_servicio, hora } = e.detail;
 
         // 1. Sincronizar con el backend
@@ -496,11 +496,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    window.addEventListener('servicioCerrado', function(e) {
+    window.addEventListener('servicioCerrado', function (e) {
         const { id_servicio, hora } = e.detail;
 
         // 1. Sincronizar con el backend
-console.log("Proceso para finalizar el servicio");        
+        console.log("Proceso para finalizar el servicio");
         sincronizarEstadoGPS(id_servicio, 'fin', hora);
 
         // 2. Actualizar estado local
@@ -531,7 +531,7 @@ console.log("Proceso para finalizar el servicio");
     // === 2. Estructura del carrusel ===
     const carrusel = {
         contenedor: document.getElementById('servicio-carrusel'),
-        datos: [], 
+        datos: [],
         elementos: [],
         TOTAL_DISPLAY: 0,
         espacioUsado: 0,
@@ -864,7 +864,7 @@ console.log("Proceso para finalizar el servicio");
     try {
         const res = await fetch('/app/ajax/serviciosAjax.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }, 
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ modulo_servicios: 'listar' })
         });
 
@@ -881,7 +881,7 @@ console.log("Proceso para finalizar el servicio");
             const contenedor = document.getElementById('carrusel') || document.body;
             let intentos = 0;
             const maxIntentos = 120; // 60 minutos (120 x 30 seg)
-            
+
             // Estilo limpio y visible
             contenedor.style.display = 'flex';
             contenedor.innerHTML = `
@@ -902,6 +902,9 @@ console.log("Proceso para finalizar el servicio");
                     <div id="contador-polling" style="font-size: 0.9em; margin-top: 10px;">Attempts: 0</div>
                 </div>
             `;
+
+            const vehicles1 = [];
+            const seenTrucks1 = new Set();
 
             const intervaloPolling = setInterval(async () => {
                 intentos++;
@@ -926,14 +929,51 @@ console.log("Proceso para finalizar el servicio");
                     if (Array.isArray(nuevosServicios) && nuevosServicios.length > 0) {
                         console.log("✅ Servicios detectados, recargando sistema");
                         clearInterval(intervaloPolling);
-                        
+
                         // Limpiar contenedor
                         contenedor.innerHTML = '';
                         contenedor.style.display = '';
 
                         // Recargar todo el flujo con los nuevos datos
-                        procesarYSistema(nuevosServicios); // ← Llama al mismo flujo principal
+                        procesarYSistema(nuevosServicios); // ← Llama al mismo flujo principal 
                     }
+
+                    // Vehiculos sin servicios (Deberian estar en el HQ)
+                    vehiculosSinServicio.forEach(s => {
+                        if (!seenTrucks1.has(s.truck)) {
+                            seenTrucks1.add(s.truck);
+
+                            vehicles1.push({
+                                id: s.truck,
+                                color: s.color_truck,
+                            });
+                        }
+                    });
+
+                    const container1 = document.getElementById('contenedor-vehiculos-sin-servicio');
+                    container1.innerHTML = ''; // Limpiar antes
+
+                    vehicles1.forEach(v => {
+                        const btn = document.createElement('button');
+                        btn.textContent = v.id;
+                        btn.style.background = v.color;
+                        btn.style.color = getColorContraste(v.color); // Blanco o negro según contraste
+                        btn.style.border = 'none';
+                        btn.style.borderRadius = '4px';
+                        btn.style.padding = '2px 6px';
+                        btn.style.fontSize = '0.8em';
+                        btn.style.cursor = 'pointer';
+                        btn.style.fontWeight = 'bold';
+                        btn.style.minWidth = '60px';
+                        btn.style.width = '31%';
+                        btn.style.textAlign = 'center';
+
+                        // Opcional: tooltip
+                        btn.title = `Vehicle: ${v.id}`;
+
+                        container1.appendChild(btn);
+                    });
+
                 } catch (err) {
                     console.error("Error en polling:", err);
                 }
@@ -953,10 +993,10 @@ console.log("Proceso para finalizar el servicio");
             }));
 
             // === Validar coordenadas numéricas ===
-            const serviciosValidos = servicios.filter(s => 
-                typeof s.lat === 'number' && 
-                typeof s.lng === 'number' && 
-                !isNaN(s.lat) && 
+            const serviciosValidos = servicios.filter(s =>
+                typeof s.lat === 'number' &&
+                typeof s.lng === 'number' &&
+                !isNaN(s.lat) &&
                 !isNaN(s.lng)
             );
 
@@ -1032,11 +1072,11 @@ console.log("Proceso para finalizar el servicio");
                         if (iconElement) {
                             iconElement.id = `marker-${s.id_servicio}`;
                             iconElement.style.transition = 'all 0.3s ease';
-                            
+
                             // Opcional: Tooltip pequeño para identificar rápido
                             iconElement.title = `Truck: ${s.truck}`;
                         }
-                    });                    
+                    });
 
                     // === Generar HTML del crew ===
                     const crewHtml = Array.isArray(s.crew_integrantes) && s.crew_integrantes.length > 0
@@ -1069,7 +1109,7 @@ console.log("Proceso para finalizar el servicio");
                         <div style="margin-top:4px;">${crewHtml}</div></div>
                     `);
                 }
-                
+
             });
 
             vehiculosSinServicio.forEach(s => {
@@ -1080,9 +1120,9 @@ console.log("Proceso para finalizar el servicio");
                         id: s.truck,
                         color: s.color_truck,
                     });
-                }                        
+                }
             });
-            
+
             // ✅ Disparar evento para GPS
             const event = new Event('serviciosCargados');
             document.dispatchEvent(event);
@@ -1122,7 +1162,7 @@ console.log("Proceso para finalizar el servicio");
 
                 container.appendChild(btn);
             });
-            
+
             const container1 = document.getElementById('contenedor-vehiculos-sin-servicio');
             container1.innerHTML = ''; // Limpiar antes
 
@@ -1182,7 +1222,7 @@ console.log("Proceso para finalizar el servicio");
         });
         const servicioActualizado = await response.json();
         let servicioHistorico = null;
-        
+
         let con_historia = null;
         if (!servicioActualizado) {
             await suiteAlertError("Error", "Could not load service");
@@ -1279,7 +1319,7 @@ console.log("Proceso para finalizar el servicio");
         const historialBody = document.getElementById('historial-servicio');
         historialBody.innerHTML = '';
 
-        if (con_historia){
+        if (con_historia) {
             if (Array.isArray(servicioHistorico.historial) && servicioHistorico.historial.length > 0) {
                 servicioHistorico.historial.forEach(h => {
                     const tr = document.createElement('tr');
@@ -1511,7 +1551,7 @@ console.log("Proceso para finalizar el servicio");
                             String(now.getDate()).padStart(2, '0') + ' ' +
                             String(now.getHours()).padStart(2, '0') + ':' +
                             String(now.getMinutes()).padStart(2, '0') + ':' +
-                            String(now.getSeconds()).padStart(2, '0');                            
+                            String(now.getSeconds()).padStart(2, '0');
 
                         if (nuevoEstado === 'inicio_actividades' && !servicio.hora_aviso_usuario) {
                             // ✅ Fecha en formato local "Y-m-d H:i:s"
@@ -1573,7 +1613,7 @@ console.log("Proceso para finalizar el servicio");
         String(now.getDate()).padStart(2, '0') + ' ' +
         String(now.getHours()).padStart(2, '0') + ':' +
         String(now.getMinutes()).padStart(2, '0') + ':' +
-        String(now.getSeconds()).padStart(2, '0');                            
+        String(now.getSeconds()).padStart(2, '0');
 
     let ultimoTiempo = localDate;
 
@@ -1597,7 +1637,7 @@ console.log("Proceso para finalizar el servicio");
 
                 if (Array.isArray(serviciosActualizados) && serviciosActualizados.length > 0) {
 
-//                    console.log(`✅ ${serviciosActualizados.length} servicios actualizados`);
+                    //                    console.log(`✅ ${serviciosActualizados.length} servicios actualizados`);
 
                     serviciosActualizados.forEach(servicio => {
                         // Actualiza la tarjeta si existe
@@ -1749,7 +1789,7 @@ console.log("Proceso para finalizar el servicio");
     }
 
     // Escuchar cambios en el input de búsqueda
-    document.getElementById('buscar-no-asignados')?.addEventListener('input', function(e) {
+    document.getElementById('buscar-no-asignados')?.addEventListener('input', function (e) {
         const texto = e.target.value.trim().toLowerCase();
         const contenedor = document.getElementById('lista-no-asignados');
         const items = contenedor.querySelectorAll('.item-despacho');
@@ -1773,7 +1813,7 @@ console.log("Proceso para finalizar el servicio");
                 if (primero) {
                     item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     primero = false;
-                }                
+                }
             }
         });
     });
@@ -1801,9 +1841,8 @@ console.log("Proceso para finalizar el servicio");
         btnCerrar_lista.addEventListener('click', () => {
             if (modalSelectDespacho) modalSelectDespacho.style.display = 'none';
             if (formFlotante) {
-            formFlotante.style.display = 'flex'; // O 'block' / 'inline-flex', según diseño
-        }
-
+                formFlotante.style.display = 'flex'; // O 'block' / 'inline-flex', según diseño
+            }
         });
 
         if (!modalSelectDespacho) {
@@ -1843,15 +1882,17 @@ console.log("Proceso para finalizar el servicio");
         try {
             const fecha_despacho = document.getElementById('fecha-despacho')?.value || formatearFechaInput(new Date());
 
-            const listaAsignados = document.getElementById('lista-asignados');
-            const listaNoAsignados = document.getElementById('lista-no-asignados');
+            window.listaAsignados = document.getElementById('lista-asignados');
+            window.listaNoAsignados = document.getElementById('lista-no-asignados');
+            window.htmlTotalTiempo = document.getElementById('htmlTotalTiempo');
+
             let editable = true;
 
             const res = await fetch('/app/ajax/serviciosAjax.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(
-                    { 
+                    {
                         modulo_servicios: 'listar_despacho',
                         fecha_despacho: fecha_despacho
                     }
@@ -1859,40 +1900,105 @@ console.log("Proceso para finalizar el servicio");
             });
 
             if (!res.ok) throw new Error('HTTP ' + res.status);
-
             const respuesta = await res.json();
-
-            listaNoAsignados.innerHTML = respuesta.html_no_asignados;
-            listaAsignados.innerHTML = respuesta.html_asignados;
-            editable = respuesta.editable;  
-
-            const tit_tipo_servcio = document.getElementById('tit_tipo_servcio');
-            if (!editable){
-                tit_tipo_servcio.innerHTML = "Assigned Services"
+            if (respuesta.success === false) {
+                const la = document.getElementById('lista-asignados');
+                const lna = document.getElementById('lista-no-asignados');
+                if (la) la.innerHTML = `<p>❌ ${respuesta.mess} </p>`;
+                if (lna) lna.innerHTML = `<p>❌ ${respuesta.mess} </p>`;
             } else {
-                tit_tipo_servcio.innerHTML = "Pre-Assigned"
-            }
 
-            // ... después de asignar innerHTML
-            actualizarContadorPanel(listaAsignados, 'pie_panel_izquierdo');
-            actualizarContadorPanel(listaNoAsignados, 'pie_panel_derecho');            
+                window.listaNoAsignados.innerHTML = respuesta.html_no_asignados;
+                window.listaAsignados.innerHTML = respuesta.html_asignados;
+                window.htmlTotalTiempo.innerHTML = respuesta.htmlTotalTiempo;
 
-            // Re-vincular eventos en AMBOS paneles
-            [listaNoAsignados, listaAsignados].forEach(contenedor => {
-                contenedor.querySelectorAll('.item-despacho').forEach(el => {
-                    el.addEventListener('click', () => seleccionarItem(el));
+                editable = respuesta.editable;
 
-                    el.addEventListener('dragstart', (e) => {
-                        e.dataTransfer.setData('text/plain', el.dataset.id);
-                        e.dataTransfer.effectAllowed = 'move';
-                        el.classList.add('dragging');
-                    });
+                const tit_tipo_servicio = document.getElementById('tit_tipo_servicio');
+                if (!editable) {
+                    tit_tipo_servicio.innerHTML = "Assigned Services"
+                } else {
+                    tit_tipo_servicio.innerHTML = "Pre-Assigned"
+                }
 
-                    el.addEventListener('dragend', () => {
-                        el.classList.remove('dragging');
+                // ... después de asignar innerHTML 
+                actualizarContadorPanel(window.listaAsignados, 'totalRegistros');
+                actualizarContadorPanel(window.listaNoAsignados, 'pie_panel_derecho');
+
+                // Inyectar lista de servicios sin ruta (si viene en la respuesta)
+                try {
+                    const pieDerecho = document.getElementById('pie_panel_derecho');
+                    if (pieDerecho) {
+                        if (respuesta && respuesta.html_no_route) {
+                            let cont = pieDerecho.querySelector('.sin-ruta-lista');
+                            if (!cont) {
+                                cont = document.createElement('div');
+                                cont.className = 'sin-ruta-lista';
+                                cont.style.marginTop = '6px';
+                                pieDerecho.appendChild(cont);
+                            }
+                            cont.innerHTML = respuesta.html_no_route;
+                            // Hacer que los items dentro de la lista "sin ruta" sean seleccionables
+                            try {
+                                const elementos = cont.querySelectorAll('.item-despacho, li, .no-route-item');
+                                elementos.forEach(el => {
+                                    // Normalizar dataset y clases para integrarse con el flujo existente
+                                    el.dataset.tipo = el.dataset.tipo || 'no-asignado';
+                                    if (!el.classList.contains('item-despacho')) el.classList.add('item-despacho');
+
+                                    // Click -> seleccionar (soportando Ctrl multi-select)
+                                    el.addEventListener('click', (ev) => seleccionarItem(el, ev));
+
+                                    // Habilitar drag (compatibilidad)
+                                    el.setAttribute('draggable', 'true');
+                                    el.addEventListener('dragstart', (e) => {
+                                        if (window.dispatchConfig && window.dispatchConfig.dateIsProcessed) {
+                                            e.preventDefault();
+                                            return;
+                                        }
+                                        const id = el.dataset.id || el.getAttribute('data-id') || '';
+                                        e.dataTransfer.setData('text/plain', id);
+                                        e.dataTransfer.effectAllowed = 'move';
+                                        el.classList.add('dragging');
+                                    });
+                                    el.addEventListener('dragend', () => {
+                                        el.classList.remove('dragging');
+                                    });
+                                });
+                            } catch (e2) {
+                                console.warn('No se pudieron vincular eventos a items sin-ruta:', e2);
+                            }
+                        } else {
+                            const cont = pieDerecho.querySelector('.sin-ruta-lista');
+                            if (cont) cont.innerHTML = '';
+                        }
+                    }
+                } catch (e) {
+                    console.warn('No se pudo inyectar html_no_route:', e);
+                }
+
+                // Re-vincular eventos en AMBOS paneles
+                [window.listaNoAsignados, window.listaAsignados].forEach(contenedor => {
+                    contenedor.querySelectorAll('.item-despacho').forEach(el => {
+                        el.addEventListener('click', (ev) => seleccionarItem(el, ev));
+
+                        el.addEventListener('dragstart', (e) => {
+                            // Bloquear inicio de drag si la fecha seleccionada está procesada
+                            if (window.dispatchConfig && window.dispatchConfig.dateIsProcessed) {
+                                e.preventDefault();
+                                return;
+                            }
+                            e.dataTransfer.setData('text/plain', el.dataset.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                            el.classList.add('dragging');
+                        });
+
+                        el.addEventListener('dragend', () => {
+                            el.classList.remove('dragging');
+                        });
                     });
                 });
-            });
+            }
 
         } catch (err) {
             console.error("Error al cargar lista de Despacho:", err);
@@ -1902,14 +2008,14 @@ console.log("Proceso para finalizar el servicio");
             if (lna) lna.innerHTML = '<p>❌ Error loading available services</p>';
         }
     }
-    
+
     let coincidencias = [];
     let indiceActual = -1;
 
     function resaltarCoincidencias(texto) {
         const contenedor = document.getElementById('lista-no-asignados');
         const items = contenedor.querySelectorAll('.item-despacho');
-        
+
         // Reset
         coincidencias = [];
         indiceActual = -1;
@@ -1923,7 +2029,7 @@ console.log("Proceso para finalizar el servicio");
         }
 
         const busqueda = texto.trim().toLowerCase();
-        
+
         items.forEach(item => {
             const textoItem = item.textContent.toLowerCase();
             if (textoItem.includes(busqueda)) {
@@ -1968,71 +2074,260 @@ console.log("Proceso para finalizar el servicio");
     }
 
     // Evento: escribir en el input
-    document.getElementById('buscar-no-asignados')?.addEventListener('input', function(e) {
+    document.getElementById('buscar-no-asignados')?.addEventListener('input', function (e) {
         resaltarCoincidencias(e.target.value);
     });
 
     // Evento: clic en "Next"
-    document.getElementById('btn-next-coincidencia')?.addEventListener('click', function() {
+    document.getElementById('btn-next-coincidencia')?.addEventListener('click', function () {
         irAlSiguienteCoincidente();
     });
 
     let itemSeleccionado = null;
 
-    function seleccionarItem(item) {
-        // Quitar selección previa
-        if (itemSeleccionado) {
-            itemSeleccionado.classList.remove('seleccionado');
+    function seleccionarItem(item, ev = null) {
+        // Si se usa Ctrl para multi-selección, alternar el estado
+        const usarMulti = ev && (ev.ctrlKey || ev.metaKey);
+
+        if (usarMulti) {
+            if (item.classList.contains('seleccionado')) {
+                item.classList.remove('seleccionado');
+            } else {
+                item.classList.add('seleccionado');
+            }
+            // reconstruir itemSeleccionado como el último seleccionado
+            const seleccionados = document.querySelectorAll('.item-despacho.seleccionado');
+            itemSeleccionado = seleccionados.length > 0 ? seleccionados[seleccionados.length - 1] : null;
+        } else {
+            // Quitar selección previa (modo single)
+            document.querySelectorAll('.item-despacho.seleccionado').forEach(it => it.classList.remove('seleccionado'));
+            // Seleccionar nuevo
+            item.classList.add('seleccionado');
+            itemSeleccionado = item;
+        }
+        // Si la fecha está marcada como procesada, no permitir seleccionar ni habilitar acciones
+        if (window.dispatchConfig && window.dispatchConfig.dateIsProcessed) {
+            itemSeleccionado = null;
+            document.getElementById('btn-mover-a-no-asignados').disabled = true;
+            document.getElementById('btn-mover-a-asignados').disabled = true;
+            return;
         }
 
-        // Seleccionar nuevo
-        item.classList.add('seleccionado');
-        itemSeleccionado = item;
-
-        // Habilitar botón correspondiente
-        const tipo = item.dataset.tipo;
-        document.getElementById('btn-mover-a-asignados').disabled = (tipo !== 'no-asignado');
+        // Habilitar botón correspondiente según última selección
+        const tipo = itemSeleccionado ? itemSeleccionado.dataset.tipo : null;
         document.getElementById('btn-mover-a-no-asignados').disabled = (tipo !== 'asignado');
+        document.getElementById('btn-mover-a-asignados').disabled = (tipo !== 'no-asignado');
     }
 
-    function moverItem(elemento, origen) {
+    async function verificarRuta(elemento, tipo_dato) {
+console.log("🔍 verificarRuta llamado para:", elemento.dataset.id, "tipo:", tipo_dato);
+        const id_cliente = elemento.dataset.id || elemento.getAttribute('data-id');
+        const modulo = 'verificar_ruta';
+        const fecha = document.getElementById('fecha-despacho')?.value || null;
+        if (!fecha) {
+            console.warn('Fecha no seleccionada: no se persisten cambios');
+            return;
+        }
+
+        try {
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(
+                    {
+                        modulo_servicios: modulo,
+                        id_cliente: id_cliente,
+                        fecha: fecha
+                    }
+                )
+            });
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            const situacion = data.status;
+            const mensaje = data.message;
+            const cliente = data.cliente;
+
+            if (situacion == 'false') {
+                // Mostrar modal
+                const valorSeleccionado = await mostrarModalSelect(mensaje, cliente);
+
+                if (valorSeleccionado !== null) {
+                    console.log('Usuario seleccionó:', valorSeleccionado);
+                    moverItem(elemento, tipo_dato, valorSeleccionado);
+                    itemSeleccionado = null;
+                    document.getElementById('btn-mover-a-asignados').disabled = true;
+                    document.getElementById('btn-mover-a-no-asignados').disabled = true;
+                } else {
+                    console.log('Usuario canceló');
+                }
+            } else {
+                moverItem(elemento, tipo_dato, null);
+                document.getElementById('btn-mover-a-asignados').disabled = true;
+                document.getElementById('btn-mover-a-no-asignados').disabled = true;
+            }
+        } catch (error) {
+            console.error('Error en verificarRuta:', error);
+            alert('Error al verificar la ruta: ' + error.message);
+        }
+    }
+
+    /**
+     * Muestra un modal con un select y devuelve la opción seleccionada
+     * @param {Array} opciones - [{ value: 'id', text: 'Nombre' }, ...]
+     * @param {Function} callback - función que recibe el valor seleccionado (o null si cancela)
+     */
+    function mostrarModalSelect(opciones, cliente) {
+        return new Promise((resolve) => {
+            const select = document.getElementById('modalSelect');
+            const btnAceptar = document.getElementById('btnAceptar');
+            const btnCancelar = document.getElementById('btnCancelar');
+            const modal = document.getElementById('selectModal');
+            const overlay = document.getElementById('modalOverlay');
+            const dat_cliente = document.getElementById('dat_cliente');
+
+            dat_cliente.innerHTML = cliente;
+
+            // Limpiar y llenar el select
+            select.innerHTML = opciones;
+
+            // Mostrar modal
+            modal.style.display = 'block';
+            overlay.style.display = 'block';
+
+            // Manejar botones
+            const handleAceptar = () => {
+                cleanup();
+                const selectedOption = select.options[select.selectedIndex];
+                if (selectedOption) {
+                    resolve({
+                        id_ruta: selectedOption.value,
+                        nombre_ruta: selectedOption.textContent,
+                    });
+                } else {
+                    resolve(null);
+                }
+            };
+
+            const handleCancelar = () => {
+                cleanup();
+                resolve(null);
+            };
+
+            const cleanup = () => {
+                btnAceptar.removeEventListener('click', handleAceptar);
+                btnCancelar.removeEventListener('click', handleCancelar);
+                overlay.removeEventListener('click', handleCancelar);
+                modal.style.display = 'none';
+                overlay.style.display = 'none';
+            };
+
+            // Asignar eventos (una sola vez)
+            btnAceptar.addEventListener('click', handleAceptar);
+            btnCancelar.addEventListener('click', handleCancelar);
+            overlay.addEventListener('click', handleCancelar); // cerrar al hacer clic fuera
+        });
+    }
+
+    async function moverItem(elemento, origen, rutaSeleccionada = null) {
+console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", origen);
+        //const listaNoAsignados = document.getElementById('lista-no-asignados');
         const destino = origen === 'asignado' ? 'no-asignado' : 'asignado';
-        const contenedorDestino = destino === 'asignado' ? listaAsignados : listaNoAsignados;
-        const contenedorOrigen = origen === 'asignado' ? listaAsignados : listaNoAsignados;
+        const contenedorDestino = destino === 'asignado' ? window.listaAsignados : window.listaNoAsignados;
+        const contenedorOrigen = origen === 'asignado' ? window.listaAsignados : window.listaNoAsignados;
 
-        // Quitar selección
-        elemento.classList.remove('seleccionado');
+        // Determinar elementos a mover (soporta multi-select)
+        let seleccionados = Array.from(contenedorOrigen.querySelectorAll('.item-despacho.seleccionado'));
+        if (seleccionados.length === 0) {
+            seleccionados = [elemento];
+        }
 
-        // Mover visualmente
-        contenedorDestino.insertAdjacentElement('beforeend', elemento);
-        elemento.dataset.tipo = destino;
+        const clientes = [];
+        for (const el of seleccionados) {
+            // Quitar selección
+            el.classList.remove('seleccionado');
 
-        // Actualizar color de fondo si usas estilo por panel
-        elemento.style.backgroundColor = destino === 'asignado' ? '#f0fff0' : '';
+            // Mover visualmente
+            contenedorDestino.insertAdjacentElement('beforeend', el);
+            el.dataset.tipo = destino;
+            el.style.backgroundColor = destino === 'asignado' ? '#f0fff0' : '';
+
+            // ✅ ACTUALIZAR LA RUTA VISUAL SI SE MOVIÓ A "ASIGNADOS"
+            if (destino === 'asignado' && rutaSeleccionada) {
+                const formatoRutaDiv = el.querySelector('.formatoRuta');
+                if (formatoRutaDiv) {
+                    formatoRutaDiv.innerHTML = `<span class="colorE">Route: </span> ${rutaSeleccionada.nombre_ruta}`;
+                }
+            }
+            const idCliente = el.dataset.id || el.getAttribute('data-id');
+            if (idCliente) clientes.push(idCliente);
+        }
 
         // ✅ Actualizar contadores
-        actualizarContadorPanel(listaAsignados, 'pie_panel_izquierdo');
-        actualizarContadorPanel(listaNoAsignados, 'pie_panel_derecho');
+        actualizarContadorPanel(window.listaAsignados, 'pie_panel_izquierdo');
+        actualizarContadorPanel(window.listaNoAsignados, 'pie_panel_derecho');
 
         // Deshabilitar botones
         document.getElementById('btn-mover-a-asignados').disabled = true;
         document.getElementById('btn-mover-a-no-asignados').disabled = true;
+
+        // Persistir cambio en servidor
+        try {
+            const fecha = document.getElementById('fecha-despacho')?.value || null;
+            if (!fecha) {
+                console.warn('Fecha no seleccionada: no se persisten cambios');
+                return;
+            }
+
+            let id_ruta_new = '';
+
+            if (destino == 'no-asignado'){
+                id_ruta_new = null;
+            }else{
+                id_ruta_new = rutaSeleccionada.id_ruta ? rutaSeleccionada.id_ruta : null;
+            }
+
+            const modulo = destino === 'asignado' ? 'preservicio_add' : 'preservicio_remove';
+
+            console.log('Modulo: ', modulo);
+            console.log('Origen: ', clientes);
+            console.log('Fecha:', fecha);
+
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(
+                    {
+                        modulo_servicios: modulo,
+                        clientes: clientes,
+                        fecha: fecha,
+                        id_ruta_new: id_ruta_new
+                    }
+                )
+            });
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            // Recargar la lista para asegurar orden y consistencia
+            await cargarListaDespacho();
+        } catch (err) {
+            console.error('Error persistiendo cambios de preservicios:', err);
+        }
     }
 
     // Eventos para botones centrales (si quieres usarlos en lugar del clic directo)
     document.getElementById('btn-mover-a-asignados')?.addEventListener('click', () => {
         if (itemSeleccionado && itemSeleccionado.dataset.tipo === 'no-asignado') {
-            moverItem(itemSeleccionado, 'no-asignado');
-            itemSeleccionado = null;
-            // Deshabilitar botones
-            document.getElementById('btn-mover-a-asignados').disabled = true;
-            document.getElementById('btn-mover-a-no-asignados').disabled = true;
+            verificarRuta(itemSeleccionado);
         }
     });
 
     document.getElementById('btn-mover-a-no-asignados')?.addEventListener('click', () => {
         if (itemSeleccionado && itemSeleccionado.dataset.tipo === 'asignado') {
-            moverItem(itemSeleccionado, 'asignado');
+            moverItem(itemSeleccionado, 'asignado', null);
             itemSeleccionado = null;
             document.getElementById('btn-mover-a-asignados').disabled = true;
             document.getElementById('btn-mover-a-no-asignados').disabled = true;
@@ -2077,7 +2372,7 @@ console.log("Proceso para finalizar el servicio");
             return;
         }
         modal.style.display = 'flex';
-console.log("Llego al la captura del click");        
+        console.log("Llego al la captura del click");
         await cargarMatrizDiaria();
     });
 
@@ -2139,8 +2434,8 @@ console.log("Llego al la captura del click");
             const thResume = document.createElement('th');
             thResume.style.cssText = 'background: #bbdefb; font-weight: bold; text-align: center; height: 40px; font-size: 1.1em;';
             thResume.innerHTML = `<div style="font-size: 1.1em;">RESUME</div>
-                                  <div style="font-size: 0.8em; margin-top: 4px; color: #555;">P: Processed, R: Rescheduled, C: Cancelled, T: Total</div>
-                                  <div>Total services for the day: ${totalServicios}<div>`;
+                                    <div style="font-size: 0.8em; margin-top: 4px; color: #555;">P: Processed, R: Rescheduled, C: Cancelled, T: Total</div>
+                                    <div>Total services for the day: ${totalServicios}<div>`;
             trResume.appendChild(thResume);
 
             crews.forEach((crew, idx) => {
@@ -2156,7 +2451,7 @@ console.log("Llego al la captura del click");
             });
             tbody.appendChild(trResume);
 
-console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
+            console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
             clientes.forEach(cliente => {
                 const tr = document.createElement('tr');
                 const tdCliente = document.createElement('td');
@@ -2295,7 +2590,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                 clearInterval(window.statusM2Timers[id_servicio]);
                 delete window.statusM2Timers[id_servicio];
             }
-        }        
+        }
     }
 
     // === MONITOREO CONTINUO DEL GPS PARA SINCRONIZAR ESTADO AUTOMÁTICAMENTE ===
@@ -2348,7 +2643,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                     if (estaCerca && !inicioMarcado) {
                         console.log(`📍 GPS detecta inicio para servicio ${servicio.id_servicio} (${servicio.cliente})`);
                         await sincronizarEstadoGPS(servicio.id_servicio, 'inicio', punto.timestamp);
-                        
+
                         // Opcional: Actualizar localmente
                         servicio.hora_inicio_gps = punto.timestamp;
                     }
@@ -2357,7 +2652,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                     else if (!estaCerca && inicioMarcado && !finMarcado) {
                         console.log(`🏁 GPS detecta fin para servicio ${servicio.id_servicio} (${servicio.cliente})`);
                         await sincronizarEstadoGPS(servicio.id_servicio, 'fin', punto.timestamp);
-                        
+
                         // Opcional: Actualizar localmente
                         servicio.hora_fin_gps = punto.timestamp;
                     }
@@ -2395,39 +2690,39 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
     function mouseSobreElementoCarrusel() {
         // Usar la misma referencia del carrusel que usas en insertarTarjeta
         const carrusel = window.carrusel ? window.carrusel.contenedor : document.getElementById('carrusel');
-        
+
         if (!carrusel || !window.mousePosition) {
             return null;
         }
-        
+
         const rect = carrusel.getBoundingClientRect();
-        
+
         // Verificar si el carrusel tiene dimensiones válidas
         if (rect.width === 0 && rect.height === 0) {
             return null;
         }
-        
+
         const mouseX = window.mousePosition.x;
         const mouseY = window.mousePosition.y;
-        
+
         // Verificar si el mouse está dentro del carrusel
         const dentroDelCarrusel = (
-            mouseX >= rect.left && 
+            mouseX >= rect.left &&
             mouseX <= rect.right &&
-            mouseY >= rect.top && 
+            mouseY >= rect.top &&
             mouseY <= rect.bottom
         );
-        
+
         if (!dentroDelCarrusel) {
             return null;
         }
-        
+
         // Buscar elementos del carrusel que contengan el mouse
         const elementos = carrusel.querySelectorAll('[data-servicio-id]');
         if (elementos.length === 0) {
             return null;
         }
-        
+
         // Verificar cada elemento
         for (let elemento of elementos) {
             const elemRect = elemento.getBoundingClientRect();
@@ -2435,7 +2730,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                 mouseX >= elemRect.left && mouseX <= elemRect.right &&
                 mouseY >= elemRect.top && mouseY <= elemRect.bottom
             );
-            
+
             if (mouseEnElemento) {
                 const servicioId = elemento.getAttribute('data-servicio-id');
                 return {
@@ -2444,7 +2739,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                 };
             }
         }
-        
+
         return null;
     }
 
@@ -2554,31 +2849,31 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
     // Función principal de rastreo DEBUG
     function rastrearMouseYCrearFlecha() {
         const elementoBajoMouse = mouseSobreElementoCarrusel();
-        
+
         // console.log('🔍 Rastreando mouse...', elementoBajoMouse);
-        
+
         if (elementoBajoMouse) {
             console.log('🎯 Elemento encontrado:', elementoBajoMouse.servicioId);
-            
+
             // Si es un servicio diferente al actualmente rastreado
             if (elementoBajoMouse.servicioId !== window.servicioActualRastreado) {
                 console.log('🔄 Cambio de servicio detectado');
-                
+
                 // Eliminar flecha anterior
                 eliminarFlechaActual();
-                
+
                 // Buscar el servicio completo
                 if (window.serviciosData) {
                     const servicio = window.serviciosData.find(s => s.id_servicio == elementoBajoMouse.servicioId);
                     console.log('📋 Servicio encontrado:', servicio);
-                    
+
                     if (servicio) {
                         // Crear nueva flecha
                         console.log('➡️ Creando flecha para servicio:', servicio.id_servicio);
                         setTimeout(() => {
                             crearFlechaHaciaMapa(servicio);
                         }, 50);
-                        
+
                         window.servicioActualRastreado = elementoBajoMouse.servicioId;
                     } else {
                         console.log('❌ Servicio no encontrado en window.serviciosData');
@@ -2670,10 +2965,10 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
     // Escuchar clic en botón de reconciliación
     document.getElementById('btn-reconciliar-historico')?.addEventListener('click', async () => {
         const confirmado = await suiteConfirm(
-            "Reconciliar Datos",
-            "¿Ejecutar reconciliación histórica para los últimos 7 días?\n\nSe procesarán servicios sin hora GPS."
+            "Reconcile Data",
+            "Execute historical reconciliation for the last 7 days?\n\nServices without GPS time will be processed."
         );
-        
+
         if (!confirmado) return;
         try {
             const res = await fetch('/app/ajax/serviciosAjax.php', {
@@ -2701,7 +2996,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
             "Reconciliar Datos",
             "¿Ejecutar reconciliación histórica?\n\nSe procesarán servicios sin hora GPS."
         );
-        
+
         if (!confirmado) return;
         try {
             const res = await fetch('/app/ajax/serviciosAjax.php', {
@@ -2754,7 +3049,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
     const infoVehiculo = document.getElementById('info-vehiculo-donde-esta');
 
     if (menuDondeEsta && modalDondeEsta && selectVehiculo && closeModalDondeEsta && infoVehiculo) {
-        menuDondeEsta.onclick = async function(e) {
+        menuDondeEsta.onclick = async function (e) {
             e.preventDefault();
             document.getElementById('menu-lateral').style.display = 'none';
             document.getElementById('menu-overlay').style.display = 'none';
@@ -2774,7 +3069,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                 console.log(`✅ Vehiculos encontrados (${resp.data.length}):`, resp.data);
 
                 const vehiculos = resp.data;
-                
+
                 selectVehiculo.innerHTML = '';
 
                 const optDefault = document.createElement('option');
@@ -2783,7 +3078,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                 optDefault.disabled = true;
                 optDefault.selected = true;
                 selectVehiculo.appendChild(optDefault);
-                
+
                 if (vehiculos && vehiculos.length) {
                     vehiculos.forEach(v => {
                         const opt = document.createElement('option');
@@ -2802,9 +3097,9 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
 
         };
     }
-    
+
     // 2. Al seleccionar un vehículo, mostrar info y marker
-    document.getElementById('select-vehiculo-donde-esta').onchange = async function() {
+    document.getElementById('select-vehiculo-donde-esta').onchange = async function () {
         const select = this;
         const selectedOption = select.options[select.selectedIndex];
         const nombreVehiculo = selectedOption.getAttribute('data-nombre');
@@ -2817,7 +3112,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
         infoDiv.innerHTML = 'Loading...';
 
         const data = {
-            modulo_motor2: 'info_vehiculo', 
+            modulo_motor2: 'info_vehiculo',
             id_truck: nombreVehiculo
         };
 
@@ -2827,7 +3122,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
-        
+
         const vdata = await resp.json();
 
         // Si no está en servicio, consultar a verizon
@@ -2914,7 +3209,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                     $lng = lngVehiculo;
 
                     const data = {
-                        modulo_motor2: 'obtener_direccion', 
+                        modulo_motor2: 'obtener_direccion',
                         apikey: $apiKey,
                         lat: $lat,
                         lng: $lng
@@ -2925,7 +3220,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data)
                     });
-                    
+
                     const locationIQ = await resp.json();
 
                     if (locationIQ && locationIQ.direccion && locationIQ.data) {
@@ -2944,11 +3239,11 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                 }
             }
             html += `</div>`;
-            infoDiv.innerHTML = html;                
+            infoDiv.innerHTML = html;
 
             if (window.mapa) {
                 if (window.markerDondeEsta) window.mapa.removeLayer(window.markerDondeEsta);
-                window.markerDondeEsta = L.marker([vdata.lat, vdata.lng], {icon: L.icon({iconUrl:'/img/marker-donde-esta.png', iconSize:[32,32]})}).addTo(window.mapa);
+                window.markerDondeEsta = L.marker([vdata.lat, vdata.lng], { icon: L.icon({ iconUrl: '/img/marker-donde-esta.png', iconSize: [32, 32] }) }).addTo(window.mapa);
                 window.mapa.setView([vdata.lat, vdata.lng], 16);
                 setTimeout(() => {
                     if (window.markerDondeEsta) window.mapa.removeLayer(window.markerDondeEsta);
@@ -2960,12 +3255,12 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
     };
 
     // Inicializar comportamiento de submenús (hover + focus)
-    (function initSubmenuBehaviour(){
+    (function initSubmenuBehaviour() {
         const submenuToggles = document.querySelectorAll('.has-submenu');
-    
+
         submenuToggles.forEach(container => {
             const toggleLink = container.querySelector('.submenu-toggle');
-    
+
             // mouse enter / leave
             container.addEventListener('mouseenter', () => {
                 container.classList.add('open');
@@ -2975,7 +3270,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                 container.classList.remove('open');
                 container.setAttribute('aria-expanded', 'false');
             });
-    
+
             // keyboard accessibility: focusin / focusout
             container.addEventListener('focusin', () => {
                 container.classList.add('open');
@@ -2988,7 +3283,7 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                     container.setAttribute('aria-expanded', 'false');
                 }
             });
-    
+
             // permitir toggle con tecla Enter / Space sobre el enlace
             if (toggleLink) {
                 toggleLink.addEventListener('keydown', (e) => {
@@ -3005,10 +3300,10 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
                 });
             }
         });
-    })(); 
+    })();
 
     // 3. Botón cerrar modal
-    document.getElementById('close_modal_donde_esta').onclick = function() {
+    document.getElementById('close_modal_donde_esta').onclick = function () {
         document.getElementById('modal-donde-esta').style.display = 'none';
         if (window.markerDondeEsta && window.mapa) {
             window.mapa.removeLayer(window.markerDondeEsta);
@@ -3017,37 +3312,56 @@ console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
         document.getElementById('menu-overlay').style.display = '';
     };
     //}    
-    
+
     // === 5. Si usas polling o eventos personalizados, dispara este evento cuando haya datos ===
     // Ejemplo: cuando asignes window.serviciosData, haz:
     // window.dispatchEvent(new Event('serviciosActualizados'));
 
 
     document.getElementById('lista-asignados').addEventListener('dragover', (e) => {
+        // Bloquear drag si la fecha está procesada
+        if (window.dispatchConfig && window.dispatchConfig.dateIsProcessed) {
+            e.preventDefault();
+            return;
+        }
         e.preventDefault(); // permite soltar
         e.dataTransfer.dropEffect = 'move';
     });
 
     document.getElementById('lista-no-asignados').addEventListener('dragover', (e) => {
+        if (window.dispatchConfig && window.dispatchConfig.dateIsProcessed) {
+            e.preventDefault();
+            return;
+        }
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
     });
 
     document.getElementById('lista-asignados').addEventListener('drop', (e) => {
+        if (window.dispatchConfig && window.dispatchConfig.dateIsProcessed) {
+            e.preventDefault();
+            return;
+        }
         e.preventDefault();
         const id = e.dataTransfer.getData('text/plain');
         const item = document.querySelector(`.item-despacho[data-id="${id}"]`);
         if (item && item.dataset.tipo === 'no-asignado') {
-            moverItem(item, 'no-asignado');
+            moverItem(item, 'no-asignado', null);
+            document.getElementById('btn-mover-a-asignados').disabled = true;
+            document.getElementById('btn-mover-a-no-asignados').disabled = true;
         }
     });
 
     document.getElementById('lista-no-asignados').addEventListener('drop', (e) => {
+        if (window.dispatchConfig && window.dispatchConfig.dateIsProcessed) {
+            e.preventDefault();
+            return;
+        }
         e.preventDefault();
         const id = e.dataTransfer.getData('text/plain');
         const item = document.querySelector(`.item-despacho[data-id="${id}"]`);
         if (item && item.dataset.tipo === 'asignado') {
-            moverItem(item, 'asignado');
+            verificarRuta(item, 'asignado');
         }
     });
 

@@ -55,7 +55,7 @@ if (!$modulo) {
     exit();
 }
 
-// === 8. Cargar el controlador ===
+// === 8. Cargar el controlador === 
 require_once  '../controllers/contratosController.php';
 use app\controllers\contratosController;
 
@@ -68,7 +68,11 @@ switch ($modulo) {
 
         $controller->cargar_distribucion($id_contrato);
         break;
-   
+
+    case 'update_contrato':
+        $controller->guardarCambios($inputData);
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);

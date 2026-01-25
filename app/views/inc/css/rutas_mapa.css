@@ -122,3 +122,19 @@
     .leaflet-control-custom:hover {
         background-color: #f0f0f0;
     }
+
+    .ele_hora{
+        background: #000000; 
+        color: #27ae60; 
+        padding: 2px 4px; 
+        font-size: 0.85em;        
+    }
+
+    .elem_direcc{
+        align-items: center;
+        border-bottom: 1px solid #eee; 
+        cursor: pointer;
+        display: flex; 
+        justify-content: space-between; 
+        padding: 6px 0; 
+    }

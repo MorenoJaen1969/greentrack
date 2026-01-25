@@ -1197,11 +1197,20 @@ $this->log("Palabras: ", json_encode($palabras));
 
     public function arreglaMonto($monto)
     {
-        $largo = strlen($monto) - 2;
-        $decimales = substr($monto, $largo, 2);
-        $monto = substr($monto, 0, -3);
-        $monto = preg_replace('/[^0-9]/', '', $monto);
-        $total = $monto . "." . $decimales;
+        if (is_null($monto)) {
+            $total = "0.00";
+        } else {    
+            $largo = strlen($monto) - 2;
+            if ($largo > 1) {
+                $decimales = substr($monto, $largo, 2);
+                $monto = substr($monto, 0, -3);
+                $monto = preg_replace('/[^0-9]/', '', $monto);
+                $total = $monto . "." . $decimales;
+            }else{
+                $monto = preg_replace('/[^0-9]/', '', $monto);
+                $total = $monto . ".00";
+            }
+        }
         return $total;
     }
 
@@ -1391,12 +1400,24 @@ $this->log("Palabras: ", json_encode($palabras));
             if (isset($condicion[0]) && is_array($condicion[0])) {
                 // Nuevo formato: múltiples condiciones con operadores
                 $cond_json = [];
-                foreach ($condicion as $cond) {
-                    $cond_json[] = [
-                        'campo' => $cond['campo'],
-                        'operador' => $cond['operador'] ?? '=',
-                        'valor' => $cond['valor']
-                    ];
+                if (count((array)$condicion)===1) {
+                    foreach ($condicion as $cond) {
+                        $cond_json[] = [
+                            'campo' => $cond['condicion_campo'],
+                            'operador' => $cond['condicion_operador'] ?? '=',
+                            'valor' => $cond['condicion_valor']
+                        ];
+                    }
+                } else {
+                    foreach ($condicion as $array1) {
+                        foreach ($array1 as $cond) {
+                            $cond_json[] = [
+                                'campo' => $cond['condicion_campo'],
+                                'operador' => $cond['condicion_operador'] ?? '=',
+                                'valor' => $cond['condicion_valor']
+                            ];
+                        }
+                    }
                 }
             } else {
                 // Formato antiguo: condición simple de igualdad
@@ -1497,4 +1518,95 @@ $this->log("Palabras: ", json_encode($palabras));
             return 0;
         }
     }    
+
+    /**
+     * Aclara un color hexadecimal.
+     * @param string $hex Color en formato #RRGGBB o RRGGBB
+     * @param float $factor Factor de claridad (0 = sin cambio, 1 = blanco). Ej: 0.7
+     * @return string Color aclarado en formato #RRGGBB
+     */
+    public function lightenHexColor($hex, $factor = 0.7) {
+        // Eliminar el # si existe
+        $hex = ltrim($hex, '#');
+        
+        // Asegurar que tenga 6 caracteres
+        if (strlen($hex) === 3) {
+            $hex = str_repeat(substr($hex, 0, 1), 2) . 
+                    str_repeat(substr($hex, 1, 1), 2) . 
+                    str_repeat(substr($hex, 2, 1), 2);
+        }
+        
+        // Convertir a RGB
+        $r = hexdec(substr($hex, 0, 2));
+        $g = hexdec(substr($hex, 2, 2));
+        $b = hexdec(substr($hex, 4, 2));
+        
+        // Aclarar cada canal (mezclar con blanco)
+        $r = round($r + (255 - $r) * $factor);
+        $g = round($g + (255 - $g) * $factor);
+        $b = round($b + (255 - $b) * $factor);
+        
+        // Limitar a 0-255
+        $r = min(255, max(0, $r));
+        $g = min(255, max(0, $g));
+        $b = min(255, max(0, $b));
+        
+        return sprintf('#%02X%02X%02X', $r, $g, $b);
+    }
+
+    public function formatearTelefono($telefono, $codigoPais = '+1')
+    {
+        $telefonoLimpio = preg_replace('/[^\+\d]/', '', $telefono);
+        if (!str_starts_with($telefonoLimpio, '+')) {
+            $telefonoLimpio = $codigoPais . ltrim($telefonoLimpio, '0');
+        }
+        return $telefonoLimpio;
+    }
+
+    public function verifica_num($costo){
+		$costo_f = $this->arreglaMonto($this->limpiarCadena($costo));
+		return $costo_f;
+	}		
+
+    public function obtenerMes($mes){
+        switch ($mes) {
+            case 1:
+                $mes_act = "January";
+                break;
+            case 2:
+                $mes_act = "February";
+                break;
+            case 3:
+                $mes_act = "March";
+                break;
+            case 4:
+                $mes_act = "April";
+                break;
+            case 5:
+                $mes_act = "May";
+                break;
+            case 6:
+                $mes_act = "June";
+                break;
+            case 7:
+                $mes_act = "July";
+                break;
+            case 8:
+                $mes_act = "August";
+                break;
+            case 9:
+                $mes_act = "September";
+                break;
+            case 10:
+                $mes_act = "October";
+                break;
+            case 11:
+                $mes_act = "November";
+                break;
+            case 12:
+                $mes_act = "December";
+                break;
+        }
+        return $mes_act;
+    }
 }

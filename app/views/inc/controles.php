@@ -18,7 +18,9 @@
         "dias_no_actividad",
         "direcciones",
         "proveedores",
+        "route_day",
         "rutas_mapa",
+        "salas",
         "servicios",
         "vehiculos"
     ];
@@ -59,7 +61,11 @@
             }elseif($raiz=="rutas_mapa"){
                 $txt_titulo = "Maps rute";       
             }elseif($raiz=="vehiculos"){
-                $txt_titulo = "Vehicles";                
+                $txt_titulo = "Vehicles";        
+            }elseif($raiz=="route_day"){
+                $txt_titulo = "Route assignment on specific days";        
+            }elseif($raiz=="salas"){
+                $txt_titulo = "Rooms";
             }else{
                 $txt_titulo = $raiz;
             }                

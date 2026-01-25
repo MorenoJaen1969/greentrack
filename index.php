@@ -137,14 +137,12 @@ if (file_exists($ruta_control)) {
 
     if ($token) {
         require_once APP_R_PROY . 'app/controllers/usuariosController.php';
-
         $controller = new usuariosController();
-
         $param = [
             'token' => $token
         ];
-
         $validacion = $controller->valida_usuario($param);
+
         // === 2. Lista de correos autorizados ===
         $usuarios_permitidos = [
             'adriana@sergioslandscape.com',
@@ -152,11 +150,6 @@ if (file_exists($ruta_control)) {
             'oparra@mcka915.com',
             'morenojaen@gmail.com'
         ];
-
-        //https://positron4tx.ddns.net:9990/index.php?access_key=bd3933852ea0edd0321937344f2c5a2dcc446213857230954ce3dd58ac4810be
-        //https://positron4tx.ddns.net:9990/index.php?access_key=cfadd3fa951916768e9524d9e0091756f9aae75d35429c3bd4d14a06593a2d16
-    
-        //use app\controllers\usuariosController;
     
         if (!empty($validacion)) {
             $email = $validacion['email'];
@@ -166,10 +159,37 @@ if (file_exists($ruta_control)) {
                 $_SESSION['token'] = $validacion['token'];
                 $_SESSION['user_valid'] = true;
                 $_SESSION['user_id'] = $validacion['id'];
+                $_SESSION['area'] = $validacion['area'];
 
                 $user_email = $email;
                 // Redirigir al dashboard ejecutivo
-                header("Location: /app/views/mobile-view.php");
+
+                switch ($_SESSION['area']) {
+                    case 'sistema':
+                        // En el futuro: con login
+                        require_once 'app/views/content/dashboard-view.php';
+                        break;
+
+                    case 'administracion':
+                        header("Location: /app/views/mobile-view.php");
+                        break;
+                    case 'supervision':
+                        $vista_motor4 = APP_R_PROY . "app/views/content/supervisor-mobile.php";
+                        if (file_exists($vista_motor4)) {
+                            // Renderizar vista del Motor 4 sin navbar ni chat
+                            echo "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n";
+                            require_once APP_R_PROY . "app/views/inc/head.php";
+                            echo '<script src="/app/views/inc/js/motor4.js"></script>';
+                            echo "</head>\n<body>\n";
+                            require_once $vista_motor4;
+                            echo "\n</body>\n</html>";
+                            exit();
+                        } else {
+                            die('<h3 style="text-align:center; margin-top:50px;">⚠️ App móvil no disponible</h3>');
+                        }                        
+                    case 'choferer':
+                        break;
+                }
                 //require_once 'app/views/mobile-view.php';
                 exit();
             }
@@ -188,7 +208,7 @@ if (file_exists($ruta_control)) {
                 } else {
                     ?>
                     <div class='titulo-del-chat'>
-                        Chat Adela
+                        Infiniti Chat
                     </div>
                     <?php
                 }

@@ -93,143 +93,79 @@ if (empty($userEmail)) {
         exit();
     }
     ?>
-    <div class="login">
-        <h1>Member Login</h1>
-        <form id="loginForm" method="post" class="form login-form" action="<?= $ruta_usuariosAjax ?>">
-            <input type="hidden" name="modulo_usuarios" value="control_acceso">
-            <label class="form-label" for="username">Username</label>
-            <div class="form-group">
-                <svg class="form-icon-left" width="14" height="14" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512">
-                    <path d="M224 256A128 128 0 1 0 224 0a128 128 0 1 0 0 256zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H418.3c16.4 0 29.7-13.3 29.7-29.7C448 383.8 368.2 304 269.7 304H178.3z"/>
-                </svg>
-                <input class="form-input" type="text" name="username" placeholder="Username" id="username" required>
-            </div>
-            <label class="form-label" for="password">Password</label>
-            <div class="form-group mar-bot-5">
-                <svg class="form-icon-left" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 448 512">
-                    <path d="M144 144v48H304V144c0-44.2-35.8-80-80-80s-80 35.8-80 80zM80 192V144C80 64.5 144.5 0 224 0s144 64.5 144 144v48h16c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V256c0-35.3 28.7-64 64-64H80z"/>
-                </svg>
-                <input class="form-input" type="password" name="password" placeholder="Password" id="password" required>
-            </div>
-            <button type="submit" class="btn blue btn-login">
-                <i class="fas fa-sign-in-alt"></i> Login
-            </button>
-        </form>
-    </div>
-    <script>
-    document.getElementById('loginForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const submitBtn = this.querySelector('.btn-login');
-        const originalText = submitBtn.innerHTML;
-        try {
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validando...';
-            submitBtn.disabled = true;
-            let data = new FormData(this);
-            const res = await fetch(this.action, { method: this.method, body: data });
-            const json = await res.json();
-            if (json.success) {
-                window.location.reload();
-            } else {
-                alert(json.message || 'Authentication error');
-            }
-        } catch (e) {
-            alert('Invalid server response');
-        } finally {
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
+<div class="login">
+    <h1>Member Login</h1>
+    <form id="loginForm" method="post" class="form login-form" action="<?= $ruta_usuariosAjax ?>">
+        <input type="hidden" name="modulo_usuarios" value="control_acceso">
+        <label class="form-label" for="username">Username</label>
+        <div class="form-group">
+            <svg class="form-icon-left" width="14" height="14" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512">
+                <path
+                    d="M224 256A128 128 0 1 0 224 0a128 128 0 1 0 0 256zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H418.3c16.4 0 29.7-13.3 29.7-29.7C448 383.8 368.2 304 269.7 304H178.3z" />
+            </svg>
+            <input class="form-input" type="text" name="username" placeholder="Username" id="username" required>
+        </div>
+        <label class="form-label" for="password">Password</label>
+        <div class="form-group mar-bot-5">
+            <svg class="form-icon-left" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 448 512">
+                <path
+                    d="M144 144v48H304V144c0-44.2-35.8-80-80-80s-80 35.8-80 80zM80 192V144C80 64.5 144.5 0 224 0s144 64.5 144 144v48h16c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V256c0-35.3 28.7-64 64-64H80z" />
+            </svg>
+            <input class="form-input" type="password" name="password" placeholder="Password" id="password" required>
+        </div>
+        <button type="submit" class="btn blue btn-login">
+            <i class="fas fa-sign-in-alt"></i> Login
+        </button>
+    </form>
+</div>
+<script>
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const submitBtn = this.querySelector('.btn-login');
+    const originalText = submitBtn.innerHTML;
+    try {
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validando...';
+        submitBtn.disabled = true;
+        let data = new FormData(this);
+        const res = await fetch(this.action, {
+            method: this.method,
+            body: data
+        });
+        const json = await res.json();
+        if (json.success) {
+            window.location.reload();
+        } else {
+            alert(json.message || 'Authentication error');
         }
-    });
-    </script>
-    <?php
+    } catch (e) {
+        alert('Invalid server response');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+});
+</script>
+<?php
     exit();
 }
-
-// === 8. Modo parcial: solo el contenedor del chat (para PC) ===
-// if ($isPartial): ?>
-// <div class="chat-app-container" style="width:100%;height:100%;margin:0;padding:0;">
-//     <div class="chat-header">
-//         <div class="user-info">
-//             <img src="<?= RUTA_REAL ?>/app/views/img/avatars/<?= md5($userEmail) ?>.jpg" alt="Avatar"
-//                  class="user-avatar" onerror="this.src='<?= RUTA_REAL ?>/app/views/img/avatars/default.png'">
-//             <div class="user-details">
-//                 <h1><?= htmlspecialchars($userName) ?></h1>
-//                 <span class="user-status" id="userStatus">Online</span>
-//             </div>
-//         </div>
-//         <div class="header-actions">
-//             <button class="btn-action" id="logoutChatBtn" title="Log out">
-//                 <i class="fas fa-sign-out-alt"></i>
-//             </button>            
-
-//             <button class="btn-close" id="closeChatBtn" title="Close chat">
-//                 <i class="fas fa-times"></i>
-//             </button>
-//         </div>
-//     </div>
-//     <main class="chat-main-grid">
-//         <aside class="contacts-sidebar">
-//             <div class="sidebar-header">
-//                 <h2>Conversations</h2>
-//                 <button class="btn-new-chat" id="newChatBtn" title="New chat">
-//                     <i class="fas fa-plus"></i>
-//                 </button>
-//             </div>
-//             <div class="contacts-list" id="contactsList">
-//                 <div class="loading-contacts">
-//                     <i class="fas fa-spinner fa-spin"></i> Loading contacts...
-//                 </div>
-//             </div>
-//         </aside>
-//         <section class="messages-area">
-//             <div class="messages-header">
-//                 <h3 id="currentChatName">Select a conversation</h3>
-//             </div>
-//             <div class="messages-container" id="messagesContainer">
-//                 <div class="welcome-message">
-//                     <i class="fas fa-comments"></i>
-//                     <h3>Welcome to the Chat</h3>
-//                     <p>Select a contact to start chatting</p>
-//                 </div>
-//             </div>
-//             <div class="message-input-area" id="messageInputArea" style="display:none;">
-//                 <input type="text" class="message-input" id="messageInput" placeholder="Write a message..." maxlength="1000">
-//                 <button class="btn-send" id="sendBtn"><i class="fas fa-paper-plane"></i></button>
-//             </div>
-//         </section>
-//         <aside class="chat-info-sidebar">
-//             <h4>Information</h4>
-//         </aside>
-//     </main>
-// </div>
-// <script>
-// window.chatConfig = {
-//     userEmail: <?= json_encode($userEmail) ?>,
-//     userName: <?= json_encode($userName) ?>,
-//     userToken: <?= json_encode($userToken) ?>,
-//     baseUrl: <?= json_encode(defined('APP_URL') ? APP_URL : '') ?>,
-//     wsUrl: <?= json_encode('https://' . $_SERVER['HTTP_HOST'] . '/websocket') ?>,
-//     authType: 'session'
-// };
-// </script>
-// <?php
-// exit();
-// endif;
 
 // === 9. Modo completo: página standalone (para móvil) ===
 ?>
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title>Chat</title>
     <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/chat.css?v=<?= time() ?>">
 </head>
+
 <body>
     <div class="chat-app-container">
         <div class="chat-header">
             <div class="user-info">
                 <img src="<?= RUTA_REAL ?>/app/views/img/avatars/<?= md5($userEmail) ?>.jpg" alt="Avatar"
-                     class="user-avatar" onerror="this.src='<?= RUTA_REAL ?>/app/views/img/avatars/default.png'">
+                    class="user-avatar" onerror="this.src='<?= RUTA_REAL ?>/app/views/img/avatars/default.png'">
                 <div class="user-details">
                     <h1><?= htmlspecialchars($userName) ?></h1>
                     <span class="user-status" id="userStatus">Online</span>
@@ -246,7 +182,20 @@ if (empty($userEmail)) {
             <aside class="contacts-sidebar">
                 <div class="sidebar-header">
                     <h2>Conversations</h2>
-                    <button class="btn-new-chat" id="newChatBtn" title="New chat"><i class="fas fa-plus"></i></button>
+                    <!-- <button class="btn-new-chat" id="newChatBtn" title="New chat"><i class="fas fa-plus"></i></button> -->
+                </div>
+                <!-- Sidebar de salas -->
+                <div id="roomsSidebar" class="rooms-sidebar">
+                    <div class="solo_titulo">
+                        <h5>Rooms</h5>
+                    </div>
+                    <div id="roomsList" class="rooms-list">
+                        <!-- Aquí se cargarán las salas -->
+                    </div>
+                </div>
+                <!-- Área de mensajes -->
+                <div id="chatArea" class="chat-area">
+                    <!-- Mensajes de la sala seleccionada -->
                 </div>
                 <div class="contacts-list" id="contactsList">
                     <div class="loading-contacts"><i class="fas fa-spinner fa-spin"></i> Loading contacts...</div>
@@ -268,11 +217,15 @@ if (empty($userEmail)) {
                 </div>
                 <div class="message-input-area" id="messageInputArea" style="display:none;">
                     <div class="input-actions">
-                        <button class="btn-attach" id="attachBtn" title="Attach file"><i class="fas fa-paperclip"></i></button>
-                        <button class="btn-audio" id="audioMsgBtn" title="Audio message"><i class="fas fa-microphone"></i></button>
+                        <button class="btn-attach" id="attachBtn" title="Attach file"><i
+                                class="fas fa-paperclip"></i></button>
+                        <button class="btn-audio" id="audioMsgBtn" title="Audio message"><i
+                                class="fas fa-microphone"></i></button>
                     </div>
-                    <input type="text" class="message-input" id="messageInput" placeholder="Write a message..." maxlength="1000">
-                    <button class="btn-send" id="sendBtn" title="Send message"><i class="fas fa-paper-plane"></i></button>
+                    <input type="text" class="message-input" id="messageInput" placeholder="Write a message..."
+                        maxlength="1000">
+                    <button class="btn-send" id="sendBtn" title="Send message"><i
+                            class="fas fa-paper-plane"></i></button>
                 </div>
             </section>
             <aside class="chat-info-sidebar">
@@ -296,4 +249,5 @@ if (empty($userEmail)) {
     </script>
     <script src="<?= RUTA_REAL ?>/app/views/inc/js/chat.js?v=<?= time() ?>"></script>
 </body>
+
 </html>

@@ -67,27 +67,6 @@ switch ($modulo) {
         $controller->generarCuadriculaConroe();
         break;
 
-    case 'listar_direcciones_en_area':
-        $lat_sw = $inputData['lat_sw'] ?? null;
-        $lng_sw = $inputData['lng_sw'] ?? null;
-        $lat_ne = $inputData['lat_ne'] ?? null;
-        $lng_ne = $inputData['lng_ne'] ?? null;
-
-        if ($lat_sw === null || $lng_sw === null || $lat_ne === null || $lng_ne === null) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Faltan límites del área (lat_sw, lng_sw, lat_ne, lng_ne)']);
-            exit();
-        }
-
-        try {
-            $direcciones = $controller->listarDireccionesEnArea($lat_sw, $lng_sw, $lat_ne, $lng_ne);
-            echo json_encode(['success' => true, 'data' => $direcciones]);
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-        }
-        break;
-
     // 🔹 NUEVO: crear una zona a partir de límites y lista de direcciones
     case 'crear_zona':
         $lat_sw = $inputData['lat_sw'] ?? null;
@@ -96,6 +75,7 @@ switch ($modulo) {
         $lng_ne = $inputData['lng_ne'] ?? null;
         $ids_direcciones = $inputData['ids_direcciones'] ?? [];
         $nombre_zona = $inputData['nombre_zona'] ?? null;
+        $id_ruta = $inputData['id_ruta'] ?? null;
 
         if ($lat_sw === null || $lng_sw === null || $lat_ne === null || $lng_ne === null) {
             http_response_code(400);
@@ -112,7 +92,7 @@ switch ($modulo) {
             $id_zona = $controller->crearZona(
                 $lat_sw, $lng_sw, $lat_ne, $lng_ne,
                 $ids_direcciones,
-                $nombre_zona
+                $nombre_zona, $id_ruta
             );
             echo json_encode(['success' => true, 'id_zona' => $id_zona, 'message' => 'Zona creada exitosamente']);
         } catch (Exception $e) {

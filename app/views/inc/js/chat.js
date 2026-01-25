@@ -1,4 +1,3 @@
-// /* *
 // * Sistema de Mensajería GreenTrack
 // * Versión 100% AJAX/Polling (sin WebSocket)
 // * Integrado con la arquitectura PHP existente
@@ -28,9 +27,9 @@ class GreenTrackChat {
 
     registerChatInteraction() {
         this.lastChatInteraction = Date.now();
-    }    
+    }
 
-    initializeChat() {
+    async initializeChat() {
         const messagesContainer = document.getElementById("messagesContainer");
         if (messagesContainer) {
             messagesContainer.innerHTML = `
@@ -68,12 +67,11 @@ class GreenTrackChat {
         }
 
         // Inicializar sonido
-        // Permitir reproducción de audio incluso sin interacción
         if (this.notificationSound) {
             const unlockAudio = () => {
                 this.notificationSound
                     .play()
-                    .catch(() => {})
+                    .catch(() => { })
                     .then(() => {
                         this.notificationSound.pause();
                         this.notificationSound.currentTime = 0;
@@ -87,14 +85,86 @@ class GreenTrackChat {
             });
         }
 
-        this.sendHeartbeat(); // Inmediato al iniciar
-        // Iniciar verificación de mensajes no leídos cada 10s
+        this.sendHeartbeat();
         setInterval(() => this.checkUnreadMessages(), 10000);
-        this.checkUnreadMessages(); // ejecutar inmediatamente
+        this.checkUnreadMessages();
 
-        this.loadContacts();
+        // ✅ 1. Cargar salas del usuario
+        let salas = [];
+        try {
+            const res = await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    modulo_contacts: "listar_salas_usuario",
+                    user_id: this.config.userId
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                salas = data.salas;
+                // Renderizar salas en el sidebar
+                this.renderUserRooms(salas);
+            }
+        } catch (e) {
+            console.error("Error al cargar salas:", e);
+            salas = [];
+        }
+
+        // ✅ 2. Determinar qué sala abrir
+        let salaActivaId = null;
+
+        // Intentar obtener última sala
+        try {
+            const res = await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    modulo_contacts: "obtener_ultima_sala",
+                    user_id: this.config.userId
+                }),
+            });
+            const data = await res.json();
+            if (data.success && data.ultima_sala_id) {
+                salaActivaId = data.ultima_sala_id;
+            }
+        } catch (e) {
+            console.warn("No se pudo cargar la última sala:", e);
+        }
+
+        // Si no hay última sala, usar la primera disponible
+        if (!salaActivaId && salas.length > 0) {
+            salaActivaId = salas[0].id;
+        }
+
+        // ✅ 3. Seleccionar la sala si existe
+        if (salaActivaId) {
+            setTimeout(() => {
+                this.selectRoom(salaActivaId);
+            }, 300);
+        }
+
         this.setupEventListeners();
         console.log("✅ Chat inicializado para:", this.config.userName);
+    }
+
+    renderUserRooms(salas) {
+        const container = document.getElementById('roomsList');
+        if (!container) return;
+
+        container.innerHTML = salas.map(sala => `
+            <div class="room-item" data-sala-id="${sala.id}">
+                <div class="room-name">${this.escapeHTML(sala.nombre)}</div>
+                ${sala.unread > 0 ? `<span class="room-unread-badge">${sala.unread > 99 ? '99+' : sala.unread}</span>` : ''}
+            </div>
+        `).join('');
+
+        // Añadir listeners
+        container.querySelectorAll('.room-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                this.selectRoom(e.currentTarget.dataset.salaId);
+            });
+        });
     }
 
     startPolling() {
@@ -156,30 +226,71 @@ class GreenTrackChat {
     }
 
     async checkUnreadMessages() {
-        if (!this.config?.userToken) return;
-
         try {
+            // 1) Si no hay chat seleccionado -> conteo global (para el icono)
+            if (!this.currentChat) {
+                const resG = await fetch("../app/ajax/contactsAjax.php", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ modulo_contacts: 'unread_count', token: this.config.userToken })
+                });
+                const dataG = await resG.json();
+                const globalCount = dataG && dataG.success ? dataG.count : 0;
+                this.updateUnreadBadge(globalCount);
+                this.updateTabTitle(globalCount);
+                return;
+            }
+
+            // 2) Si hay chat seleccionado -> manejar según tipo
+            const payload = { modulo_contacts: "get_unread_count", token: this.config.userToken };
+            if (this.currentChat.isRoom) {
+                payload.sala_id = this.currentChat.id;
+                payload.is_room = true;
+            } else {
+                // Si estamos en 1:1 pero dentro de una sala, incluir sala context
+                if (this.currentSalaId || this.lastRoomId) payload.sala_id = this.currentSalaId || this.lastRoomId;
+                payload.contact_id = this.currentChat.id;
+                payload.is_room = false;
+            }
+
             const res = await fetch("../app/ajax/contactsAjax.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    modulo_contacts: "unread_count",
-                    token: this.config.userToken,
-                }),
+                body: JSON.stringify(payload),
             });
             const data = await res.json();
-            const count = data.success ? data.count : 0;
 
-            // Solo notificar si hay nuevos mensajes
-            if (count > this.unreadCount && count > 0 && !this.currentChat) {
-                this.playNotificationSound();
-                this.updateTabTitle(count);
+            if (data && data.success) {
+                if (this.currentChat.isRoom) {
+                    this.updateRoomUnreadBadge(this.currentChat.id, data.count);
+                } else {
+                    // actualizar badge global si backend lo devuelve
+                    if (typeof data.global_count !== 'undefined') {
+                        this.updateUnreadBadge(data.global_count);
+                        this.updateTabTitle(data.global_count);
+                    }
+                    // actualizar badge por contacto si devuelve `count`
+                    if (typeof data.count !== 'undefined') {
+                        const badgeEl = document.getElementById(`badge-${this.currentChat.id}`);
+                        if (data.count > 0) {
+                            if (!badgeEl) {
+                                const contactEl = document.getElementById(`contact-${this.currentChat.id}`);
+                                if (contactEl) {
+                                    const newBadge = document.createElement('span');
+                                    newBadge.id = `badge-${this.currentChat.id}`;
+                                    newBadge.className = 'contact-unread-badge';
+                                    newBadge.textContent = data.count > 99 ? '99+' : data.count;
+                                    contactEl.appendChild(newBadge);
+                                }
+                            } else {
+                                badgeEl.textContent = data.count > 99 ? '99+' : data.count;
+                            }
+                        } else if (badgeEl) badgeEl.remove();
+                    }
+                }
             }
-
-            this.unreadCount = count;
-            this.updateUnreadBadge(count);
         } catch (e) {
-            console.error("Error checking unread messages:", e);
+            console.error("Error checking unread count:", e);
         }
     }
 
@@ -198,26 +309,160 @@ class GreenTrackChat {
         }
 
         try {
-            const res = await fetch("../app/ajax/contactsAjax.php", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${this.config.userToken}`,
-                },
-                body: JSON.stringify({ modulo_contacts: "contactos" }),
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success) {
-                    this.contacts = data.data.contacts || [];
-                    this.renderContacts(); // ← ahora renderiza SIN duplicar
+            // 👉 Verificar si hay una sala activa guardada
+            const shouldLoadRoomMembers = this.currentSalaId || this.lastRoomId;
+
+            if (shouldLoadRoomMembers) {
+                // Cargar miembros de la sala (no contactos globales)
+                const salaId = this.currentSalaId || this.lastRoomId;
+                await this.loadRoomMembers(salaId);
+            } else {
+                const res = await fetch("../app/ajax/contactsAjax.php", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${this.config.userToken}`,
+                    },
+                    body: JSON.stringify({ modulo_contacts: "contactos" }),
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success) {
+                        this.contacts = data.data.contacts || [];
+                        this.renderContacts(); // ← ahora renderiza SIN duplicar
+                    }
                 }
             }
         } catch (e) {
             console.error("Error al cargar contactos:", e);
-            if (container)
-                container.innerHTML =
-                    '<div class="error">Failed to load contacts</div>';
+            if (container) container.innerHTML = '<div class="error">Failed to load contacts</div>';
+        }
+    }
+
+    // En GreenTrackChat.js
+    async loadUserRooms() {
+        const res = await fetch('../app/ajax/contactsAjax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                modulo_contacts: 'listar_salas_usuario',
+                user_id: this.config.userId
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            const container = document.getElementById('roomsList');
+            if (!container) return;
+
+            container.innerHTML = data.salas.map(sala => `
+                <div class="room-item" data-sala-id="${sala.id}">
+                    <div class="room-name">${this.escapeHTML(sala.nombre)}</div>
+                    ${sala.unread > 0 ? `<span class="room-unread-badge">${sala.unread > 99 ? '99+' : sala.unread}</span>` : ''}
+                </div>
+                `).join('');
+
+            // Añadir listeners
+            container.querySelectorAll('.room-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    const salaId = e.currentTarget.dataset.salaId;
+                    this.selectRoom(salaId);
+                });
+            });
+        }
+    }
+
+    async selectRoom(salaId) {
+        console.log('Codigo de la sala: ', salaId);
+        this.currentSalaId = salaId;
+        this.lastRoomId = salaId;
+
+        // Guardar como última sala
+        await fetch('../app/ajax/contactsAjax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                modulo_contacts: 'guardar_ultima_sala',
+                user_id: this.config.userId,
+                sala_id: salaId
+            })
+        });
+
+        // ✅ Cargar miembros de la sala y actualizar lista de contactos
+        await this.loadRoomMembers(salaId);
+        // Actualizar UI: resaltar sala seleccionada
+        document.querySelectorAll('.room-item').forEach(el => {
+            el.classList.toggle('active', el.dataset.salaId == salaId);
+        });
+
+        // Deseleccionar cualquier contacto activo al cambiar de sala
+        document.querySelectorAll('.contact-item.active').forEach(c => c.classList.remove('active'));
+
+        // Ocultar área de mensajes hasta que el usuario seleccione un contacto
+        const messageArea = document.getElementById('messageInputArea');
+        if (messageArea) messageArea.style.display = 'none';
+
+        const salaEl = document.querySelector(`.room-item[data-sala-id="${salaId}"]`);
+        const salaName = salaEl?.querySelector(".room-name")?.textContent || "Room";
+        // currentChat ahora representa la sala, sin contacto seleccionado
+        this.currentChat = { id: salaId, name: salaName, isRoom: true };
+
+        // Update header: room name and reset selected user
+        const roomNameEl = document.getElementById("currentRoomName");
+        if (roomNameEl) roomNameEl.textContent = salaName;
+        const userNameEl = document.getElementById("currentUserName");
+        if (userNameEl) userNameEl.textContent = 'None';
+
+        // Broadcast checkbox: show and enable in room context, load stored state
+        const bcContainer = document.getElementById('broadcastCheckboxContainer');
+        if (bcContainer) bcContainer.style.display = 'flex';
+        const bc = document.getElementById('broadcastCheckbox');
+        if (bc) {
+            try {
+                const val = localStorage.getItem('greentrack_broadcast_' + salaId);
+                bc.checked = val === '1';
+            } catch (e) { /* ignore */ }
+
+            bc.disabled = false;
+            bc.onchange = (e) => {
+                try { localStorage.setItem('greentrack_broadcast_' + salaId, e.target.checked ? '1' : '0'); } catch (err) { }
+            };
+        }
+
+        // ✅ Mostrar mensaje de bienvenida (sin historial)
+        this.showNoMessages();
+
+        // Cargar historial de la sala
+        //await this.loadRoomHistory(salaId);
+    }
+
+    async loadRoomMembers(salaId) {
+        const res = await fetch('../app/ajax/contactsAjax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                modulo_contacts: 'get_room_members',
+                sala_id: salaId,
+                token: this.config.userToken
+            })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            // Guardar contexto: estamos en una sala
+            this.currentSalaId = salaId;
+            this.currentContactsMode = 'room'; // ← modo sala
+
+            // Renderizar SOLO estos contactos
+            this.contacts = data.contacts.map(c => ({
+                id: c.id,
+                nombre: c.nombre,
+                email: c.email,
+                avatar: c.avatar,
+                status: 'online', // o lo que venga de sesiones_activas
+                unread: 0, // opcional: conteo por contacto en esta sala
+                dispositivos: { pc: 'active', movil: null } // opcional
+            }));
+            this.renderContacts();
         }
     }
 
@@ -245,17 +490,20 @@ class GreenTrackChat {
                 // Crear estructura base con IDs
                 contactEl.innerHTML = `
                     <img id="avatar-${contact.id}" 
-                        src="../app/views/img/avatars/${contact.email}.jpg" 
+                        src="../app/views/img/avatars/${btoa(contact.email)}.jpg" 
                         width="40" height="40"
                         class="contact-avatar"
                         onerror="this.src='../app/views/img/avatars/default.png'">
                     <div class="contact-details">
-                    <div id="name-${contact.id}" class="contact-name">${this.escapeHTML(contact.nombre)}</div>
-                    <div id="status-${contact.id}" class="contact-status"></div>
+                        <div id="name-${contact.id}" class="contact-name">${this.escapeHTML(contact.nombre)}</div>
+                        <div id="status-${contact.id}" class="contact-status"></div>
                     </div>
                     <!-- El badge se crea/elimina dinámicamente -->
                 `;
+
+                // ✅ Siempre añadir listener a los contactos
                 contactEl.addEventListener("click", () => this.selectChat(contactEl));
+
                 container.appendChild(contactEl);
             }
 
@@ -271,23 +519,21 @@ class GreenTrackChat {
                 const deviceLines = [];
 
                 // --- PC ---
-                const pc = contact.dispositivos?.pc; // será 'activo', 'pausa' o null/undefined
+                const pc = contact.dispositivos?.pc;
                 if (pc === 'active') {
                     deviceLines.push('🟢 PC: Online');
                 } else if (pc === 'pause') {
                     deviceLines.push('⏸️ PC: On pause');
                 }
-                // si pc es null/undefined → no se muestra (offline)
 
                 // --- Móvil ---
                 const movil = contact.dispositivos?.movil;
-                // En móvil, no usamos "pausa" (siempre se considera atento)
                 if (movil === 'active' || movil === 'pause') {
                     deviceLines.push('📱 Mobile: Online');
                 }
 
-                const statusHTML = deviceLines.length > 0 
-                    ? deviceLines.join('<br>') 
+                const statusHTML = deviceLines.length > 0
+                    ? deviceLines.join('<br>')
                     : '⚫ Offline';
 
                 if (statusEl.innerHTML !== statusHTML) {
@@ -328,15 +574,15 @@ class GreenTrackChat {
         const messageInput = document.getElementById('messageInput');
         if (messageInput) {
             ['focus', 'input', 'keydown'].forEach(eventType => {
-            messageInput.addEventListener(eventType, () => this.registerChatInteraction());
+                messageInput.addEventListener(eventType, () => this.registerChatInteraction());
             });
         }
 
         // Al seleccionar un contacto
         document.querySelectorAll('.contact-item').forEach(item => {
             item.addEventListener('click', () => {
-            this.selectChat(item);
-            this.registerChatInteraction();
+                this.selectChat(item);
+                this.registerChatInteraction();
             });
         });
 
@@ -505,20 +751,22 @@ class GreenTrackChat {
 
     async sendMessage() {
         console.log("sendMessage() llamado");
+        if (!this.currentChat || !this.currentChat.email) {
+            // Opcional: mostrar tooltip "Selecciona un contacto"
+            return;
+        }
+
         const input = document.getElementById("messageInput");
         if (!input || !this.currentChat) {
             console.warn("No hay input o no hay chat seleccionado");
             return;
         }
 
-        // Obtener HTML del contenteditable
         let content = input.innerHTML.trim();
-        // Sanitización básica en el frontend (el backend ya hace la fuerte)
         content = content.replace(
             /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
             ""
         );
-        // Si está vacío o solo tiene <br>
         if (!content || content === "<br>") {
             console.warn("Mensaje vacío");
             return;
@@ -526,19 +774,55 @@ class GreenTrackChat {
 
         console.log("Contenido a enviar:", content);
         try {
+            // ✅ Detectar si es sala o contacto
+            const isRoom = this.currentChat.isRoom;
+
+            // Construir payload considerando contexto de sala o 1:1
+            const salaId = this.currentSalaId || this.lastRoomId || null;
+            const payload = {
+                modulo_contacts: "send_message",
+                content: content,
+                token: this.config.userToken
+            };
+
+            // Broadcast checkbox (solo relevante en salas)
+            const broadcastEl = document.getElementById('broadcastCheckbox');
+            const broadcast = !!(broadcastEl && broadcastEl.checked);
+
+            if (salaId) {
+                // Mensaje dentro de una sala (grupo). Backend debe asociarlo a la sala.
+                payload.sala_id = salaId;
+                payload.is_room = true;
+                if (!broadcast) {
+                    // Si NO es broadcast y hay contacto seleccionado, enviar como privado dentro de la sala
+                    if (this.currentChat && this.currentChat.email) payload.to = this.currentChat.email;
+                } else {
+                    payload.broadcast = true;
+                }
+            } else {
+                payload.is_room = false;
+                if (this.currentChat && this.currentChat.email) {
+                    payload.to = this.currentChat.email;
+                } else if (this.currentChat && this.currentChat.id) {
+                    payload.contact_id = this.currentChat.id;
+                }
+            }
+            console.log("Paquete de envio ", payload);
+            // ✅ Enviar parámetros según el contexto
+            // if (isRoom) {
+            //     payload.sala_id = this.currentChat.id; // ID de la sala
+            // } else {
+            //     payload.to = this.currentChat.email;   // Email del contacto
+            // }
+
             const res = await fetch("../app/ajax/contactsAjax.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    modulo_contacts: "send_message",
-                    to: this.currentChat.email,
-                    content: content,
-                    token: this.config.userToken,
-                }),
+                body: JSON.stringify(payload),
             });
             const data = await res.json();
             if (data.success) {
-                input.innerHTML = ""; // Limpiar
+                input.innerHTML = "";
                 this.scrollToBottom();
             }
         } catch (e) {
@@ -546,37 +830,58 @@ class GreenTrackChat {
         }
     }
 
+    // Nueva función: seleccionar cualquier elemento (contacto o sala)
     selectChat(el) {
+        if (el.classList.contains('room-item')) {
+            this.selectRoom(el.dataset.salaId);
+        } else {
+            this.selectContact(el);
+        }
+    }
+
+    // Nueva función: manejo de contactos 1:1
+    selectContact(el) {
         if (this.polling) this.stopPolling();
 
-        document
-            .querySelectorAll(".contact-item")
-            .forEach((i) => i.classList.remove("active"));
+        document.querySelectorAll(".contact-item").forEach(i =>
+            i.classList.remove("active")
+        );
         el.classList.add("active");
 
         const userId = el.dataset.id;
         const userEmail = el.dataset.email;
         const userName = el.querySelector(".contact-name").textContent;
 
-        this.currentChat = { id: userId, email: userEmail, name: userName };
-        document.getElementById("currentChatName").textContent =
-            this.currentChat.name;
+        this.currentChat = {
+            id: userId,
+            email: userEmail,
+            name: userName,
+            isRoom: false
+        };
 
-        // ✅ Asegurar que el área de mensaje es visible
+        console.log("current chat set to:", this.currentChat);
+        const userNameEl = document.getElementById("currentUserName");
+        if (userNameEl) userNameEl.textContent = userName;
+
         const messageArea = document.getElementById("messageInputArea");
         if (messageArea) messageArea.style.display = "flex";
 
-        // ✅ Limpiar notificaciones al abrir el chat
         this.unreadCount = 0;
         this.updateUnreadBadge(0);
         this.updateTabTitle(0);
 
-        this.loadChatHistory(this.currentChat.id);
+        this.loadChatHistory(userId);
         this.startPolling();
+        this.markMessagesAsRead(userId);
 
-        // ✅ Marcar como leídos
-        this.markMessagesAsRead(this.currentChat.id);
+        // Keep broadcast checkbox visible but disable it if there's no active room
+        const bc = document.getElementById('broadcastCheckbox');
+        if (bc) {
+            const hasRoom = !!(this.currentSalaId || this.lastRoomId);
+            bc.disabled = !hasRoom;
+        }
     }
+
 
     async markMessagesAsRead(contactId) {
         try {
@@ -598,6 +903,9 @@ class GreenTrackChat {
 
     async loadChatHistory(contactId) {
         try {
+            const salaId = this.currentSalaId || this.lastRoomId;
+            console.log("🔍 loadChatHistory - currentSalaId:", this.currentSalaId, "lastRoomId:", this.lastRoomId, "salaId enviado:", salaId);
+
             const res = await fetch("../app/ajax/contactsAjax.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -605,6 +913,7 @@ class GreenTrackChat {
                     modulo_contacts: "get_history",
                     contact_id: contactId,
                     token: this.config.userToken,
+                    salaId: salaId,
                 }),
             });
             const data = await res.json();
@@ -636,9 +945,89 @@ class GreenTrackChat {
         }
     }
 
+    // Para salas grupales
+    async loadRoomHistory(salaId) {
+        try {
+            const res = await fetch("../app/ajax/contactsAjax.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    modulo_contacts: "get_room_history", // ← nuevo módulo
+                    sala_id: salaId,
+                    token: this.config.userToken,
+                }),
+            });
+            const data = await res.json();
+            if (data.success && data.data?.length) {
+                const messages = data.data.map((msg) => ({
+                    id: msg.id,
+                    user: {
+                        id: msg.remitente_id,
+                        nombre: msg.remitente_nombre,
+                        email: msg.remitente_email,
+                    },
+                    content: msg.content,
+                    timestamp: msg.timestamp,
+                    leido: msg.leido,
+                    sala_id: salaId, // ← útil para marcar como leídos
+                }));
+                this.renderMessagesWithGroups(messages);
+                this.currentSalaId = salaId; // ← guardar contexto
+                this.lastMessageId = data.data[data.data.length - 1].id;
+
+                setTimeout(() => {
+                    this.setMessagesContainerHeight();
+                    this.scrollToBottom();
+                }, 100);
+
+                // ✅ Marcar mensajes de ESTA SALA como leídos
+                this.markMessagesAsReadInRoom(salaId);
+            } else {
+                this.showNoMessages();
+            }
+        } catch (e) {
+            console.error("Error al cargar historial de sala:", e);
+        }
+    }
+
+    async markMessagesAsReadInRoom(salaId) {
+        const messageIds = Array.from(
+            document.querySelectorAll(`[data-sala-id="${salaId}"] .message[data-id]`)
+        ).map(el => el.dataset.id);
+
+        if (messageIds.length > 0) {
+            await fetch('../app/ajax/contactsAjax.php', {
+                method: 'POST',
+                body: JSON.stringify({
+                    modulo_contacts: 'marcar_leidos_por_sala',
+                    sala_id: salaId,
+                    user_id: this.config.userId
+                })
+            });
+            // Actualizar badge de la sala
+            this.updateRoomUnreadBadge(salaId, 0);
+        }
+    }
+
+    updateRoomUnreadBadge(salaId, count) {
+        const roomEl = document.querySelector(`.room-item[data-sala-id="${salaId}"]`);
+        if (!roomEl) return;
+
+        const existingBadge = roomEl.querySelector(".room-unread-badge");
+        if (existingBadge) existingBadge.remove();
+
+        if (count > 0) {
+            const badge = document.createElement("span");
+            badge.className = "room-unread-badge";
+            badge.textContent = count > 99 ? "99+" : count;
+            roomEl.appendChild(badge);
+        }
+    }
+
     async loadNewMessages() {
         if (!this.currentChat) return;
         try {
+            const salaId = this.currentSalaId || this.lastRoomId;
             const res = await fetch("../app/ajax/contactsAjax.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -647,6 +1036,7 @@ class GreenTrackChat {
                     contact_id: this.currentChat.id,
                     since_id: this.lastMessageId,
                     token: this.config.userToken,
+                    salaId: salaId,
                 }),
             });
             const data = await res.json();
@@ -698,13 +1088,15 @@ class GreenTrackChat {
         const container = document.getElementById("messagesContainer");
         if (!container) return;
 
+        // Si no hay mensajes, mostrar "No messages"
+        if (!messages || messages.length === 0) {
+            this.showNoMessages();
+            return;
+        }
+
         const groups = {};
         const unreadByGroup = {};
-        let van = 1;
 
-        console.log("🔄 renderMessagesWithGroups llamado");
-
-        // === Paso 1: Agrupar mensajes y contar no leídos ===
         messages.forEach((msg) => {
             const dateKey = this.getMessageGroupKey(msg.timestamp);
             if (!groups[dateKey]) {
@@ -713,41 +1105,27 @@ class GreenTrackChat {
             }
             groups[dateKey].push(msg);
 
-            // ✅ Contar SOLO los mensajes NO PROPIOS que están sin leer
-            const isOwnMessage = msg.user.id == this.config.userId; // Comparación flexible (==)
+            const isOwnMessage = msg.user.id == this.config.userId;
             if (!isOwnMessage && (msg.leido === 0 || msg.leido === "0")) {
                 unreadByGroup[dateKey]++;
             }
-            van++;
         });
 
-        // === LOG: Mostrar conteo por grupo ===
         const sortedDates = Object.keys(groups).sort(
             (a, b) => new Date(a) - new Date(b)
         );
-        const lastDate =
-            sortedDates.length > 0 ? sortedDates[sortedDates.length - 1] : null;
+        const lastDate = sortedDates.length > 0 ? sortedDates[sortedDates.length - 1] : null;
 
         let html = "";
-
         sortedDates.forEach((dateKey) => {
-            // ✅ Aquí aplicas la corrección de zona horaria para la fecha del grupo
             const formattedDate = this.getGroupHeaderText(dateKey);
             const unreadCount = unreadByGroup[dateKey] || 0;
-
-            // === LOG: Detalle por grupo ===
-
             const isOpen = dateKey === lastDate;
             const displayStyle = isOpen ? "block" : "none";
-            const iconClass = isOpen
-                ? "fas fa-chevron-down"
-                : "fas fa-chevron-right";
-
-            // ✅ Solo mostrar badge si hay no leídos
-            const unreadBadge =
-                unreadCount > 0
-                    ? `<span class="group-unread-badge">${unreadCount}</span>`
-                    : "";
+            const iconClass = isOpen ? "fas fa-chevron-down" : "fas fa-chevron-right";
+            const unreadBadge = unreadCount > 0
+                ? `<span class="group-unread-badge">${unreadCount}</span>`
+                : "";
 
             html += `
                 <div class="message-date-group">
@@ -761,72 +1139,48 @@ class GreenTrackChat {
                         </button>
                     </div>
                     <div class="date-messages" id="messages-${dateKey}" style="display: ${displayStyle};">
-                        ${groups[dateKey]
-                            .map((msg) => this.createMessageElement(msg))
-                            .join("")}
+                        ${groups[dateKey].map((msg) => this.createMessageElement(msg)).join("")}
                     </div>
                 </div>
             `;
         });
 
-        container.innerHTML =
-            html ||
-            `
-            <div class="welcome-message">
-                <i class="fas fa-comments"></i>
-                <h3>No messages</h3>
-                <p>Start a conversation</p>
-            </div>
-        `;
+        container.innerHTML = html;
 
-        // Vincular listeners de toggle
+        // Añadir listeners a los toggles
         container.querySelectorAll(".toggle-date-group").forEach((btn) => {
             btn.addEventListener("click", (e) => {
                 const dateKey = e.currentTarget.dataset.date;
-                const messagesDiv = document.getElementById(
-                    `messages-${dateKey}`
-                );
+                const messagesDiv = document.getElementById(`messages-${dateKey}`);
                 const isOpen = messagesDiv.style.display !== "none";
                 const dateHeader = e.currentTarget.closest(".date-header");
-                const unreadBadge = dateHeader?.querySelector(
-                    ".group-unread-badge"
-                );
+                const unreadBadge = dateHeader?.querySelector(".group-unread-badge");
 
                 if (!isOpen) {
                     messagesDiv.style.display = "block";
-                    e.currentTarget.querySelector("i").className =
-                        "fas fa-chevron-down";
+                    e.currentTarget.querySelector("i").className = "fas fa-chevron-down";
 
-                    // ✅ Marcar mensajes de este grupo como leídos
-                    const messageElements =
-                        messagesDiv.querySelectorAll(".message[data-id]");
-                    const messageIds = Array.from(messageElements).map(
-                        (el) => el.dataset.id
-                    );
+                    const messageIds = Array.from(
+                        messagesDiv.querySelectorAll(".message[data-id]")
+                    ).map(el => el.dataset.id);
+
                     if (messageIds.length > 0) {
                         this.markMessagesByIdAsRead(messageIds).then(() => {
-                            // ✅ Eliminar el badge visual del grupo tras marcar como leídos
-                            if (unreadBadge) {
-                                unreadBadge.remove();
-                            }
+                            if (unreadBadge) unreadBadge.remove();
                         });
                     }
                 } else {
                     messagesDiv.style.display = "none";
-                    e.currentTarget.querySelector("i").className =
-                        "fas fa-chevron-right";
+                    e.currentTarget.querySelector("i").className = "fas fa-chevron-right";
                 }
             });
         });
 
-        // Scroll al último mensaje
+        // Scroll al final
         if (lastDate) {
             const lastGroup = document.getElementById(`messages-${lastDate}`);
             if (lastGroup && lastGroup.lastElementChild) {
-                lastGroup.lastElementChild.scrollIntoView({
-                    behavior: "smooth",
-                    block: "end",
-                });
+                lastGroup.lastElementChild.scrollIntoView({ behavior: "smooth", block: "end" });
             }
         }
     }
@@ -910,17 +1264,15 @@ class GreenTrackChat {
         const isOwn = message.user.email === this.config.userEmail;
         // ✅ Insertar HTML directamente (el backend ya lo sanitizó)
         return `
-            <div class="message ${isOwn ? "own-message" : ""}" data-id="${
-            message.id
-        }">
-                <img src="../app/views/img/avatars/${
-                    message.user.email
-                }.jpg" class="message-avatar" onerror="this.src='../app/views/img/avatars/default.png'">
+            <div class="message ${isOwn ? "own-message" : ""}" data-id="${message.id
+            }">
+                <img src="../app/views/img/avatars/${btoa(message.user.email)}.jpg" 
+                    class="message-avatar" onerror="this.src='../app/views/img/avatars/default.png'">
                 <div class="message-content">
                     <div class="message-text">${message.content}</div>
                     <div class="message-time">${this.formatTime(
-                        message.timestamp
-                    )}</div>
+                message.timestamp
+            )}</div>
                 </div>
             </div>
         `;
@@ -1121,9 +1473,8 @@ class GreenTrackChat {
                 } else if (file.type.startsWith("video/")) {
                     html = `<video controls src="${data.url}" style="max-width:100%; height:auto;"></video>`;
                 } else {
-                    html = `<a href="${
-                        data.url
-                    }" target="_blank">📎 ${this.escapeHTML(file.name)}</a>`;
+                    html = `<a href="${data.url
+                        }" target="_blank">📎 ${this.escapeHTML(file.name)}</a>`;
                 }
                 this.insertHtmlAtCursor(html);
             } else {
@@ -1164,8 +1515,10 @@ class GreenTrackChat {
     }
 
     async markMessagesByIdAsRead(messageIds) {
+        if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+
         try {
-            await fetch("../app/ajax/contactsAjax.php", {
+            const res = await fetch("../app/ajax/contactsAjax.php", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -1174,10 +1527,34 @@ class GreenTrackChat {
                     token: this.config.userToken,
                 }),
             });
-            // Opcional: actualizar badges de contactos
-            this.loadContacts();
+            const data = await res.json();
+            if (data.success) {
+                // ✅ 1. Eliminar el badge del grupo (ya lo haces implícitamente al recargar, pero si no...)
+                const unreadBadge = document.querySelector(`.group-unread-badge`);
+                if (unreadBadge) unreadBadge.remove();
+
+                // ✅ 2. ACTUALIZAR EL BADGE DE LA SALA ACTUAL
+                if (this.currentSalaId) {
+                    // Recargar solo el conteo de la sala actual
+                    const salaRes = await fetch("../app/ajax/contactsAjax.php", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            modulo_contacts: "listar_salas_usuario",
+                            user_id: this.config.userId
+                        }),
+                    });
+                    const salaData = await salaRes.json();
+                    if (salaData.success) {
+                        const sala = salaData.salas.find(s => s.id == this.currentSalaId);
+                        if (sala) {
+                            this.updateRoomUnreadBadge(this.currentSalaId, sala.unread);
+                        }
+                    }
+                }
+            }
         } catch (e) {
-            console.error("Error marking messages as read:", e);
+            console.error("Error marking as read:", e);
         }
     }
 

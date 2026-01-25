@@ -415,15 +415,6 @@ class proveedoresController extends mainModel
 		return $resultado;
 	}
 
-    public function formatearTelefono($telefono, $codigoPais = '+1')
-    {
-        $telefonoLimpio = preg_replace('/[^\+\d]/', '', $telefono);
-        if (!str_starts_with($telefonoLimpio, '+')) {
-            $telefonoLimpio = $codigoPais . ltrim($telefonoLimpio, '0');
-        }
-        return $telefonoLimpio;
-    }
-
 	public function frecuencia_pago($id_frecuencia_pago)
 	{
 		$consulta = "SELECT fp.*

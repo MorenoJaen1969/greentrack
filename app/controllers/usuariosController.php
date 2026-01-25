@@ -144,7 +144,7 @@ class usuariosController extends mainModel
     public function valida_usuario($paquete){
         $token = $paquete['token'];
 
-        $sql = "SELECT id, nombre, email, token
+        $sql = "SELECT id, nombre, email, token, area
             FROM usuarios_ejecutivos 
             WHERE token = :v_token AND activo = 1";
 
@@ -154,6 +154,9 @@ class usuariosController extends mainModel
 
         $result = $this->ejecutarConsulta($sql, "", $parametro);
 		$this->log("Consulta de usuario Ejecutada". print_r($result, true));
+        if (empty($result)) {
+			
+		}
 
         if (empty($result)) {
 			$result = [];
@@ -175,9 +178,14 @@ class usuariosController extends mainModel
 			':v_token' => $token
 		];
 		
-		$result = $this->ejecutarConsulta($sql, '', $params, 'fetchAll');
+		$result = $this->ejecutarConsulta($sql, '', $params);
 		
-		return ($result && count($result) > 0) ? $result[0] : false;
+		if ($result && count((array)$result) > 0) {
+			$respuesta = $result;
+		} else {
+			$respuesta = false;
+		}	
+		return $respuesta;
 	}
 
 	public function getUser($username, $password)
@@ -193,48 +201,56 @@ class usuariosController extends mainModel
 		$this->log("Consulta de validacion de usuario " . $sql);
 		
 		$result = $this->ejecutarConsulta($sql, '', $params);
-		$user_id = $result['id_user'];
-		$dispositivo = $_SERVER['HTTP_USER_AGENT'];
-		$token_sesion =  $result['token'];
-		
-		$this->log("Resultado de validacion de usuario " . json_encode($result));
 
-		if (!$result || count($result) === 0) {
-			return false; // Usuario no encontrado
-		} else {
-			// ✅ NUEVO: Actualizar estado a 'online' en la base de datos
-			$chat_estado = 'online';
-			$chat_ultima_conexion = date('Y-m-d H:i:s');
-			$datos = [
-				['campo_nombre' => 'chat_estado', 'campo_marcador' => ':chat_estado', 'campo_valor' => $chat_estado],
-				['campo_nombre' => 'chat_ultima_conexion', 'campo_marcador' => ':chat_ultima_conexion', 'campo_valor' => $chat_ultima_conexion]
-			];
-			$condicion = [
-				'condicion_campo' => 'id',
-				'condicion_operador' => '=', 
-				'condicion_marcador' => ':id',
-				'condicion_valor' => $result['id_user']
-			];
-			$this->actualizarDatos('usuarios_ejecutivos', $datos, $condicion);
-
-			$sql = "SELECT id AS id_user, nombre, email, token
-				FROM usuarios_ejecutivos 
-				WHERE email = :email AND activo = 1";
-
-			$params = [
-				':email' => $username
-			];
+		if ($result){
+			$user_id = $result['id_user'];
+			$dispositivo = $_SERVER['HTTP_USER_AGENT'];
+			$token_sesion =  $result['token'];
 			
-			$result = $this->ejecutarConsulta($sql, '', $params);
+			$this->log("Resultado de validacion de usuario " . json_encode($result));
 
-			return $result;
+			if (count((array)$result) === 0) {
+				return false; // Usuario no encontrado
+			} else {
+				// ✅ NUEVO: Actualizar estado a 'online' en la base de datos
+				$chat_estado = 'online';
+				$chat_ultima_conexion = date('Y-m-d H:i:s');
+				$datos = [
+					['campo_nombre' => 'chat_estado', 'campo_marcador' => ':chat_estado', 'campo_valor' => $chat_estado],
+					['campo_nombre' => 'chat_ultima_conexion', 'campo_marcador' => ':chat_ultima_conexion', 'campo_valor' => $chat_ultima_conexion]
+				];
+				$condicion = [
+					'condicion_campo' => 'id',
+					'condicion_operador' => '=', 
+					'condicion_marcador' => ':id',
+					'condicion_valor' => $result['id_user']
+				];
+				$this->actualizarDatos('usuarios_ejecutivos', $datos, $condicion);
+
+				$sql = "SELECT id AS id_user, nombre, email, token
+					FROM usuarios_ejecutivos 
+					WHERE email = :email AND activo = 1";
+
+				$params = [
+					':email' => $username
+				];
+				
+				$result = $this->ejecutarConsulta($sql, '', $params);
+				if ($result){
+					return $result;
+				} else {
+					return false; // Usuario no encontrado
+				}
+			}
+		} else {
+			return false; // Usuario no encontrado
 		}
 	}
 	
 	public function heartbeat($token, $dispositivo, $modo){
 		// ✅ Paso 1: Verificar si ya existe una sesión para este usuario + dispositivo
 
-		$usuario_actual = $this->getUserByToken($token);
+		$usuario_actual = $this->getUserByToken($token); 
 		$user_id = $usuario_actual['id'];
 
 		$sql = "SELECT id 
@@ -256,8 +272,7 @@ class usuariosController extends mainModel
 			$ultima_actividad = date('Y-m-d H:i:s');
 
 			$datos = [
-				['campo_nombre' => 'ultima_actividad', 'campo_marcador' => ':ultima_actividad', 'campo_valor' => $ultima_actividad],
-				['campo_nombre' => 'token_sesion', 'campo_marcador' => ':token_sesion', 'campo_valor' => $token]
+				['campo_nombre' => 'ultima_actividad', 'campo_marcador' => ':ultima_actividad', 'campo_valor' => $ultima_actividad]
 			];
 			$condicion = [
 				[
@@ -290,7 +305,37 @@ class usuariosController extends mainModel
 		return true;
 	}
 	
-	
-	
+	public function changeAvatar($email, $token, $file){
+		$usuario_actual = $this->getUserByToken($token); 
+		if (!$usuario_actual || $usuario_actual['email'] !== $email) {
+			$this->logWithBacktrace("Intento de cambio de avatar fallido: token inválido o email no coincide", true);
+			return false; // Usuario no autorizado
+		}
+		
+		$uploadDir = APP_R_PROY . 'app/views/img/avatars/';
+		
+		if (!file_exists($uploadDir)) {
+			mkdir($uploadDir, 0775, true);
+			chgrp($uploadDir, 'www-data');
+			chmod($uploadDir, 0775);
+		}
 
+		$extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+		$allowedExtensions = ['jpg', 'jpeg', 'png', 'gif'];
+
+		if (!in_array(strtolower($extension), $allowedExtensions)) {
+			$this->logWithBacktrace("Intento de cambio de avatar fallido: extensión de archivo no permitida", true);
+			return false; // Extensión no permitida
+		}
+
+		$targetFile = $uploadDir . base64_encode($email) . '.' . $extension;
+
+		if (move_uploaded_file($file['tmp_name'], $targetFile)) {
+			chmod($targetFile, 0644); // Asegurarse de que el archivo sea legible
+			return true;
+		} else {
+			$this->logWithBacktrace("Intento de cambio de avatar fallido: error al mover el archivo", true);
+			return false; // Error al mover el archivo
+		}
+	}
 }

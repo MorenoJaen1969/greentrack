@@ -57,6 +57,7 @@ if (!$modulo) {
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/serviciosController.php';
+
 use app\controllers\serviciosController;
 
 $controller = new serviciosController();
@@ -71,30 +72,29 @@ $controller = new serviciosController();
  */
 // === 9. Enrutar según el módulo ===
 switch ($modulo) {
-    case 'listar': 
-        // Permitir filtrar por fecha y vehículo si se reciben
+    case 'listar':
+        // Permitir filtrar por fecha y vehículo si se reciben  
         $fecha = $inputData['fecha'] ?? null;
         $truck = $inputData['truck'] ?? null;
         if ($fecha || $truck) {
             $controller->listarServiciosConEstado($fecha, $truck);
-        } else { 
+        } else {
             $controller->listarServiciosConEstado();
         }
         break;
 
-    case 'listar_despacho':  
+    case 'listar_despacho':
         $fecha = $inputData['fecha_despacho'] ?? null;
-        $controller->listarServicios_despachos($fecha); 
+        $controller->listarServicios_despachos($fecha);
         break;
 
     case 'listar_individual';
-        // Permitir filtrar por fecha y vehículo si se reciben
+        // Permitir filtrar por fecha y vehículo si se reciben 
         $fecha = $inputData['fecha'] ?? null;
         $truck = $inputData['truck'] ?? null;
         if ($fecha || $truck) {
             $controller->listarServicioshistorico($fecha, $truck);
         } else {
-
         }
         break;
 
@@ -166,7 +166,7 @@ switch ($modulo) {
             echo json_encode(['error' => 'ID de servicio requerido']);
         }
         break;
-                
+
     case 'obtener_historial_servicio':
         $id_cliente = $inputData['id_cliente'] ?? null;
         if ($id_cliente) {
@@ -181,7 +181,7 @@ switch ($modulo) {
         // Recibe id_servicio, hora_inicio_gps
         $controller->actualizarHoraInicioGps($inputData);
         break;
-    
+
     case 'actualizar_hora_fin_gps':
         // Recibe id_servicio, hora_fin_gps, tiempo_servicio
         $controller->actualizarHoraFinGps($inputData);
@@ -212,7 +212,7 @@ switch ($modulo) {
         if (!$fecha_ctrl || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_ctrl)) {
             echo json_encode(['trucks' => []]);
             break;
-        }        
+        }
 
         if ($fecha_ctrl) {
             $controller->obtenerVehiclesPorFecha($fecha_ctrl);
@@ -235,7 +235,7 @@ switch ($modulo) {
             $hora_fin_gps = null;
             $tiempo_servicio = null;
         } else {
-            if (array_key_exists('hora_fin_gps', $inputData) && array_key_exists('tiempo_servicio', $inputData)){
+            if (array_key_exists('hora_fin_gps', $inputData) && array_key_exists('tiempo_servicio', $inputData)) {
                 $hora_inicio_gps = null;
                 $hora_fin_gps = $inputData['hora_fin_gps'];
                 $tiempo_servicio = $inputData['tiempo_servicio'];
@@ -248,14 +248,13 @@ switch ($modulo) {
             exit();
         }
 
-        if (($hora_inicio_gps && !$hora_fin_gps && !$tiempo_servicio) || (!$hora_inicio_gps && $hora_fin_gps && $tiempo_servicio) ){
+        if (($hora_inicio_gps && !$hora_fin_gps && !$tiempo_servicio) || (!$hora_inicio_gps && $hora_fin_gps && $tiempo_servicio)) {
             $resp_cont = $controller->actualizarServicio($id_servicio, $hora_inicio_gps, $hora_fin_gps, $tiempo_servicio);
             if ($resp_cont || isset($resp_cont['success'])) {
                 echo json_encode(['success' => true, 'message' => $resp_cont['message']]);
             } else {
                 echo json_encode(['error' => true, 'message' => $resp_cont['message']]);
             }
-
         } else {
             http_response_code(400);
             echo json_encode(['error' => 'Faltan datos requeridos: ' . json_encode($inputData)]);
@@ -267,21 +266,21 @@ switch ($modulo) {
         $resultado = $controller->reconciliarDatosHistoricos();
         echo json_encode($resultado);
         break;
-              
+
     case 'listar_vehiculos':
-        $controller->listarVehiculos(); 
+        $controller->listarVehiculos();
         break;
-    
+
     case 'info_vehiculo':
         $id_truck = $inputData['id_truck'];
-        
-        $controller->dato_actual_de_truck($id_truck); 
+
+        $controller->dato_actual_de_truck($id_truck);
         break;
 
     case 'listar_propiedades':
-        $controller->cargar_clientes_y_direccion(); 
+        $controller->cargar_clientes_y_direccion();
         break;
-    
+
     case 'actualizar_servicio':
         $id_servicio = $inputData['id_servicio'] ?? null;
         $id_cliente = $inputData['id_cliente'] ?? null;
@@ -313,6 +312,42 @@ switch ($modulo) {
         $controller->consultaServicios($id_servicio);
         break;
 
+    case 'preservicio_add':
+        // Espera: 'clientes' => array de ids de cliente, 'fecha' => 'YYYY-MM-DD'
+        $clientes = $inputData['clientes'] ?? [];
+        $fecha = $inputData['fecha'] ?? null;
+        $id_ruta_new = $inputData['id_ruta_new'] ?? null;
+        if (empty($clientes) || !$fecha) {
+            http_response_code(400);
+            echo json_encode(['error' => 'clientes y fecha son requeridos']);
+            exit();
+        }
+        $controller->addPreservicios($clientes, $fecha, $id_ruta_new);
+        break;
+
+    case 'preservicio_remove':
+        // Espera: 'clientes' => array de ids de cliente, 'fecha' => 'YYYY-MM-DD'
+        $clientes = $inputData['clientes'] ?? [];
+        $fecha = $inputData['fecha'] ?? null;
+        if (empty($clientes) || !$fecha) {
+            http_response_code(400);
+            echo json_encode(['error' => 'clientes y fecha son requeridos']);
+            exit();
+        }
+        $controller->removePreservicios($clientes, $fecha);
+        break;
+
+    case 'verificar_ruta':
+        $id_cliente = $inputData['id_cliente'] ?? [];
+        $fecha = $inputData['fecha'] ?? null;
+        if (empty($id_cliente) || !$fecha) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Contract code and date are required.']);
+            exit();
+        }
+        $controller->verificar_ruta($id_cliente, $fecha);
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);
@@ -320,4 +355,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

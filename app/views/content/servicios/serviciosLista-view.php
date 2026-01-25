@@ -274,7 +274,7 @@ function calcularTiempoTranscurrido($fecha_inicio, $fecha_fin)
                         case 1:
                             $ruta_direcciones = "direccionesVista/" . $key['id_direccion'] . "/" . $key['id_address_clas'] . "/serviciosLista/clientes/" . $pagina_retorno . "/". $key['id_cliente'];
                             $ruta_det_servicio = RUTA_APP . "/" . $ruta_direcciones;
-			            	$href = $ruta_det_servicio . $rows['id_cliente'] 
+                            $href = $ruta_det_servicio . $rows['id_cliente'] 
                             ?>
                             <div class="celda">
                                 <div class="center">

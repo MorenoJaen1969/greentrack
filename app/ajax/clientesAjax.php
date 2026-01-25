@@ -82,7 +82,7 @@ switch ($modulo) {
     case 'listar_tabla':
         $pagina = $inputData['pagina'] ?? 1;
         $registros_por_pagina = $inputData['registros_por_pagina'] ?? 10;
-        $url_origen = $inputData['url_origen'] ?? 'clientes';
+        $url_origen = $inputData['url_origen'] ?? 'Customers';
         $busca_frase = $inputData['busca_frase'] ?? '';
 
         // Llamar a tu método existente

@@ -24,6 +24,12 @@ switch ($opcion) {
         $nuevo_reg = "contratosNew";
         break;
 
+    case 'crew':
+        $titulo_act = "Field Staff ";
+        $clase = "fa-solid fa-truck-pickup";
+        $nuevo_reg = "crewNew";
+        break;
+
     case 'dias_no_actividad':
         $titulo_act = "Non-Working Days or Holidays";
         $clase = "fa-solid fa-circle-xmark";
@@ -40,6 +46,18 @@ switch ($opcion) {
         $titulo_act = "Suppliers";
         $clase = "fa-solid fa-boxes-packing";
         $nuevo_reg = "proveedoresNew";
+        break;
+
+    case 'route_day':
+        $titulo_act = "Route assignment on specific days";
+        $clase = "fa-solid fa-solid fa-route";
+        $nuevo_reg = "";
+        break;
+
+    case 'salas':
+        $titulo_act = "Rooms";
+        $clase = "fa-solid fa-chalkboard-user";
+        $nuevo_reg = "salasNew";
         break;
 
     case 'status_all':
@@ -74,6 +92,9 @@ switch ($opcion) {
                     </a>
                 </div>
             </div>
+            <?php
+                if ($opcion <> "route_day") {
+            ?>
             <div class="grid-tit_primero_2">
                 <div class="row_titulo-">
                     <div class="row_titulo-">
@@ -90,9 +111,15 @@ switch ($opcion) {
                     </div>
                 </div>
             </div>
+            <?php
+                }
+            ?>
         </div>
 
         <div class="grid_titulo">
+            <?php
+                if ($opcion <> "route_day") {
+            ?>
             <div class="grid-titulo-item1">
                 <div class="etiqueta is-link is-rounded is-small">
                     <div class="col-md-6">
@@ -110,6 +137,9 @@ switch ($opcion) {
                     </div>
                 </div>
             </div>
+            <?php
+                }
+            ?>
             <div class="grid-titulo-item2">
                 <h2 class="titulo_form">
                     <span class="<?php echo $clase; ?>">&nbsp</span>
@@ -118,6 +148,9 @@ switch ($opcion) {
             </div>
         </div>
 
+        <?php
+            if ($opcion <> "route_day") {
+        ?>
         <div class="tit_segundo">
             <div class="row_titulo-01">
                 <div class="row">
@@ -126,5 +159,8 @@ switch ($opcion) {
                 </div>
             </div>
         </div>
+        <?php
+            }
+        ?>
     </div>
 </div>

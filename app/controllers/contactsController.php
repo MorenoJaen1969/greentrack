@@ -1,10 +1,13 @@
 <?php
+
 namespace app\controllers;
+
 require_once APP_R_PROY . 'app/models/mainModel.php';
 
 use app\models\mainModel;
 
 use \Exception;
+
 class contactsController extends mainModel
 {
     private $log_path;
@@ -144,7 +147,6 @@ class contactsController extends mainModel
                 'success' => true,
                 'data' => $contactsData
             ]);
-
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['error' => 'Error interno del servidor: ' . $e->getMessage()]);
@@ -157,10 +159,10 @@ class contactsController extends mainModel
         if (isset($input['token']) && !empty($input['token'])) {
             return $input['token'];
         }
-        
+
         // Método 1: Buscar en $_SERVER (más confiable)
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? null;
-        
+
         // Método 2: Fallback a getallheaders() (por compatibilidad)
         if (!$authHeader && function_exists('getallheaders')) {
             $headers = getallheaders();
@@ -182,14 +184,12 @@ class contactsController extends mainModel
                 FROM usuarios_ejecutivos 
                 WHERE token = :v_token AND activo = 1 AND chat_activo = 1
         ";
-        
+
         $param = [
             ':v_token' => $token
         ];
 
-        $this->log("Consulta actual: " . $stmt);
         $datos = $this->ejecutarConsulta($stmt, "", $param);
-        $this->log("Resultado de la consulta: " . json_encode($datos));
         if (is_array($datos) && count($datos) > 0) {
             return $datos;
         }
@@ -210,7 +210,7 @@ class contactsController extends mainModel
         $token = $this->getAuthToken();
         if (!$token) {
             echo json_encode(['success' => false, 'error' => 'Token no proporcionado']);
-                exit();
+            exit();
         }
         $user = $this->validateToken($token);
         if (!$user || !isset($user['id'])) {
@@ -225,7 +225,7 @@ class contactsController extends mainModel
     private function getAvailableContacts($userId)
     {
         $this->log("Proceso getAvailableContacts ");
-        
+
         // Paso 1: Obtener todos los usuarios ejecutivos activos (excepto el usuario actual)
         $stmt = "
             SELECT id, nombre, email, chat_avatar as avatar, chat_estado as status, 'contact' as type,
@@ -387,7 +387,8 @@ class contactsController extends mainModel
         return $datos;
     }
 
-    private function getChatHistory($userIdActual, $contactId) {
+    private function getChatHistory($userIdActual, $contactId, $salaId)
+    {
         $stmt = "
             SELECT 
                 cm.id, cm.usuario_id as remitente_id, ue.nombre as remitente_nombre, ue.email as remitente_email,
@@ -403,7 +404,8 @@ class contactsController extends mainModel
                 cus2.usuario_id = :v_contactId1 AND
                 (cm.usuario_id = :v_userIdActual2 OR cm.usuario_id = :v_contactId2) AND
                 cs.activo = 1 AND
-                ue.activo = 1
+                ue.activo = 1 AND
+                cm.sala_id = :v_salaId
             ORDER BY cm.fecha_envio ASC
             LIMIT 100
         ";
@@ -412,7 +414,8 @@ class contactsController extends mainModel
             ':v_userIdActual1' => $userIdActual,
             ':v_userIdActual2' => $userIdActual,
             ':v_contactId1' => $contactId,
-            ':v_contactId2' => $contactId
+            ':v_contactId2' => $contactId,
+            ':v_salaId' => $salaId
         ];
 
         $this->log("Consulta historial: " . $stmt);
@@ -425,7 +428,8 @@ class contactsController extends mainModel
     }
 
     // Método público para ser llamado desde contactsAjax.php
-    public function getChatHistoryPublic($token, $contactId) {
+    public function getChatHistoryPublic($token, $contactId, $salaId)
+    {
         try {
             if (!$token) {
                 http_response_code(401);
@@ -450,25 +454,24 @@ class contactsController extends mainModel
 
             // Validar que contactId sea numérico si es necesario
             if (!is_numeric($contactId)) {
-                 http_response_code(400);
-                 echo json_encode(['error' => 'contact_id debe ser un número']);
-                 return;
+                http_response_code(400);
+                echo json_encode(['error' => 'contact_id debe ser un número']);
+                return;
             }
-
-            $messages = $this->getChatHistory($userIdActual, (int)$contactId);
+            $messages = $this->getChatHistory($userIdActual, (int)$contactId, $salaId);
 
             echo json_encode([
                 'success' => true,
                 'data' => $messages
             ]);
-
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['error' => 'Error interno del servidor: ' . $e->getMessage()]);
         }
-    }    
+    }
 
-    public function updateUserStatus() {
+    public function updateUserStatus()
+    {
         try {
             $token = $this->getAuthToken();
             if (!$token) {
@@ -499,13 +502,19 @@ class contactsController extends mainModel
             $chat_estado = $newStatus;
             $chat_ultima_conexion = date('Y-m-d H:i:s');
 
+            // Asegurarse de tener una sala válida antes de insertar
+            if (empty($salaId)) {
+                echo json_encode(['success' => false, 'error' => 'No se pudo determinar la sala para el mensaje']);
+                return;
+            }
+
             $datos = [
                 ['campo_nombre' => 'chat_estado', 'campo_marcador' => ':chat_estado', 'campo_valor' => $chat_estado],
                 ['campo_nombre' => 'chat_ultima_conexion', 'campo_marcador' => ':chat_ultima_conexion', 'campo_valor' => $chat_ultima_conexion]
             ];
             $condicion = [
                 'condicion_campo' => 'id',
-                'condicion_operador' => '=', 
+                'condicion_operador' => '=',
                 'condicion_marcador' => ':id',
                 'condicion_valor' => $user['id']
             ];
@@ -513,7 +522,6 @@ class contactsController extends mainModel
             $this->actualizarDatos('usuarios_ejecutivos', $datos, $condicion);
 
             echo json_encode(['success' => true, 'message' => 'Estado actualizado']);
-
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['error' => 'Error: ' . $e->getMessage()]);
@@ -536,7 +544,7 @@ class contactsController extends mainModel
         ];
         $condicion = [
             'condicion_campo' => 'id',
-            'condicion_operador' => '=', 
+            'condicion_operador' => '=',
             'condicion_marcador' => ':id',
             'condicion_valor' => $user['id']
         ];
@@ -549,7 +557,8 @@ class contactsController extends mainModel
         }
     }
 
-    public function getChatHistoryFrom($userIdActual, $contactId, $sinceTimestamp) {
+    public function getChatHistoryFrom($userIdActual, $contactId, $sinceTimestamp)
+    {
         $stmt = "
             SELECT 
                 cm.id, 
@@ -593,15 +602,16 @@ class contactsController extends mainModel
                 return $datos;
             } else {
                 return [];
-            }    
+            }
         } catch (Exception $e) {
-            $this->logWithBacktrace("Error en Consulta de historico: " . print_r(e, true));
-            return $datos ?: [];
+            $this->logWithBacktrace("Error en Consulta de historico: " . print_r($e, true));
+            return [];
         }
-    }    
+    }
 
     // Función de sanitización recursiva
-    private function sanitizeHtml($html, $allowed) {
+    private function sanitizeHtml($html, $allowed)
+    {
         if (!mb_check_encoding($html, 'UTF-8')) {
             $html = mb_convert_encoding($html, 'UTF-8', 'auto');
         }
@@ -672,7 +682,8 @@ class contactsController extends mainModel
         return $result;
     }
 
-    public function sendMessage(): void {
+    public function sendMessage($salaId, $toEmail, $content, $broadcast = false): void
+    {
         try {
             $token = $this->getAuthToken();
             if (!$token) {
@@ -687,12 +698,8 @@ class contactsController extends mainModel
             }
             $emisorId = $user['id'];
 
-            $input = json_decode(file_get_contents('php://input'), true);
-            $toEmail = $input['to'] ?? '';
-            $content = $input['content'] ?? '';
-
-            if (empty($toEmail) || empty($content)) {
-                echo json_encode(['success' => false, 'error' => 'Faltan datos']);
+            if (empty($content)) {
+                echo json_encode(['success' => false, 'error' => 'Faltan datos (contenido)']);
                 return;
             }
 
@@ -730,56 +737,83 @@ class contactsController extends mainModel
                 return;
             }
 
-            // 1. Buscar destinatario
-            $stmt = "SELECT id FROM usuarios_ejecutivos WHERE email = :v_email AND activo = :v_activo";
-
-            $param = [
-                ':v_email' =>  $toEmail,
-                ':v_activo' => 1
-            ];
-            $dest = $this->ejecutarConsulta($stmt, "", $param);
-
-            if (!$dest) {
-                echo json_encode(['success' => false, 'error' => 'Destinatario no encontrado']);
-                return;
+            $destId = null;
+            // Si es broadcast, ignorar destinatario privado
+            if (!empty($broadcast)) {
+                $toEmail = null;
             }
-            $destinatarioId = $dest['id'];
+            if (!empty($toEmail)) {
+                // 1. Buscar destinatario por email (solo si se especificó)
+                $stmt = "SELECT id 
+                    FROM usuarios_ejecutivos 
+                    WHERE email = :v_email 
+                        AND activo = :v_activo";
+                $param = [
+                    ':v_email' =>  $toEmail,
+                    ':v_activo' => 1
+                ];
+                $dest = $this->ejecutarConsulta($stmt, "", $param);
+                if (!$dest) {
+                    echo json_encode(['success' => false, 'error' => 'Destinatario no encontrado']);
+                    return;
+                }
+                $destId = $dest['id'] ?? null;
+            }
 
-            // Obtener salas del emisor
-            $stmtEmisor = " SELECT sala_id 
-                FROM chat_usuarios_salas 
-                WHERE usuario_id = :v_usuario_id";
-
-            $param = [
-                ':v_usuario_id' => $emisorId
-            ];    
-            $salasEmisor = $this->ejecutarConsulta($stmtEmisor, "", $param,  "fetchAll");
-
-            // Obtener salas del destinatario
-            $stmtDestino = "SELECT sala_id 
-                FROM chat_usuarios_salas 
-                WHERE usuario_id = :v_usuario_id";
-            $param = [
-                ':v_usuario_id' => $destinatarioId
-            ];    
-            
-            $salasDestino = $this->ejecutarConsulta($stmtDestino, "", $param, "fetchAll");
-
-            // Encontrar la intersección
-            $salasEmisorIds = array_column($salasEmisor, 'sala_id');
-            $salasDestinoIds = array_column($salasDestino, 'sala_id');
-            $salaComun = array_values(array_intersect($salasEmisorIds, $salasDestinoIds));
-
-            if (empty($salaComun)) {
-                // Si no hay sala común, crear una privada
-                $salaComunId = $this->crearSalaDirecta($emisorId, $destinatarioId);
-            } else {
-                $salaComunId = $salaComun[0];
+            // Si no se proporcionó sala_id pero se indicó destinatario y NO es broadcast, intentar resolver sala 1:1
+            if (empty($salaId) && $destId) {
+                if ($broadcast) {
+                    echo json_encode(['success' => false, 'error' => 'Broadcast requires a sala_id']);
+                    return;
+                }
+                $stmtSala = "SELECT s.sala_id as sala_id
+                    FROM chat_usuarios_salas s
+                    INNER JOIN chat_usuarios_salas s2 ON s.sala_id = s2.sala_id
+                    WHERE s.usuario_id = :emisor_id AND s2.usuario_id = :dest_id
+                    LIMIT 1";
+                $paramsSala = [':emisor_id' => $emisorId, ':dest_id' => $destId];
+                $found = $this->ejecutarConsulta($stmtSala, "", $paramsSala);
+                if ($found && isset($found['sala_id'])) {
+                    $salaId = $found['sala_id'];
+                } else {
+                    // Crear sala privada 1:1 si no existe
+                    $nombreSala = 'dm_' . min($emisorId, $destId) . '_' . max($emisorId, $destId);
+                    $datosSala = [
+                        ['campo_nombre' => 'nombre', 'campo_marcador' => ':nombre', 'campo_valor' => $nombreSala],
+                        ['campo_nombre' => 'descripcion', 'campo_marcador' => ':descripcion', 'campo_valor' => 'Sala privada entre usuarios'],
+                        ['campo_nombre' => 'creado_por', 'campo_marcador' => ':creado_por', 'campo_valor' => $emisorId],
+                        ['campo_nombre' => 'fecha_creacion', 'campo_marcador' => ':fecha_creacion', 'campo_valor' => date('Y-m-d H:i:s')],
+                        ['campo_nombre' => 'activo', 'campo_marcador' => ':activo', 'campo_valor' => 1]
+                    ];
+                    try {
+                        $newSalaId = $this->guardarDatos('chat_salas', $datosSala);
+                        if ($newSalaId) {
+                            // Añadir usuarios a la sala
+                            $datosUsuario1 = [
+                                ['campo_nombre' => 'sala_id', 'campo_marcador' => ':sala_id', 'campo_valor' => $newSalaId],
+                                ['campo_nombre' => 'usuario_id', 'campo_marcador' => ':usuario_id', 'campo_valor' => $emisorId],
+                                ['campo_nombre' => 'rol', 'campo_marcador' => ':rol', 'campo_valor' => 'owner'],
+                                ['campo_nombre' => 'fecha_union', 'campo_marcador' => ':fecha_union', 'campo_valor' => date('Y-m-d H:i:s')]
+                            ];
+                            $datosUsuario2 = [
+                                ['campo_nombre' => 'sala_id', 'campo_marcador' => ':sala_id', 'campo_valor' => $newSalaId],
+                                ['campo_nombre' => 'usuario_id', 'campo_marcador' => ':usuario_id', 'campo_valor' => $destId],
+                                ['campo_nombre' => 'rol', 'campo_marcador' => ':rol', 'campo_valor' => 'member'],
+                                ['campo_nombre' => 'fecha_union', 'campo_marcador' => ':fecha_union', 'campo_valor' => date('Y-m-d H:i:s')]
+                            ];
+                            $this->guardarDatos('chat_usuarios_salas', $datosUsuario1);
+                            $this->guardarDatos('chat_usuarios_salas', $datosUsuario2);
+                            $salaId = $newSalaId;
+                        }
+                    } catch (Exception $e) {
+                        $this->logWithBacktrace("Error creando sala 1:1: " . $e->getMessage());
+                    }
+                }
             }
 
             $fecha_envio = date('Y-m-d H:i:s');
             $datos = [
-                ['campo_nombre' => 'sala_id', 'campo_marcador' => ':sala_id', 'campo_valor' => $salaComunId],
+                ['campo_nombre' => 'sala_id', 'campo_marcador' => ':sala_id', 'campo_valor' => $salaId],
                 ['campo_nombre' => 'usuario_id', 'campo_marcador' => ':usuario_id', 'campo_valor' => $emisorId],
                 ['campo_nombre' => 'mensaje', 'campo_marcador' => ':mensaje', 'campo_valor' => $sanitizedContent],
                 ['campo_nombre' => 'fecha_envio', 'campo_marcador' => ':fecha_envio', 'campo_valor' => $fecha_envio]
@@ -788,7 +822,6 @@ class contactsController extends mainModel
             try {
                 $salaId = $this->guardarDatos('chat_mensajes', $datos);
                 $this->log("Mensaje insertado");
-
             } catch (Exception $e) {
                 $this->logWithBacktrace("Error en Crear Mensaje: " . print_r($datos, true));
                 echo json_encode(['success' => false, 'error' => 'No se pudo crear el mensaje']);
@@ -800,7 +833,8 @@ class contactsController extends mainModel
         }
     }
 
-    public function getHistorySince() {
+    public function getHistorySince($salaId)
+    {
         try {
             $token = $this->getAuthToken();
             if (!$token) {
@@ -826,24 +860,25 @@ class contactsController extends mainModel
                 echo json_encode(['success' => false, 'error' => 'since_id inválido']);
                 return;
             }
-                        
+
             // Obtener mensajes nuevos
-            $anterior = "
-                SELECT cm.id, cm.usuario_id as remitente_id, ue.nombre as remitente_nombre, ue.email as remitente_email,
+            $anterior = "SELECT cm.id, cm.usuario_id as remitente_id, ue.nombre as remitente_nombre, ue.email as remitente_email,
                     cm.mensaje as content, cm.fecha_envio as timestamp, cs.id as sala_id
                 FROM chat_mensajes cm
                 JOIN usuarios_ejecutivos ue ON cm.usuario_id = ue.id
                 JOIN chat_usuarios_salas cus1 ON cm.sala_id = cus1.sala_id
                 JOIN chat_usuarios_salas cus2 ON cm.sala_id = cus2.sala_id
                 WHERE (cus1.usuario_id = :user AND cus2.usuario_id = :contact)
-                OR (cus1.usuario_id = :contact AND cus2.usuario_id = :user)
-                AND cm.id > :since
+                    OR (cus1.usuario_id = :contact AND cus2.usuario_id = :user)
+                    AND cm.id > :since
+                    AND cm.sala_id = :sala_id
                 ORDER BY cm.id ASC
             ";
             $params01 = [
-                ':user' => $user['id'], 
-                ':contact' => $contactId, 
-                ':since' => $sinceId
+                ':user' => $user['id'],
+                ':contact' => $contactId,
+                ':since' => $sinceId,
+                ':sala_id' => $salaId
             ];
 
             $stmt = " SELECT  cm.id, cm.usuario_id as remitente_id, ue.nombre as remitente_nombre, ue.email as remitente_email,
@@ -856,12 +891,14 @@ class contactsController extends mainModel
                     cus.usuario_id = :usuario_id AND
                     cm.id > :since_id AND
                     cs.activo = 1 AND
-                    ue.activo = 1
+                    ue.activo = 1 AND
+                    cm.sala_id = :sala_id
                 ORDER BY cm.id ASC";
 
             $params = [
                 ':usuario_id' => $user['id'],
-                ':since_id' => $sinceId
+                ':since_id' => $sinceId,
+                ':sala_id' => $salaId
             ];
 
             $mensajes = $this->ejecutarConsulta($stmt, "", $params, "fetchAll");
@@ -871,7 +908,8 @@ class contactsController extends mainModel
         }
     }
 
-    public function getNumberChatNew($userId) {
+    public function getNumberChatNew($userId)
+    {
         $stmt = "SELECT COUNT(*) as count 
                 FROM chat_mensajes m
                 INNER JOIN chat_usuarios_salas s ON m.sala_id = s.sala_id
@@ -886,7 +924,8 @@ class contactsController extends mainModel
         return $count;
     }
 
-    public function getNumberChatNew_for_user($userId){
+    public function getNumberChatNew_for_user($userId)
+    {
         // Obtener contactos con conteo de mensajes no leídos
         $stmt = "
             SELECT 
@@ -922,8 +961,133 @@ class contactsController extends mainModel
         return $result;
     }
 
- 
-    public function markMessagesAsRead($user_id, $messageIds){
+    public function traer_salas($userId)
+    {
+        // Obtener salas + conteo de no leídos por sala
+        $sql = "SELECT s.id, s.nombre, s.descripcion,
+                COUNT(CASE WHEN m.leido = 0 AND m.usuario_id != :v_usuario_id1 THEN 1 END) as unread
+            FROM chat_usuarios_salas us
+            INNER JOIN chat_salas s ON us.sala_id = s.id
+            LEFT JOIN chat_mensajes m ON s.id = m.sala_id
+            WHERE us.usuario_id = :v_usuario_id2
+                AND s.activo = 1
+            GROUP BY s.id, s.nombre, s.descripcion
+            ORDER BY s.nombre";
+
+        $param = [
+            ':v_usuario_id1' => $userId,
+            ':v_usuario_id2' => $userId
+        ];
+
+        $salas = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
+        return $salas;
+    }
+
+    public function ultima_sala($userId, $salaId)
+    {
+        $datos = [
+            ['campo_nombre' => 'ultima_sala_id', 'campo_marcador' => ':ultima_sala_id', 'campo_valor' => $salaId]
+        ];
+        $condicion = [
+            'condicion_campo' => 'id',
+            'condicion_operador' => '=',
+            'condicion_marcador' => ':id',
+            'condicion_valor' => $userId
+        ];
+
+        try {
+            $this->actualizarDatos('usuarios_ejecutivos', $datos, $condicion);
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    public function marca_leidos_por_sala($userId, $salaId)
+    {
+        $datos = [
+            ['campo_nombre' => 'leido', 'campo_marcador' => ':leido', 'campo_valor' => 1]
+        ];
+        $condicion = [
+            [
+                'condicion_campo' => 'sala_id',
+                'condicion_operador' => '=',
+                'condicion_marcador' => ':sala_id',
+                'condicion_valor' => $salaId
+            ],
+            [
+                'condicion_campo' => 'usuario_id',
+                'condicion_operador' => '=',
+                'condicion_marcador' => ':usuario_id',
+                'condicion_valor' => $userId
+            ],
+            [
+                'condicion_campo' => 'leido',
+                'condicion_operador' => '=',
+                'condicion_marcador' => ':leido',
+                'condicion_valor' => 0
+            ]
+        ];
+
+
+        try {
+            $this->actualizarDatos('chat_mensajes', $datos, $condicion);
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    public function room_history($salaId, $token)
+    {
+        $usuarioToken = $this->validateToken($token);
+        $userId = $usuarioToken['id'];
+
+        if (!$salaId || !$userId) {
+            echo json_encode(['success' => false]);
+            return;
+        }
+
+        // ✅ Verificar que el usuario pertenece a la sala
+        $stmt = "SELECT 1 
+            FROM chat_usuarios_salas 
+            WHERE sala_id = :v_sala_id 
+                AND usuario_id = :v_usuario_id";
+        $param = [
+            ':v_sala_id' => $salaId,
+            ':v_usuario_id' => $userId
+        ];
+
+        $result = $this->ejecutarConsulta($stmt, "", $param);
+        if (!$result) {
+            echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
+            return;
+        }
+
+        // Cargar mensajes de la sala
+        $sql = "SELECT 
+                m.id,
+                m.mensaje as content,
+                m.fecha_envio as timestamp,
+                m.leido,
+                u.id as remitente_id,
+                u.nombre as remitente_nombre,
+                u.email as remitente_email
+            FROM chat_mensajes m
+            INNER JOIN usuarios_ejecutivos u ON m.usuario_id = u.id
+            WHERE m.sala_id = :v_sala_id
+            ORDER BY m.fecha_envio ASC";
+
+        $param = [
+            ':v_sala_id' => $salaId
+        ];
+
+        $mensajes = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
+        return $mensajes;
+    }
+
+    public function markMessagesAsRead($user_id, $messageIds)
+    {
         // Asegurar que los mensajes pertenecen al usuario
         $placeholders = str_repeat('?,', count($messageIds) - 1) . '?';
 
@@ -939,10 +1103,9 @@ class contactsController extends mainModel
         if (empty($messageIds)) {
             $this->log("marcarMensajesComoLeidos: IDs inválidos");
             return 0;
-        }        
-
+        }
         $filas = $this->marcarMensajesComoLeidos($user_id, $messageIds);
-        
+
         if ($filas >= 0) {
             echo json_encode(['success' => true, 'affected' => $filas]);
         } else {
@@ -950,4 +1113,145 @@ class contactsController extends mainModel
         }
         exit();
     }
-}   
+
+    public function marcarMensajesComoLeidos($user_id, $messageIds): int
+    {
+        $datos = [
+            ['campo_nombre' => 'leido', 'campo_marcador' => ':leido', 'campo_valor' => 1]
+        ];
+
+        $cantidad_registros = 0;
+
+        foreach ($messageIds as $id) {
+            $condicion = [
+                'condicion_campo' => 'id',
+                'condicion_operador' => '=',
+                'condicion_marcador' => ':id',
+                'condicion_valor' => $id
+            ];
+            $marcado = $this->actualizarDatos('chat_mensajes', $datos, $condicion);
+            if ($marcado) {
+                $cantidad_registros++;
+            }
+        }
+
+        return $cantidad_registros;
+    }
+
+    public function messUnreadRoom($token, $sala_id)
+    {
+        $usuarioToken = $this->validateToken($token);
+        $userId = $usuarioToken['id'];
+
+        if (!$sala_id || !$userId) {
+            echo json_encode(['success' => false]);
+            return;
+        }
+
+        $stmt = "SELECT COUNT(*) as total_unread
+            FROM chat_mensajes m
+            WHERE 
+                m.sala_id = :sala_id
+                AND m.leido = 0
+                AND m.usuario_id != :user_id";
+
+        $params = [
+            ':sala_id' => $sala_id,
+            ':user_id' => $userId
+        ];
+
+        $result = $this->ejecutarConsulta($stmt, "", $params);
+        return (int)($result['total_unread'] ?? 0);
+    }
+
+    public function messUnreadContact($contact_id, $sala_id)
+    {
+        if (!$sala_id || !$contact_id) {
+            echo json_encode(['success' => false]);
+            return;
+        }
+
+        $stmt2 = "SELECT 
+                (CASE 
+                    WHEN m.usuario_id = :user_id1 THEN s_other.usuario_id
+                    ELSE m.usuario_id
+                END) as contact_id,
+                COUNT(*) as unread
+            FROM chat_mensajes m
+            INNER JOIN chat_usuarios_salas s_me ON m.sala_id = s_me.sala_id AND s_me.usuario_id = :user_id2
+            INNER JOIN chat_usuarios_salas s_other ON m.sala_id = s_other.sala_id AND s_other.usuario_id != :user_id3
+            WHERE 
+                m.leido = 0 
+                AND m.usuario_id != :user_id4
+                AND m.sala_id = :sala_id
+            GROUP BY contact_id";
+        $param2 = [
+            ':user_id1' => $contact_id,
+            ':user_id2' => $contact_id,
+            ':user_id3' => $contact_id,
+            ':user_id4' => $contact_id,
+            ':sala_id' => $sala_id
+        ];
+        $unreadList = $this->ejecutarConsulta($stmt2, "", $param2, "fetchAll");
+        return $unreadList;
+    }
+
+    public function get_room_members($salaId, $token)
+    {
+        $usuarioToken = $this->validateToken($token);
+        $userId = $usuarioToken['id'];
+
+        if (!$salaId || !$userId) {
+            echo json_encode(['success' => false]);
+            return;
+        }
+
+        // Verificar que el usuario pertenece a la sala
+        $stmt = "SELECT 1 
+            FROM chat_usuarios_salas 
+            WHERE sala_id = :v_sala_id 
+                AND usuario_id = :v_usuario_id";
+        $param = [
+            ':v_sala_id' => $salaId,
+            ':v_usuario_id' => $userId
+        ];
+
+        $result = $this->ejecutarConsulta($stmt, "", $param);
+        if (!$result) {
+            echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
+            return;
+        }
+
+        // Obtener miembros de la sala (excluyendo al usuario actual)
+        $stmt = "SELECT u.id, u.nombre, u.email, u.chat_avatar as avatar
+            FROM chat_usuarios_salas us
+            INNER JOIN usuarios_ejecutivos u ON us.usuario_id = u.id
+            WHERE us.sala_id = :v_sala_id AND u.id != :v_usuario_id
+            ORDER BY u.nombre";
+
+        $param = [
+            ':v_sala_id' => $salaId,
+            ':v_usuario_id' => $userId
+        ];
+
+        $miembros = $this->ejecutarConsulta($stmt, "", $param, "fetchAll");
+        return $miembros;
+    }
+
+    public function obtener_ultima_sala($userId)
+    {
+
+        $stmt = "SELECT ultima_sala_id 
+            FROM usuarios_ejecutivos 
+            WHERE id = :v_id";
+        $param = [
+            ':v_id' => $userId
+        ];
+
+        $miembros = $this->ejecutarConsulta($stmt, "", $param);
+
+        $salaId = $miembros['ultima_sala_id'] ?? null;
+
+        return $salaId;
+    }
+}

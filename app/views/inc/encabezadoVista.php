@@ -20,6 +20,11 @@ switch ($opcion) {
         $clase = "fa-solid fa-file-signature";
         break;
 
+    case 'crewVista':
+        $titulo_act = "Crew view";
+        $clase = "fa-solid fa-truck-pickup";
+        break;
+
     case 'dias_no_actividad':
         $titulo_act = "Non-Working Days or Holidays view";
         $clase = "fa-solid fa-circle-xmark";

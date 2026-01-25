@@ -184,6 +184,24 @@ try {
             echo json_encode(['success' => true]);            
             exit();
             
+
+        case 'changeAvatar';
+            if (!isset($_FILES['avatar']) || !isset($inputData['email']) || !isset($inputData['token'])) {
+                echo json_encode(['success' => false, 'message' => 'Missing data']);
+                exit;
+            }
+            $email = $inputData['email'];
+            $token = $inputData['token'];
+            $file = $_FILES['avatar'];
+
+            $resultado = $controller->changeAvatar($email, $token, $file);
+            if ($resultado) {
+                echo json_encode(['success' => true]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'File move failed']);
+            }            
+            exit();
+
         default:
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Módulo no válido: ' . $modulo]);

@@ -21,7 +21,7 @@ class rutas_mapaController extends mainModel
 
     public function __construct()
     {
-        // ¡ESTA LÍNEA ES CRUCIAL!
+        // ¡ESTA LÍNEA ES CRUCIAL! 
         parent::__construct();
 
         // Nombre del controlador actual abreviado para reconocer el archivo
@@ -47,10 +47,10 @@ class rutas_mapaController extends mainModel
         // rotación automatica de log (Elimina logs > XX dias)
         $this->rotarLogs(15);
 
-        $this->id_status_cancelado = 47;
+        $this->id_status_cancelado = 22;
         $this->id_status_finalizado = 38;
         $this->id_status_historico = 39;
-        $this->id_status_activo = 37;
+        $this->id_status_activo = 18;
         $this->id_status_replanificado = 40;
 
         // if (isset($_COOKIE['clang'])) {
@@ -128,10 +128,13 @@ class rutas_mapaController extends mainModel
     {
         $this->log("Inicio de lectura de Zonas ");
         try {
-            $sql = "SELECT id_ruta, nombre_ruta, color_ruta, activo 
-                        FROM rutas 
-                        WHERE activo = :v_activo 
-                        ORDER BY nombre_ruta";
+            $sql = "SELECT r.id_ruta, r.nombre_ruta, r.color_ruta, r.activo,
+                COUNT(rd.id_direccion) AS total_direcciones
+                FROM rutas r
+                LEFT JOIN rutas_direcciones rd ON r.id_ruta = rd.id_ruta AND rd.activo = 1
+                WHERE r.activo = :v_activo
+                GROUP BY r.id_ruta, r.nombre_ruta, r.color_ruta, r.activo
+                ORDER BY r.nombre_ruta";
 
             $params = [
                 ':v_activo' => 1
@@ -152,17 +155,13 @@ class rutas_mapaController extends mainModel
     public function obtenerRutaConZonas_d($id_ruta)
     {
         try {
-            $sql = "SELECT zc.id_zona, zc.nombre_zona, d.id_direccion, c.nombre AS cliente_nombre, d.direccion, d.lat, d.lng
-                FROM rutas_zonas_cuadricula rz
-                JOIN zonas_cuadricula zc ON rz.id_zona = zc.id_zona
-                LEFT JOIN zonas_direcciones zd ON zc.id_zona = zd.id_zona
-                LEFT JOIN direcciones d ON zd.id_direccion = d.id_direccion
-                LEFT JOIN clientes c ON d.id_cliente = c.id_cliente
-                WHERE rz.id_ruta = :id_ruta 
-                    AND rz.activo = 1 
-                    AND d.id_direccion IS NOT NULL
-                ORDER BY zc.id_zona, c.nombre
-		    ";
+            $sql = "SELECT d.id_direccion, c.nombre AS cliente_nombre, d.direccion, d.lat, d.lng, rd.tiempo_servicio
+                        FROM rutas_direcciones rd
+                        JOIN direcciones d ON rd.id_direccion = d.id_direccion
+                        LEFT JOIN clientes c ON d.id_cliente = c.id_cliente
+                        WHERE rd.id_ruta = :id_ruta 
+                            AND rd.activo = 1
+                        ORDER BY rd.orden_en_ruta";
 
             $param = [
                 ':id_ruta' => $id_ruta
@@ -170,37 +169,6 @@ class rutas_mapaController extends mainModel
 
             $zonasConDirecciones = $this->ejecutarConsulta($sql, '', $param, "fetchAll");
 
-            // // Agrupar direcciones por zona
-            // $zonasAgrupadas = [];
-            // foreach ($zonasConDirecciones as $fila) {
-            //     $id_zona = $fila['id_zona'];
-
-            //     if (!isset($zonasAgrupadas[$id_zona])) {
-            //         $zonasAgrupadas[$id_zona] = [
-            //             'id_zona' => $fila['id_zona'],
-            //             'nombre_zona' => $fila['nombre_zona'],
-            //             'lat_sw' => $fila['lat_sw'],
-            //             'lng_sw' => $fila['lng_sw'],
-            //             'lat_ne' => $fila['lat_ne'],
-            //             'lng_ne' => $fila['lng_ne'],
-            //             'direcciones' => []
-            //         ];
-            //     }
-
-            //     // Añadir dirección si existe (evita nulls de LEFT JOIN)
-            //     if ($fila['id_direccion'] !== null) {
-            //         $zonasAgrupadas[$id_zona]['direcciones'][] = [
-            //             'id_direccion' => $fila['id_direccion'],
-            //             'cliente_nombre' => $fila['cliente_nombre'],
-            //             'direccion' => $fila['direccion'],
-            //             'lat' => $fila['dir_lat'],
-            //             'lng' => $fila['dir_lng']
-            //         ];
-            //     }
-            // }
-
-            // $ruta['zonas'] = array_values($zonasAgrupadas);
-            // $this->log("Datos de ruta con zonas y direcciones obtenidos para ID: $id_ruta");
             return $zonasConDirecciones;
         } catch (Exception $e) {
             $this->logWithBacktrace("Error al obtener ruta con zonas y direcciones: " . $e->getMessage());
@@ -226,17 +194,14 @@ class rutas_mapaController extends mainModel
             }
 
             // Obtener zonas + direcciones asignadas
-            $sql_zonas_direcciones = "SELECT 
-                    zc.id_zona, zc.nombre_zona, zc.lat_sw, zc.lng_sw, zc.lat_ne, zc.lng_ne,
-                    d.id_direccion, c.nombre AS cliente_nombre, d.direccion, d.lat AS dir_lat, d.lng AS dir_lng
+            $sql_zonas_direcciones = "SELECT zc.id_zona, zc.nombre_zona, zc.lat_sw,
+                    zc.lng_sw, zc.lat_ne, zc.lng_ne
                 FROM rutas_zonas_cuadricula rz
-                JOIN zonas_cuadricula zc ON rz.id_zona = zc.id_zona
-                LEFT JOIN zonas_direcciones zd ON zc.id_zona = zd.id_zona
-                LEFT JOIN direcciones d ON zd.id_direccion = d.id_direccion
-                LEFT JOIN clientes c ON d.id_cliente = c.id_cliente
-                WHERE rz.id_ruta = :id_ruta AND rz.activo = 1
-                ORDER BY zc.id_zona, d.id_direccion
-            ";
+                INNER JOIN zonas_cuadricula zc ON rz.id_zona = zc.id_zona
+                WHERE rz.id_ruta = :id_ruta 
+                    AND rz.activo = 1
+                ORDER BY zc.id_zona
+            ";            
 
             $param = [':id_ruta' => $id_ruta];
 
@@ -258,19 +223,59 @@ class rutas_mapaController extends mainModel
                         'direcciones' => []
                     ];
                 }
-
-                // Añadir dirección si existe (evita nulls de LEFT JOIN)
-                if ($fila['id_direccion'] !== null) {
-                    $zonasAgrupadas[$id_zona]['direcciones'][] = [
-                        'id_direccion' => $fila['id_direccion'],
-                        'cliente_nombre' => $fila['cliente_nombre'],
-                        'direccion' => $fila['direccion'],
-                        'lat' => $fila['dir_lat'],
-                        'lng' => $fila['dir_lng']
-                    ];
-                }
             }
 
+            $sql_direcciones = "SELECT rd.id_ruta, COUNT(*) OVER() AS cant_reg, d.id_direccion, c.nombre AS cliente_nombre,
+                d.direccion, d.lat AS dir_lat, d.lng AS dir_lng, 
+                COALESCE(FLOOR(TIME_TO_SEC(ct.tiempo_servicio) / 60), 0) AS tiempo_servicio
+                FROM greentrack_live.rutas_direcciones rd
+                JOIN greentrack_live.contratos ct ON rd.id_ruta = ct.id_ruta AND rd.id_direccion = ct.id_direccion AND ct.id_status = 18
+                LEFT JOIN greentrack_live.direcciones d ON rd.id_direccion = d.id_direccion
+                LEFT JOIN greentrack_live.clientes c ON d.id_cliente = c.id_cliente
+                WHERE rd.id_ruta = :v_id_ruta
+                AND rd.activo = 1
+                AND d.id_direccion IS NOT NULL
+                ORDER BY rd.orden_en_ruta;
+            ";            
+
+            $param = [':v_id_ruta' => $id_ruta];
+
+            $direcciones = $this->ejecutarConsulta($sql_direcciones, '', $param, "fetchAll");
+
+            foreach ($direcciones as $dir) {
+                if ($dir['id_direccion'] === null || $dir['dir_lat'] === null || $dir['dir_lng'] === null) {
+                    continue; // saltar direcciones sin coordenadas
+                }
+
+                $asignada = false;
+                foreach ($zonasConDirecciones as $z) {
+                    // Verificar si la dirección está dentro de los límites de la zona
+                    if (
+                        $dir['dir_lat'] >= $z['lat_sw'] &&
+                        $dir['dir_lat'] <= $z['lat_ne'] &&
+                        $dir['dir_lng'] >= $z['lng_sw'] &&
+                        $dir['dir_lng'] <= $z['lng_ne']
+                    ) {
+                        $zonasAgrupadas[$z['id_zona']]['direcciones'][] = [
+                            'id_direccion' => $dir['id_direccion'],
+                            'cliente_nombre' => $dir['cliente_nombre'],
+                            'direccion' => $dir['direccion'],
+                            'lat' => $dir['dir_lat'],
+                            'lng' => $dir['dir_lng'],
+                            'tiempo_servicio' => (int)$dir['tiempo_servicio']
+                        ];
+                        $asignada = true;
+                        break; // asumimos que pertenece a una sola zona
+                    }
+                }
+
+                // Opcional: si no se asignó, podrías guardarla en una "zona fantasma" o loggearla
+                if (!$asignada) {
+                    // Ejemplo: loggear direcciones fuera de zonas
+                    error_log("Dirección {$dir['id_direccion']} no está en ninguna zona de la ruta $id_ruta");
+                }
+            }
+            
             $ruta['zonas'] = array_values($zonasAgrupadas);
             $this->log("Datos de ruta con zonas y direcciones obtenidos para ID: $id_ruta");
             return $ruta;
@@ -284,44 +289,49 @@ class rutas_mapaController extends mainModel
      * Crea una nueva ruta y asocia zonas
      * @param string $nombre_ruta
      * @param string $color_ruta (e.g., #FF0000)
-     * @param array $zonas_ids (array de id_zona)
+     * @param array $direcciones_ids (antes era zonas_ids, ahora son IDs de direcciones)
      * @return int id_ruta creada
      */
-    public function crearRuta($nombre_ruta, $color_ruta, $zonas_ids)
+    public function crearRuta($nombre_ruta, $color_ruta, $direcciones_ids)
     {
         try {
             // 1. Validar que las zonas existan y estén conectadas al HQ
-            if (empty($zonas_ids)) {
+            if (empty($direcciones_ids)) {
                 throw new Exception("No se puede crear una ruta sin zonas asociadas.");
             }
 
+            // === 1. Validar que las direcciones existan y tengan coordenadas ===
             // Obtener coordenadas de las zonas para validación
-            $placeholders = str_repeat('?,', count($zonas_ids) - 1) . '?';
-            $sql_check = "SELECT id_zona, lat_sw, lng_sw, lat_ne, lng_ne 
-                FROM zonas_cuadricula 
-                WHERE id_zona IN ($placeholders) AND activo = 1";
-            $params = $zonas_ids;
+            $placeholders = str_repeat('?,', count($direcciones_ids) - 1) . '?';
+            $sql_check = "SELECT id_direccion, lat, lng 
+                        FROM direcciones 
+                        WHERE id_direccion IN ($placeholders) 
+                            AND lat IS NOT NULL 
+                            AND lng IS NOT NULL";
+            $params = $direcciones_ids;
+            $direcciones_datos = $this->ejecutarConsulta($sql_check, '', $params, "fetchAll");
 
-            $zonas_datos = $this->ejecutarConsulta($sql_check, '', $params, "fetchAll");
-
-            if (count($zonas_datos) !== count($zonas_ids)) {
-                throw new Exception("Algunas zonas no existen o no están activas.");
+            if (count($direcciones_datos) !== count($direcciones_ids)) {
+                throw new Exception("Algunas direcciones no existen o no tienen coordenadas válidas.");
             }
 
+            // === 2. Validar conexión con HQ (30.3204272, -95.4217815) ===
             // Validar conexión con HQ (lat_hq = 30.3204272, lng_hq = -95.4217815)
             $hq_lat = 30.3204272;
             $hq_lng = -95.4217815;
             $distancia_minima = PHP_FLOAT_MAX;
 
-            foreach ($zonas_datos as $zona) {
-                // Calcular distancia del centro de la zona al HQ
-                $centro_lat = ($zona['lat_sw'] + $zona['lat_ne']) / 2;
-                $centro_lng = ($zona['lng_sw'] + $zona['lng_ne']) / 2;
+            foreach ($direcciones_datos as $dir) {
+                // Calcular distancia en grados
+                $dist_grados = sqrt(
+                    pow($dir['lat'] - $hq_lat, 2) + 
+                    pow($dir['lng'] - $hq_lng, 2)
+                );
+                // Convertir a km (~111 km por grado)
+                $dist_km = $dist_grados * 111;
 
-                // Distancia aproximada en grados (simplificación)
-                $distancia = sqrt(pow($centro_lat - $hq_lat, 2) + pow($centro_lng - $hq_lng, 2));
-                if ($distancia < $distancia_minima) {
-                    $distancia_minima = $distancia;
+                if ($dist_km < $distancia_minima_km) {
+                    $distancia_minima_km = $dist_km;
                 }
             }
 
@@ -333,8 +343,7 @@ class rutas_mapaController extends mainModel
                 throw new Exception("La ruta no está conectada al headquarter. La zona más cercana está a " . sprintf('%.2f', $distancia_km) . " km.");
             }
 
-
-            // 2. Crear la ruta
+            // === 3. Crear la ruta ===
             $logRuta = [
                 ['campo_nombre' => 'nombre_ruta', 'campo_marcador' => ':nombre_ruta', 'campo_valor' => $nombre_ruta],
                 ['campo_nombre' => 'color_ruta', 'campo_marcador' => ':color_ruta', 'campo_valor' => $color_ruta],
@@ -343,17 +352,17 @@ class rutas_mapaController extends mainModel
             ];
             $id_ruta = $this->guardarDatos('rutas', $logRuta);
 
-            // 3. Asociar zonas a la ruta
-            foreach ($zonas_ids as $id_zona) {
+            // === 4. Asociar direcciones a la ruta ===
+            foreach ($direcciones_ids as $id_direccion) {
                 $logRutaZona = [
                     ['campo_nombre' => 'id_ruta', 'campo_marcador' => ':id_ruta', 'campo_valor' => $id_ruta],
-                    ['campo_nombre' => 'id_zona', 'campo_marcador' => ':id_zona', 'campo_valor' => $id_zona],
+                    ['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $id_direccion],
                     ['campo_nombre' => 'activo', 'campo_marcador' => ':activo', 'campo_valor' => 1],
                 ];
-                $this->guardarDatos('rutas_zonas_cuadricula', $logRutaZona);
+                $this->guardarDatos('rutas_direcciones', $logRutaZona);
             }
 
-            $this->log("Ruta creada exitosamente: ID $id_ruta, Nombre '$nombre_ruta', Zonas: " . count($zonas_ids));
+            $this->log("Ruta creada exitosamente: ID $id_ruta, Nombre '$nombre_ruta', Zonas: " . count($direcciones_ids));
             return $id_ruta;
 
         } catch (Exception $e) {
@@ -369,7 +378,7 @@ class rutas_mapaController extends mainModel
      * @param string $color_ruta
      * @param array $zonas_ids
      */
-    public function actualizarRuta($id_ruta, $nombre_ruta, $color_ruta, $zonas_ids)
+    public function actualizarRuta($id_ruta, $nombre_ruta, $color_ruta, $direcciones_ids)
     {
         try {
             // 1. Validar existencia de la ruta
@@ -401,15 +410,15 @@ class rutas_mapaController extends mainModel
             $this->log("Registro de Ruta actualizado exitosamente: ID $id_ruta, Nombre '$nombre_ruta', Color: " . $color_ruta);
 
             // 3. Validar zonas y conexión con HQ (similar a crearRuta)
-            if (empty($zonas_ids)) {
+            if (empty($direcciones_ids)) {
                 throw new Exception("A route cannot be updated without associated zones.");
             }
 
-            $placeholders = str_repeat('?,', count($zonas_ids) - 1) . '?';
+            $placeholders = str_repeat('?,', count($direcciones_ids) - 1) . '?';
             $sql_check = "SELECT id_zona, lat_sw, lng_sw, lat_ne, lng_ne 
                             FROM zonas_cuadricula 
                             WHERE id_zona IN ($placeholders) AND activo = 1";
-            $params = $zonas_ids;
+            $params = $direcciones_ids;
 
             $zonas_datos = $this->ejecutarConsulta($sql_check, '', $params, "fetchAll");
             if (count((array) $zonas_datos) > 0) {
@@ -433,24 +442,13 @@ class rutas_mapaController extends mainModel
                     throw new Exception("La ruta no está conectada al headquarter. La zona más cercana está a " . sprintf('%.2f', $distancia_km) . " km.");
                 }
 
-                // 4. Eliminar vínculos anteriores (marcar como inactivos o borrar, aquí marco como inactivos)
-                // $activo = 0;
-                // $datos = [
-                //     ['campo_nombre' => 'activo', 'campo_marcador' => ':activo', 'campo_valor' => $activo]
-                // ];
-                // $condicion = [
-                //     'condicion_campo' => 'id_ruta',
-                //     'condicion_operador' => '=',
-                //     'condicion_marcador' => ':id_ruta',
-                //     'condicion_valor' => $id_ruta
-                // ];
-
-                // $this->actualizarDatos('rutas_zonas_cuadricula', $datos, $condicion);
-
                 // 5. Asociar nuevas zonas
-                foreach ($zonas_ids as $id_zona) {
+                foreach ($direcciones_ids as $id_zona) {
                     // Verificar si ya existe el vínculo (y está inactivo), si es así, reactivarlo
-                    $sql_check_link = "SELECT id_ruta_zona FROM rutas_zonas_cuadricula WHERE id_ruta = :id_ruta AND id_zona = :id_zona";
+                    $sql_check_link = "SELECT id_ruta_zona 
+                        FROM rutas_zonas_cuadricula 
+                        WHERE id_ruta = :id_ruta 
+                            AND id_zona = :id_zona";
                     $params = [
                         ':id_ruta' => $id_ruta,
                         ':id_zona' => $id_zona
@@ -487,7 +485,7 @@ class rutas_mapaController extends mainModel
                     }
                 }
 
-                $this->log("Ruta actualizada exitosamente: ID $id_ruta, Nombre '$nombre_ruta', Zonas: " . count($zonas_ids));
+                $this->log("Ruta actualizada exitosamente: ID $id_ruta, Nombre '$nombre_ruta', Zonas: " . count($direcciones_ids));
                 return $id_ruta;
             }
 
@@ -506,7 +504,8 @@ class rutas_mapaController extends mainModel
         try {
             // Marcar como inactiva en lugar de borrar físicamente
             $activo = 0;
-            $actualizado_en = new \DateTime();
+            $fecha_actual = new \DateTime();
+            $actualizado_en = $fecha_actual->format('Y-m-d H:i:s');
 
             $datos = [
                 ['campo_nombre' => 'activo', 'campo_marcador' => ':activo', 'campo_valor' => $activo],
@@ -603,4 +602,69 @@ class rutas_mapaController extends mainModel
         }
     }
 
+    public function consultar_rutas()
+    {
+        $sql = 'SELECT id_ruta, nombre_ruta
+            FROM rutas
+            WHERE activo = 1
+			ORDER BY nombre_ruta';
+        
+        $param = [];
+
+        $data = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
+
+        return $data;
+    }
+
+    public function actualizarOrdenDirecciones($id_ruta, $orden_direcciones) {
+        if (!is_array($orden_direcciones)) {
+            throw new Exception("El orden de direcciones debe ser un array");
+        }
+
+        // ✅ Crear mapa: id_direccion => orden (1, 2, 3, ...)
+        $mapa_orden = [];
+        foreach ($orden_direcciones as $indice => $id_direccion) {
+            // Asegurar que sea entero
+            $id_direccion = (int)$id_direccion;
+            if ($id_direccion > 0) {
+                $mapa_orden[$id_direccion] = $indice + 1; // orden empieza en 1
+            }
+        }
+
+        if (empty($mapa_orden)) {
+            return true; // nada que actualizar
+        }
+
+        // Obtener registros actuales
+        $sql = "SELECT id_ruta_direccion, id_direccion
+                FROM rutas_direcciones
+                WHERE id_ruta = :v_id_ruta";
+
+        $params = [':v_id_ruta' => $id_ruta];
+        $data = $this->ejecutarConsulta($sql, "", $params, "fetchAll");
+
+        foreach ($data as $row) {
+            $id_ruta_direccion = $row['id_ruta_direccion'];
+            $id_direccion = (int)$row['id_direccion'];
+
+            // ✅ Verificar si esta dirección está en el nuevo orden
+            if (isset($mapa_orden[$id_direccion])) {
+                $nuevo_orden = $mapa_orden[$id_direccion];
+
+                $datos = [
+                    ['campo_nombre' => 'orden_en_ruta', 'campo_marcador' => ':orden_en_ruta', 'campo_valor' => $nuevo_orden]
+                ];
+                $condicion = [
+                    'condicion_campo' => 'id_ruta_direccion',
+                    'condicion_operador' => '=',
+                    'condicion_marcador' => ':id_ruta_direccion',
+                    'condicion_valor' => $id_ruta_direccion
+                ];
+
+                $this->actualizarDatos('rutas_direcciones', $datos, $condicion);
+            }
+        }
+
+        return true;
+    }
 }

@@ -111,21 +111,21 @@ switch ($modulo) {
     case 'crear_ruta':
         $nombre_ruta = $inputData['nombre_ruta'] ?? null;
         $color_ruta = $inputData['color_ruta'] ?? '#000000';
-        $zonas_ids = $inputData['zonas_ids'] ?? [];
+        $direcciones_ids = $inputData['direcciones_ids'] ?? [];
 
         if (!$nombre_ruta) {
             http_response_code(400);
             echo json_encode(['error' => 'Falta el parámetro "nombre_ruta"']);
             exit();
         }
-        if (!is_array($zonas_ids) || empty($zonas_ids)) {
+        if (!is_array($direcciones_ids) || empty($direcciones_ids)) {
             http_response_code(400);
-            echo json_encode(['error' => 'Parámetro "zonas_ids" es requerido y debe ser un array no vacío']);
+            echo json_encode(['error' => 'Parámetro "direcciones_ids" es requerido y debe ser un array no vacío']);
             exit();
         }
 
         try {
-            $id_ruta = $controller->crearRuta($nombre_ruta, $color_ruta, $zonas_ids);
+            $id_ruta = $controller->crearRuta($nombre_ruta, $color_ruta, $direcciones_ids);
             echo json_encode(['success' => true, 'message' => 'Ruta creada exitosamente', 'id_ruta' => $id_ruta]);
         } catch (Exception $e) {
             http_response_code(500);
@@ -137,21 +137,21 @@ switch ($modulo) {
         $id_ruta = $inputData['id_ruta'] ?? null;
         $nombre_ruta = $inputData['nombre_ruta'] ?? null;
         $color_ruta = $inputData['color_ruta'] ?? '#000000';
-        $zonas_ids = $inputData['zonas_ids'] ?? [];
+        $direcciones_ids = $inputData['direcciones_ids'] ?? [];
 
         if (!$id_ruta || !$nombre_ruta) {
             http_response_code(400);
             echo json_encode(['error' => 'Faltan los parámetros "id_ruta" o "nombre_ruta"']);
             exit();
         }
-        if (!is_array($zonas_ids) || empty($zonas_ids)) {
+        if (!is_array($direcciones_ids) || empty($direcciones_ids)) {
             http_response_code(400);
-            echo json_encode(['error' => 'Parámetro "zonas_ids" es requerido y debe ser un array no vacío']);
+            echo json_encode(['error' => 'Parámetro "direcciones_ids" es requerido y debe ser un array no vacío']);
             exit();
         }
 
         try {
-            $id_ruta = $controller->actualizarRuta($id_ruta, $nombre_ruta, $color_ruta, $zonas_ids);
+            $id_ruta = $controller->actualizarRuta($id_ruta, $nombre_ruta, $color_ruta, $direcciones_ids);
             echo json_encode(['success' => true, 'message' => 'Ruta actualizada exitosamente', 'id_ruta' => $id_ruta]);
         } catch (Exception $e) {
             http_response_code(500);
@@ -216,6 +216,35 @@ switch ($modulo) {
             http_response_code(500);
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
+        break;
+
+    case 'crear_select':
+        $id_ruta = $inputData['id_ruta'];
+
+        $routes = $controller->consultar_rutas();
+        $cadena='';
+        $cadena = '<option value="">Select a Route</option>';
+
+        foreach ($routes as $curr){
+            $cadena = $cadena. '<option value="' . $curr['id_ruta'] . '" ';
+            if($id_ruta == $curr['id_ruta']){ 
+                $cadena = $cadena. 'selected> ';
+            }else{
+                $cadena = $cadena. '> ';
+            }
+            $cadena = $cadena. $curr['nombre_ruta'] . '</option>';
+        }
+        echo $cadena;
+        break;
+
+    case 'actualizar_orden_direcciones':
+        $id_ruta = $inputData['id_ruta'];
+        $orden_direcciones = $inputData['orden_direcciones'];
+        
+        $procesar = $controller->actualizarOrdenDirecciones($id_ruta, $orden_direcciones);
+        
+        http_response_code(200);
+        echo json_encode(['success' => true]);
         break;
 
     default:

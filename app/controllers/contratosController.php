@@ -9,6 +9,7 @@ use app\controllers\usuariosController;
 use \Exception;
 use DateTime;
 use DateTimeZone;
+use DateInterval;
 
 class contratosController extends mainModel
 {
@@ -19,7 +20,6 @@ class contratosController extends mainModel
 	private $errorLogFile;
 	private $ultimaCoordenada = [];
 	private $o_f;
-
 	public function __construct()
 	{
 		// ¡ESTA LÍNEA ES CRUCIAL!
@@ -68,6 +68,7 @@ class contratosController extends mainModel
 		// }
 		// $this->o_f = new otras_fun();
 		// $this->idioma_ctrol = $this->o_f->cargar_idioma($this->idioma_act);
+
 	}
 
 	private function initializeLogFile($file)
@@ -200,7 +201,7 @@ class contratosController extends mainModel
 		$semanas_var = "Weeks";
 		$dias_var = "Days";
 
-		$campos = "c.*, ct.nombre AS cliente_nombre, ct.apellido AS cliente_apellido, d.dia_ingles AS day_work, 
+		$campos = "c.*, ct.nombre AS cliente_nombre, ct.apellido AS cliente_apellido, d.dia_ingles AS day_work, ar.descripcion as area_desc,
 			ct.telefono AS cliente_telefono, ct.email AS cliente_email, s.status, fs.concepto, se.id_servicio, se.fecha_programada,
 			CASE
 				WHEN c.fecha_fin <= CURDATE() THEN '$vencido_var'
@@ -241,6 +242,7 @@ class contratosController extends mainModel
 					LEFT JOIN status_all AS s ON s.id_status = c.id_status 
 					LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = c.id_frecuencia_servicio
 					LEFT JOIN dias_semana AS d ON d.id_dia_semana = c.id_dia_semana
+					LEFT JOIN areas AS ar ON ar.id_area = c.id_area
 					LEFT JOIN (
 						SELECT 
 							id_servicio,
@@ -280,6 +282,7 @@ class contratosController extends mainModel
 					LEFT JOIN status_all AS s ON s.id_status = c.id_status 
 					LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = c.id_frecuencia_servicio
 					LEFT JOIN dias_semana AS d ON d.id_dia_semana = c.id_dia_semana
+					LEFT JOIN areas AS ar ON ar.id_area = c.id_area
 					LEFT JOIN (
 						SELECT 
 							id_servicio,
@@ -340,6 +343,7 @@ class contratosController extends mainModel
 							<th class="has-text-centered">Contract</th>
 							<th class="has-text-centered">Responsible</th>
 							<th class="has-text-centered">Time Remaining</th>
+							<th class="has-text-centered">Area</th>
 							<th class="has-text-centered">Service Frequency</th>
 							<th class="has-text-centered">Service Day</th>
 							<th class="has-text-centered">Last Service</th>
@@ -362,21 +366,40 @@ class contratosController extends mainModel
 				$fecha_ini = $rows['fecha_ini'];
 				$fecha_fin = $rows['fecha_fin'];
 
-				// 2. Convertir a objetos DateTime
-				$inicio = new DateTime($fecha_ini);
-				$fin    = new DateTime($fecha_fin);
-				$hoy    = new DateTime(); // fecha de hoy
+				// Inicializar fechas como null
+				$inicio = null;
+				$fin = null;
 
-				// 3. Calcular posición de "hoy" como porcentaje entre inicio y fin
-				if ($hoy <= $inicio) {
-					$porcentaje = 0;
-				} elseif ($hoy >= $fin) {
-					$porcentaje = 100;
-				} else {
-					$total = $inicio->diff($fin)->days;      // días totales del contrato
-					$pasados = $inicio->diff($hoy)->days;    // días transcurridos
-					$porcentaje = ($pasados / $total) * 100;
+				// Convertir solo si no son NULL
+				if ($fecha_ini !== null) {
+					$inicio = new DateTime($fecha_ini);
 				}
+				if ($fecha_fin !== null) {
+					$fin = new DateTime($fecha_fin);
+				}
+
+				$hoy = new DateTime();
+
+				// Inicializar porcentaje por defecto
+				$porcentaje = 0;
+
+				// Solo calcular si AMBAS fechas existen
+				if ($inicio !== null && $fin !== null) {
+					if ($hoy <= $inicio) {
+						$porcentaje = 0;
+					} elseif ($hoy >= $fin) {
+						$porcentaje = 100;
+					} else {
+						$total = $inicio->diff($fin)->days;
+						// Evitar división por cero (aunque en teoría no debería ocurrir)
+						if ($total > 0) {
+							$pasados = $inicio->diff($hoy)->days;
+							$porcentaje = ($pasados / $total) * 100;
+						} else {
+							$porcentaje = 0;
+						}
+					}
+				} 
 
 				// 4. Redondear para evitar decimales largos
 				$pos = round($porcentaje, 1);	
@@ -398,6 +421,7 @@ class contratosController extends mainModel
 									"></div>										
 								</div>
 							</td>
+                            <td>' . $rows['area_desc'] . '</td>
                             <td>' . $rows['concepto'] . '</td>
 							<td>' . $rows['day_work'] . '</td>
 							<td>' . "(# " . $rows['id_servicio'] . ") - (🗓️ " . $rows['fecha_programada'] . ')</td>
@@ -502,15 +526,17 @@ class contratosController extends mainModel
 	{
 		$id_contrato = $parametros['id_contrato'];
 
-		$sql = "SELECT c.id_contrato, c.contrato_origen, c.id_cliente,	cl.nombre, cl.apellido, cl.telefono, cl.email, c.id_direccion, d.direccion, c.costo, 
-					c.fecha_ini, c.fecha_fin, c.id_status, s.status, s.color, c.id_frecuencia_servicio, fs.concepto, c.id_frecuencia_pago, 
-					c.id_dia_semana, c.secondary_day, ds.dia_ingles AS day_work, c.notas, c.observaciones
+		$sql = "SELECT c.id_contrato, c.contrato_origen, c.id_cliente, c.nombre AS nom_contrato, cl.nombre, cl.apellido, cl.telefono, cl.email, c.id_direccion,
+					d.direccion, c.costo, c.fecha_ini, c.fecha_fin, c.id_status, s.status, s.color, c.id_ruta, c.id_frecuencia_servicio, fs.concepto, 
+					c.id_frecuencia_pago, c.id_dia_semana, c.secondary_day, ds.dia_ingles AS day_work, c.notas, c.observaciones, c.num_semanas, c.tiempo_servicio,
+					c.retraso_invierno, ar.descripcion as nom_area, c.id_area, c.fecha_cancelacion
 				FROM contratos c
 				LEFT JOIN clientes AS cl ON cl.id_cliente = c.id_cliente
 				LEFT JOIN direcciones AS d ON d.id_direccion = c.id_direccion
 				LEFT JOIN status_all AS s ON s.id_status = c.id_status
 				LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = c.id_frecuencia_servicio
 				LEFT JOIN dias_semana AS ds ON ds.id_dia_semana = c.id_dia_semana
+				LEFT JOIN areas AS ar ON ar.id_area = c.id_area
 				WHERE c.id_contrato = :v_id_contrato";
 
 		$params = [
@@ -523,35 +549,57 @@ class contratosController extends mainModel
 		return $registro;
 	}
 
-	public function formatearTelefono($telefono, $codigoPais = '+1')
-	{
-		$telefonoLimpio = preg_replace('/[^\+\d]/', '', $telefono);
-		if (!str_starts_with($telefonoLimpio, '+')) {
-			$telefonoLimpio = $codigoPais . ltrim($telefonoLimpio, '0');
-		}
-		return $telefonoLimpio;
-	}
-
 	public function cargar_distribucion($id_contrato)
 	{
+		$sql = "SELECT c.id_contrato, c.fecha_ini, c.fecha_fin, c.fecha_cancelacion
+				FROM contratos c
+				WHERE c.id_contrato = :v_id_contrato";
+		$params = [
+			':v_id_contrato' => $id_contrato
+		];
+
+		$this->log("Mostrar consulta de Contrato: " . $sql);
+		$registro = $this->ejecutarConsulta($sql, '', $params);
+		$fecha_cancelacion = $registro["fecha_cancelacion"];
+
 		// Bifurcación inteligente: generar si no existen
 		$this->log("Inicio de Distribuicion ");
 		$this->ensureScheduledServicesExist($id_contrato);
 
-		$sql = "SELECT id, service_date, is_done, service_number, num_servicio
-			FROM scheduled_services
-			WHERE id_contrato = :v_id_contrato
-			ORDER BY service_date";
+		$sql = "SELECT 
+					ss.id, 
+					ss.service_date, 
+					ss.is_done, 
+					ss.service_number, 
+					ss.num_servicio,
+					ss.id_status,
+					c.fecha_cancelacion
+				FROM scheduled_services ss
+				JOIN contratos c ON ss.id_contrato = c.id_contrato
+				WHERE ss.id_contrato = :v_id_contrato
+				ORDER BY ss.service_date";
+
 		$params = [
 			':v_id_contrato' => $id_contrato
 		];
 
 		$services = $this->ejecutarConsulta($sql, "", $params, "fetchAll");
 
+		$sql_status = "SELECT id_status, status, color
+			FROM status_all 
+			WHERE id_tabla = :v_id_tabla
+			ORDER BY id_status";
+		$params = [
+			":v_id_tabla"=> 25
+		];
+
+		$all_status = $this->ejecutarConsulta($sql_status, '', $params, "fetchAll");
+
 		http_response_code(200);
 		echo json_encode([
 			'status' => 'ok',
-			'services' => $services
+			'services' => $services,
+			'all_status' => $all_status
 		]);
 		exit;
 	}
@@ -560,7 +608,9 @@ class contratosController extends mainModel
 	{
 		// Verificar si ya existen servicios programados
 		$sql = "SELECT COUNT(*) AS total FROM scheduled_services WHERE id_contrato = :v_id_contrato";
-		$params = [':v_id_contrato' => $id_contrato];
+		$params = [
+			':v_id_contrato' => $id_contrato
+		];
 		$total = $this->ejecutarConsulta($sql, "", $params, "fetchColumn");
 		$this->log("Registros existentes de scheduled_services para contrato $id_contrato: $total");
 
@@ -568,27 +618,7 @@ class contratosController extends mainModel
 			return; // Ya están generados
 		}
 
-		// Obtener datos del contrato con fecha_ini real
-		$sql = "SELECT 
-					COALESCE(
-						(SELECT s.fecha_programada
-						FROM servicios s
-						WHERE s.id_cliente = c.id_cliente
-						AND s.id_status != 39
-						ORDER BY s.fecha_programada DESC
-						LIMIT 1),
-						c.fecha_ini
-					) AS fecha_ini,
-					DATE_SUB(DATE_ADD(
-						COALESCE(
-							(SELECT s.fecha_programada
-							FROM servicios s
-							WHERE s.id_cliente = c.id_cliente
-							AND s.id_status != 39
-							ORDER BY s.fecha_programada DESC
-							LIMIT 1),
-							c.fecha_ini
-						), INTERVAL 1 YEAR), INTERVAL 1 DAY) AS fecha_fin,
+		$sql = "SELECT c.fecha_ini, c.fecha_fin, c.retraso_invierno,
 					c.id_frecuencia_servicio, c.id_dia_semana, c.secondary_day, c.num_semanas, c.mensual_calendario
 				FROM contratos c
 				WHERE c.id_contrato = :v_id_contrato";
@@ -609,13 +639,32 @@ class contratosController extends mainModel
 
 		$this->log("Inicio de creacion de registros");
 
+		$servicios_reales = $this->obtenerServiciosReales($id_contrato);
+		$fechas_reales = array_column($servicios_reales, 'fecha_real');
+		$numeros_reales = array_column($servicios_reales, 'id_servicio');
+		$id_status_all = array_column($servicios_reales, 'id_status');
+
+		$fechas_programadas = [];
 		$current = $contrato['fecha_ini']; // string 'Y-m-d'
-		$end = $contrato['fecha_fin'];     // string 'Y-m-d'
+	
+		if (empty($contrato['fecha_fin']) || $contrato['fecha_fin'] === '0000-00-00') {
+			if (!empty($current) && $current !== '0000-00-00') {
+				$dt = new DateTime($current);
+				$dt->add(new DateInterval('P1Y')); // +1 año
+				$dt->sub(new DateInterval('P1D')); // -1 día
+				$end = $dt->format('Y-m-d');
+			} else {
+				$end = null; // o manejar error
+			}
+		}else{
+			$end = $contrato['fecha_fin']; // string 'Y-m-d'
+		}
 		$frecuencia = (int) $contrato['id_frecuencia_servicio'];
 		$dia_principal = (int) ($contrato['id_dia_semana'] ?? 0); // 1=domingo, 7=sabado
 		$dia_secundario = (int) ($contrato['secondary_day'] ?? 0); // 1=domingo, 7=sabado
 		$num_semanas = (int) ($contrato['num_semanas'] ?? 0); // Límite de servicios
 		$mensual_calendario = (bool) ($contrato['mensual_calendario'] ?? false);
+		$retraso_invierno = (bool)($contrato['retraso_invierno'] ?? false);
 
 		$servicesToInsert = [];
 		$seenDates = []; // para evitar duplicados
@@ -623,7 +672,7 @@ class contratosController extends mainModel
 		$this->log("Ciclo desde $current hasta $end con frecuencia $frecuencia, dia_principal $dia_principal, dia_secundario $dia_secundario");
 
 		// Cargar fechas no laborables una sola vez
-		$dias_no_actividad = $this->obtenerDiasNoActividad();
+		$dias_no_actividad = $this->obtenerDiasNoActividad($current, $end);
 
 		while ($current <= $end) {
 			// 1. Ajustar al día principal permitido
@@ -636,50 +685,165 @@ class contratosController extends mainModel
 					// Si el secundario también es no laborable, saltar esta iteración
 					if (in_array($adjustedDate, $dias_no_actividad)) {
 						$this->log("Saltando fecha $adjustedDate (no laborable y secundario también no laborable)");
-						$current = $this->avanzarFecha($current, $frecuencia, $mensual_calendario);
+						$intervalo = $this->getIntervaloFrecuencia($current, $frecuencia, $retraso_invierno, $current, $end);
+						//$current = $this->avanzarFecha($current, $frecuencia, $mensual_calendario);
+						$current = (new DateTime($current))->add(new DateInterval($intervalo))->format('Y-m-d');
 						continue;
 					}
 				} else {
 					// No hay día secundario y el principal es no laborable
 					$this->log("Saltando fecha $adjustedDate (no laborable y sin día secundario)");
-					$current = $this->avanzarFecha($current, $frecuencia, $mensual_calendario);
+					$intervalo = $this->getIntervaloFrecuencia($current, $frecuencia, $retraso_invierno, $current, $end);
+					//$current = $this->avanzarFecha($current, $frecuencia, $mensual_calendario);
+					$current = (new DateTime($current))->add(new DateInterval($intervalo))->format('Y-m-d');
 					continue;
 				}
 			}
 
 			// 3. Evitar duplicados y verificar límite
-			if (!in_array($adjustedDate, $seenDates) && $adjustedDate <= $end && count($servicesToInsert) < $num_semanas) {
-				$servicesToInsert[] = $adjustedDate;
-				$seenDates[] = $adjustedDate;
+			// if (!in_array($adjustedDate, $seenDates) && $adjustedDate <= $end && count($servicesToInsert) < $num_semanas) {
+
+			// 	$servicesToInsert[] = $adjustedDate;
+			// 	$seenDates[] = $adjustedDate;
+			// }
+
+			if ($adjustedDate <= $end) {
+				$fechas_programadas[] = $adjustedDate;
 			}
 
 			// 4. Avanzar según frecuencia
 			$current = $this->avanzarFecha($current, $frecuencia, $mensual_calendario);
 		}
 
-		// Insertar registros
+		// Crear mapa de fechas reales → id_servicio
+		$mapa_fechas_reales = [];
+		$mapa_status_reales = [];
+		foreach ($servicios_reales as $serv) {
+			$mapa_fechas_reales[$serv['fecha_real']] = $serv['id_servicio'];
+			$mapa_status_reales[$serv['fecha_real']] = $serv['id_status'];
+		}
+
+		// Asignar service_number e is_done con ventana de tolerancia
+		$servicesToInsert = [];
 		$num_servicio = 1;
-		foreach ($servicesToInsert as $date) {
+
+		foreach ($fechas_programadas as $fecha_prog) {
+			if ($num_servicio > $num_semanas) break; // Respetar límite contractual
+
+			$service_number = null;
+			$is_done = 0;
+
+			// Buscar en ventana de ±3 días
+			for ($d = -3; $d <= 3; $d++) {
+				$fecha_busqueda = date('Y-m-d', strtotime("$fecha_prog $d days"));
+				if (isset($mapa_fechas_reales[$fecha_busqueda])) {
+					$service_number = $mapa_fechas_reales[$fecha_busqueda];
+					$id_status = $mapa_status_reales[$fecha_busqueda];
+					$is_done = 1;
+					break;
+				}
+			}
+
+			$servicesToInsert[] = [
+				'date' => $fecha_prog,
+				'service_number' => $service_number,
+				'is_done' => $is_done,
+				'id_status' => $id_status,
+				'num_servicio' => $num_servicio
+			];
+			$num_servicio++;
+		}
+
+		// Insertar registros
+		foreach ($servicesToInsert as $record) {
 			$datos = [
 				['campo_nombre' => 'id_contrato',      'campo_marcador' => ':id_contrato',      'campo_valor' => $id_contrato],
-				['campo_nombre' => 'num_servicio',     'campo_marcador' => ':num_servicio',     'campo_valor' => $num_servicio],
-				['campo_nombre' => 'service_date',     'campo_marcador' => ':service_date',     'campo_valor' => $date],
-				['campo_nombre' => 'is_done',          'campo_marcador' => ':is_done',          'campo_valor' => 0],
-				['campo_nombre' => 'service_number',   'campo_marcador' => ':service_number',   'campo_valor' => null]
+				['campo_nombre' => 'num_servicio',     'campo_marcador' => ':num_servicio',     'campo_valor' => $record['num_servicio']],
+				['campo_nombre' => 'service_date',     'campo_marcador' => ':service_date',     'campo_valor' => $record['date']],
+				['campo_nombre' => 'id_status',        'campo_marcador' => ':id_status',     	'campo_valor' => $record['id_status']],
+				['campo_nombre' => 'is_done',          'campo_marcador' => ':is_done',          'campo_valor' => $record['is_done']],
+				['campo_nombre' => 'service_number',   'campo_marcador' => ':service_number',   'campo_valor' => $record['service_number']]
 			];
 			try {
 				$this->guardarDatos('scheduled_services', $datos);
-				$num_servicio++;
 			} catch (Exception $e) {
-				$this->logWithBacktrace("❌ Error al guardar registro de fecha de servicio: " . $e->getMessage(), true);
+				$this->logWithBacktrace("❌ Error al guardar scheduled_service: " . $e->getMessage(), true);
 			}
 		}
 	}
 
-	protected function obtenerDiasNoActividad(): array
+	private function obtenerServiciosReales(int $id_contrato): array {
+		$sql = "SELECT id_servicio, DATE(fecha_programada) AS fecha_real, id_status
+				FROM servicios 
+				WHERE id_contrato = :id_contrato
+					AND fecha_programada IS NOT NULL
+				ORDER BY fecha_programada ASC";
+		$params = [':id_contrato' => $id_contrato];
+		return $this->ejecutarConsulta($sql, "", $params, "fetchAll");
+	}
+
+	private function getIntervaloFrecuencia(string $fecha, int $frecuencia_base, bool $retraso_invierno, $fecha_ini, $fecha_fin): string {
+		$ano_inicio = (new DateTime($fecha_ini))->format('Y');
+		$ano_fin = (new DateTime($fecha_fin))->format('Y');
+
+		// Consultar configuración
+		$query = "SELECT clave, valor 
+			FROM configuracion_sistema 
+			WHERE clave IN ('inicio_invierno', 'fin_invierno')";
+		$resultado = $this->ejecutarConsulta($query, '', [], 'fetchAll');
+
+		// Inicializar con valores por defecto
+		$inicio_invierno = "{$ano_inicio}-11-15";
+		$fin_invierno = "{$ano_fin}-02-15";
+
+		// Procesar resultados
+		if ($resultado) {
+			foreach ($resultado as $row) {
+				if ($row['clave'] === 'inicio_invierno') {
+					// Asumir formato MM-DD
+					$inicio_invierno = "{$ano_inicio}-{$row['valor']}";
+				} elseif ($row['clave'] === 'fin_invierno') {
+					$fin_invierno = "{$ano_fin}-{$row['valor']}";
+				}
+			}
+		}
+
+		// Validar y ajustar año del fin de invierno si es necesario
+		if (strtotime($fin_invierno) < strtotime($inicio_invierno)) {
+			$fin_invierno = ($ano_inicio + 1) . '-' . substr($fin_invierno, 5);
+		}
+
+
+		if ($frecuencia_base !== 1) { // 1 = semanal
+			return 'P1W'; // Por defecto, semanal
+		}
+
+		if (!$retraso_invierno) {
+			return 'P1W';
+		}
+
+		// Verificar si la fecha está en invierno
+		if ($fecha >= $inicio_invierno && $fecha <= $fin_invierno) {
+			return 'P2W'; // Quincenal en invierno
+		}
+
+		return 'P1W';
+	}
+
+	protected function obtenerDiasNoActividad($current, $end): array
 	{
-		$sql = "SELECT fecha FROM dias_no_actividad WHERE activo = 53";
-		$resultados = $this->ejecutarConsulta($sql, "", [], "fetchAll");
+		$sql = "SELECT fecha 
+			FROM dias_no_actividad 
+			WHERE activo = 53
+				AND fecha >= :v_fecha01
+				AND fecha <= :v_fecha02
+			ORDER BY fecha";
+		$params = [
+			':v_fecha01' => $current,
+			':v_fecha02' => $end
+		];
+
+		$resultados = $this->ejecutarConsulta($sql, "", $params, "fetchAll");
 		$fechas = [];
 		foreach ($resultados as $row) {
 			$fechas[] = $row['fecha'];
@@ -739,5 +903,324 @@ class contratosController extends mainModel
 		}
 
 		return date('Y-m-d', strtotime("$dateStr +{$diff} days"));
+	}
+
+	public function guardarCambios($datos){
+		$id_contrato = (int) $datos['id_contrato'];
+
+		$id_cliente  = (int) $datos['id_cliente'];
+		$id_direccion = (int) $datos['id_direccion'];
+		$nombre = $datos['nom_contrato'];
+		$costo = $this->verifica_num($datos['$costo']);
+		$fecha_ini = $datos['fecha_ini'];
+		$fecha_fin = $datos['fecha_fin'];
+		$id_status = (int) $datos['id_status'];
+		$id_frecuencia_pago = (int) $datos['id_frecuencia_pago'];
+		$id_frecuencia_servicio = (int) $datos['id_frecuencia_servicio'];
+		$id_dia_semana = (int) $datos['id_dia_semana'];
+		$secondary_day = (int) $datos['secondary_day'];
+		$contrato_origen = $datos['contrato_origen'];
+		$notas = $datos['notas'];
+		$observaciones = $datos['observaciones'];
+		$num_semanas = (int) $datos['num_semanas'];
+		$id_ruta = (int) $datos['id_ruta'];
+		$retraso_invierno = isset($datos['retraso_invierno']) ? 1 : 0;
+		$tiempo_servicio = $datos['tiempo_servicio'];
+
+		if ($tiempo_servicio) {
+			$parts = explode(':', $tiempo_servicio);
+			if (count($parts) === 3) {
+				[$h, $m, $s] = $parts;
+				if (checkdate(1, 1, 2000) && 
+					intval($h) >= 0 && intval($h) <= 23 &&
+					intval($m) >= 0 && intval($m) <= 59 &&
+					intval($s) >= 0 && intval($s) <= 59) {
+					// Válido: $tiempo_servicio está en formato HH:mm:ss
+				} else {
+					throw new Exception("Invalid time format");
+				}
+			} else {
+				throw new Exception("Time must be in HH:mm:ss format");
+			}
+		}
+
+		// mensual_calendario TINYINT,
+
+		if($id_ruta>0){
+			$respuesta = $this->cargar_dir_zona($id_ruta, $id_direccion, $tiempo_servicio);
+			if($respuesta['success'] == true){
+				$resp_dir_zon = $respuesta['mess'];
+			}else{
+				$id_ruta = 0;
+				$resp_dir_zon = $respuesta['mess'];
+			}
+		}
+
+		// Llamar al controlador
+        $datos = [
+            ['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $id_cliente],
+            ['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $id_direccion],
+            ['campo_nombre' => 'nombre', 'campo_marcador' => ':nombre', 'campo_valor' => $nombre],
+            ['campo_nombre' => 'costo', 'campo_marcador' => ':costo', 'campo_valor' => $costo],
+            ['campo_nombre' => 'fecha_ini', 'campo_marcador' => ':fecha_ini', 'campo_valor' => $fecha_ini],
+            ['campo_nombre' => 'fecha_fin', 'campo_marcador' => ':fecha_fin', 'campo_valor' => $fecha_fin],
+            ['campo_nombre' => 'id_status', 'campo_marcador' => ':id_status', 'campo_valor' => $id_status],
+            ['campo_nombre' => 'id_frecuencia_pago', 'campo_marcador' => ':id_frecuencia_pago', 'campo_valor' => $id_frecuencia_pago],
+            ['campo_nombre' => 'id_frecuencia_servicio', 'campo_marcador' => ':id_frecuencia_servicio', 'campo_valor' => $id_frecuencia_servicio],
+            ['campo_nombre' => 'id_dia_semana', 'campo_marcador' => ':id_dia_semana', 'campo_valor' => $id_dia_semana],
+            ['campo_nombre' => 'secondary_day', 'campo_marcador' => ':secondary_day', 'campo_valor' => $secondary_day],
+            ['campo_nombre' => 'contrato_origen', 'campo_marcador' => ':contrato_origen', 'campo_valor' => $contrato_origen],
+            ['campo_nombre' => 'notas', 'campo_marcador' => ':notas', 'campo_valor' => $notas],
+            ['campo_nombre' => 'observaciones', 'campo_marcador' => ':observaciones', 'campo_valor' => $observaciones],
+            ['campo_nombre' => 'id_ruta', 'campo_marcador' => ':id_ruta', 'campo_valor' => $id_ruta],
+            ['campo_nombre' => 'num_semanas', 'campo_marcador' => ':num_semanas', 'campo_valor' => $num_semanas],
+			['campo_nombre' => 'retraso_invierno', 'campo_marcador' => ':retraso_invierno', 'campo_valor' => $retraso_invierno],
+            ['campo_nombre' => 'tiempo_servicio', 'campo_marcador' => ':tiempo_servicio', 'campo_valor' => $tiempo_servicio]
+        ];
+
+		if ($id_status == 22) {
+			$datos[] = [
+				'campo_nombre' => 'fecha_cancelacion',
+				'campo_marcador' => ':fecha_cancelacion',
+				'campo_valor' => date('Y-m-d H:i:s')
+			];
+		}
+
+        $condicion = [
+            'condicion_campo' => 'id_contrato',
+            'condicion_operador' => '=', 
+            'condicion_marcador' => ':id_contrato',
+            'condicion_valor' => $id_contrato
+        ];
+
+        try {
+			$resulta = $this->actualizarDatos("contratos", $datos, $condicion);
+            if ($resulta) {
+				if ($id_status == 22) {
+					// Paso 2: Eliminar servicios programados posteriores a la cancelación
+					$sql = "DELETE ss
+						FROM scheduled_services ss
+						JOIN contratos ct ON ss.id_contrato = ct.id_contrato
+						WHERE ct.id_contrato = :v_id_contrato 
+							AND ct.id_status = :v_id_status
+							AND ct.fecha_cancelacion IS NOT NULL
+							AND ss.fecha_programada > ct.fecha_cancelacion";
+					$params = [
+						":v_id_contrato" => $id_contrato,
+						"v_id_status" => $id_status
+					];
+					$borrados = $this->ejecutarConsulta($sql, "", $params, "fetchAll");
+				}			
+
+				http_response_code(200);
+                echo json_encode(['tipo' => 'success', 'texto' => 'Contract updated successfully. ' . $resp_dir_zon]);
+            } else {
+                throw new Exception("The contract could not be updated. ". $resp_dir_zon);
+            }
+		} catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(['tipo' => 'error', 'texto' => $e->getMessage()]);
+        }
+	}
+
+	/**
+	 * Convierte una cadena en formato HH:mm:ss a minutos enteros.
+	 * Si el formato es inválido, devuelve 0.
+	 *
+	 * @param string $timeStr Ej: "01:30:45"
+	 * @return int Minutos (ej: 90)
+	 */
+	public function timeToMinutes($timeStr) {
+		if (empty($timeStr) || $timeStr === '00:00:00' || $timeStr === '00:00') {
+			return 0;
+		}
+
+		// Asegurar que tenga al menos 5 caracteres (HH:mm)
+		if (strlen($timeStr) < 5) {
+			return 0;
+		}
+
+		// Normalizar a HH:mm:ss si viene como HH:mm
+		if (substr_count($timeStr, ':') === 1) {
+			$timeStr .= ':00';
+		}
+
+		$parts = explode(':', $timeStr);
+		if (count($parts) !== 3) {
+			return 0;
+		}
+
+		$hours = (int)$parts[0];
+		$minutes = (int)$parts[1];
+		$seconds = (int)$parts[2];
+
+		// Validar rangos básicos
+		if ($hours < 0 || $hours > 23 || $minutes < 0 || $minutes > 59 || $seconds < 0 || $seconds > 59) {
+			return 0;
+		}
+
+		// Convertir a minutos (truncando segundos)
+		return $hours * 60 + $minutes;
+	}
+
+	private function verifica_rutas_direcciones($id_ruta, $id_direccion){
+		$sql = "SELECT id_ruta_direccion
+			FROM rutas_direcciones
+			WHERE id_direccion = :v_id_direccion 
+				AND id_ruta = :v_id_ruta";
+		$params = [
+			":v_id_ruta" => $id_ruta,
+			":v_id_direccion" => $id_direccion
+		];
+		$id_ruta_direccion = $this->ejecutarConsulta($sql, "", $params, "fetchColumn");
+		return $id_ruta_direccion;
+	}
+
+	private function cargar_dir_zona($id_ruta, $id_direccion, $tiempo_servicio){
+		$sql = "SELECT lat, lng
+			FROM direcciones
+			WHERE id_direccion = :v_id_direccion";
+		$params = [
+			":v_id_direccion" => $id_direccion
+		];
+		$resultados = $this->ejecutarConsulta($sql, "", $params);
+
+		if ($resultados){
+			$coor_lat = $resultados['lat'];
+			$coor_lng = $resultados['lng'];
+
+			$sql = "SELECT id_zona, nombre_zona, centro_lat, centro_lng
+				FROM zonas_cuadricula	
+				WHERE 
+					activo = 1
+					AND :v_coor_lat BETWEEN lat_sw AND lat_ne
+					AND :v_coor_lng BETWEEN lng_sw AND lng_ne
+				LIMIT 1";
+
+			$params = [
+				":v_coor_lat" => $coor_lat,
+				":v_coor_lng" => $coor_lng
+			];
+			$resultados = $this->ejecutarConsulta($sql, "", $params);
+
+			if ($resultados){
+				$id_ruta_direccion = $this->verifica_rutas_direcciones($id_ruta, $id_direccion);
+
+				if ($id_ruta_direccion > 0){
+					// Existe el elemento en la tabla rutas_direcciones. Solo deben actualizarse los campos
+					$tiempo_servicio_hhmmss = $tiempo_servicio ?? '00:00:00';
+					$tiempo_en_minutos = $this->timeToMinutes($tiempo_servicio_hhmmss);
+
+					$datos = [
+						['campo_nombre' => 'tiempo_servicio',	'campo_marcador' => ':tiempo_servicio',	'campo_valor' => $tiempo_en_minutos]
+					];
+					$condicion = [
+						'condicion_campo' => 'id_ruta_direccion',
+						'condicion_operador' => '=', 
+						'condicion_marcador' => ':id_ruta_direccion',
+						'condicion_valor' => $id_ruta_direccion
+					];
+
+					try {
+						$resulta = $this->actualizarDatos("rutas_direcciones", $datos, $condicion);
+						if ($resulta) {
+							$respuesta = [
+								"success" => true,
+								"mess" => "Se Actualizo el Contrato en la Zona de Direcciones"
+							];
+						} else {
+							$respuesta = [
+								"success" => false,
+								"mess" => "No se Actualizo el Contrato en la Zona de Direcciones"
+							];
+						}
+					} catch (Exception $e) {
+						$respuesta = [
+							"success" => false,
+							"mess" => "ERROR al actualizar el Contrato en la Zona de Direcciones" . $e->getMessage()
+						];
+					}
+
+				}else{
+					$sql = "SELECT COUNT(*) AS total 
+						FROM rutas_direcciones 
+						WHERE id_ruta = :v_id_ruta";
+					$params = [
+						':v_id_ruta' => $id_ruta
+					];
+					$total = $this->ejecutarConsulta($sql, "", $params, "fetchColumn");
+
+					$tiempo_servicio_hhmmss = $tiempo_servicio ?? '00:00:00';
+					$tiempo_en_minutos = $this->timeToMinutes($tiempo_servicio_hhmmss);
+
+					$datos = [
+						['campo_nombre' => 'id_ruta',			'campo_marcador' => ':id_ruta',			'campo_valor' => $id_ruta],
+						['campo_nombre' => 'id_direccion',		'campo_marcador' => ':id_direccion',	'campo_valor' => $id_direccion],
+						['campo_nombre' => 'orden_en_ruta',		'campo_marcador' => ':orden_en_ruta',	'campo_valor' => $total + 1],
+						['campo_nombre' => 'tiempo_servicio',	'campo_marcador' => ':tiempo_servicio',	'campo_valor' => $tiempo_en_minutos]
+					];
+					try {
+						$reg_act = $this->guardarDatos('rutas_direcciones', $datos);
+						if($reg_act){
+
+							$id_zona = $resultados['id_zona'];
+							$sql = "SELECT id_ruta_zona 
+								FROM rutas_zonas_cuadricula
+								WHERE id_ruta = :_v_id_ruta
+									AND id_zona	= :_v_id_zona";
+							$params = [
+								":_v_id_ruta" => $id_ruta,
+								":_v_id_zona" => $id_zona
+							];
+							$resultados = $this->ejecutarConsulta($sql,	"", $params);
+							if ($resultados){
+								$respuesta = [
+									"success" => true,
+									"mess" => "Ya esta registrada en rutas_zonas_cuadricula la Zona"
+								];
+							}else{
+								$datos = [
+									['campo_nombre' => 'id_ruta', 'campo_marcador' => ':id_ruta', 'campo_valor' => $id_ruta],
+									['campo_nombre' => 'id_zona', 'campo_marcador' => ':id_zona', 'campo_valor' => $id_zona],
+									['campo_nombre' => 'activo', 'campo_marcador' => ':activo', 'campo_valor' => 1],
+								];
+								try {
+									$reg_act = $this->guardarDatos('rutas_zonas_cuadricula', $datos);
+								} catch (Exception $e) {
+									$this->logWithBacktrace("❌ Error al guardar rutas_zonas_cuadricula: " . $e->getMessage(), true);
+									$respuesta = [
+										"success" => false,
+										"mess" => "No se pudo guardar el Contrato en la Zona de Direcciones"
+									];
+								}
+							}
+						}
+
+						$respuesta = [
+							"success" => true,
+							"mess" => "Se guardar el Contrato en la Zona de Direcciones"
+						];
+					} catch (Exception $e) {
+						$this->logWithBacktrace("❌ Error al guardar registro de fecha de servicio: " . $e->getMessage(), true);
+						$respuesta = [
+							"success" => false,
+							"mess" => "ERROR. Al guardar el registro en rutas_direcciones: " . $e->getMessage()
+						];
+					}
+				}
+			} else {
+				$respuesta = [
+					"success" => false,
+					"mess" => "No hubo logro localizando la Zona" 
+				];
+			}
+		}else{
+			$respuesta = [
+				"success" => false,
+				"mess" => "No hubo Dirección en el Cliente" 
+			];
+		}
+
+		return $respuesta;
 	}
 }
