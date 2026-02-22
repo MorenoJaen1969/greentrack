@@ -43,7 +43,7 @@ async function actualizarVista() {
 
     const payload = {
         [clave]: 'cambio_cant_reg', // ← Notación de corchetes
-  
+
         datos: {
             origen: config.modulo,
             registrosPorPagina: rpp,

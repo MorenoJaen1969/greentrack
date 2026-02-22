@@ -29,6 +29,28 @@ main {
     font-size: 14px;
 }
 
+.containe-grid{
+    display: grid;
+    grid-template-rows: auto;
+    grid-template-columns: 15% 70% 15%;
+    width: 100%;
+    margin: auto;
+    padding: 0;
+}
+
+.containe-grid-01{
+    grid-column: 1/2;
+    padding: 10px;
+}
+
+.containe-grid-02{
+    grid-column: 2/3;
+}
+
+.containe-grid-03{
+    grid-column: 3/4;
+}
+
 .container-principal {
     background: rgba(255, 255, 255, 0.664);
     border-radius: 10px;
@@ -90,13 +112,13 @@ main {
 .grid_vert_01 {
     grid-column: 1/2;
     display: flex;
-    align-items: center;    
+    align-items: center;
 }
 
 .grid_vert_02 {
     grid-column: 2/3;
     display: flex;
-    align-items: center;    
+    align-items: center;
 }
 
 
@@ -147,6 +169,270 @@ main {
     text-align: center;
     font-size: 2rem !important;
     font-weight: 600 !important;
+}
+
+.titulo_form_filter {
+    text-align: center;
+    font-size: 1.5rem !important;
+    font-weight: 400 !important;
+}
+
+/* ============================================
+   GRID PRINCIPAL DEL CRUD
+   ============================================ */
+.crud-container {
+    display: grid;
+    grid-template-columns: 15% 70% 15%;
+    gap: 20px;
+    min-height: calc(100vh - 100px);
+    padding: 20px;
+    background: #f5f7fa;
+}
+
+/* ============================================
+   PANEL LATERAL DE FILTROS
+   ============================================ */
+.crud-sidebar-filters {
+    position: sticky;
+    top: 20px;
+    height: fit-content;
+}
+
+.filter-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    border: 1px solid #e2e8f0;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Efecto de brillo sutil en la esquina */
+.filter-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.filter-card.secondary {
+    background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+    padding: 20px;
+}
+
+.filter-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: -0.025em;
+}
+
+.filter-icon {
+    font-size: 1.3rem;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+.filter-subtitle {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #64748b;
+    margin: 0 0 15px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* ============================================
+   RADIO BUTTONS ESTILIZADOS
+   ============================================ */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.radio-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.radio-card:hover {
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1);
+}
+
+.radio-card.active {
+    border-color: #3b82f6;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    box-shadow: 
+        0 4px 6px -1px rgba(59, 130, 246, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* Input radio oculto */
+.radio-card input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+/* Indicador visual del radio */
+.radio-indicator {
+    width: 22px;
+    height: 22px;
+    border: 3px solid #cbd5e1;
+    border-radius: 50%;
+    margin-right: 14px;
+    position: relative;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+.radio-indicator::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    width: 10px;
+    height: 10px;
+    background: #3b82f6;
+    border-radius: 50%;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.radio-card.active .radio-indicator {
+    border-color: #3b82f6;
+}
+
+.radio-card.active .radio-indicator::after {
+    transform: translate(-50%, -50%) scale(1);
+}
+
+/* Contenido del radio */
+.radio-content {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.radio-label {
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.95rem;
+    transition: color 0.3s ease;
+}
+
+.radio-card.active .radio-label {
+    color: #1e40af;
+}
+
+/* Contador de registros */
+.radio-count {
+    background: #f1f5f9;
+    color: #64748b;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    min-width: 28px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.radio-card.active .radio-count {
+    background: #3b82f6;
+    color: white;
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+/* Efecto de glow animado */
+.radio-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at center, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.radio-card.active .radio-glow {
+    opacity: 1;
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* Colores específicos por estado */
+.radio-card[data-value="activos"].active {
+    border-color: #10b981;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+}
+
+.radio-card[data-value="activos"].active .radio-indicator {
+    border-color: #10b981;
+}
+
+.radio-card[data-value="activos"].active .radio-indicator::after {
+    background: #10b981;
+}
+
+.radio-card[data-value="activos"].active .radio-label {
+    color: #065f46;
+}
+
+.radio-card[data-value="activos"].active .radio-count {
+    background: #10b981;
+}
+
+.radio-card[data-value="inactivos"].active {
+    border-color: #f59e0b;
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.radio-card[data-value="inactivos"].active .radio-indicator {
+    border-color: #f59e0b;
+}
+
+.radio-card[data-value="inactivos"].active .radio-indicator::after {
+    background: #f59e0b;
+}
+
+.radio-card[data-value="inactivos"].active .radio-label {
+    color: #92400e;
+}
+
+.radio-card[data-value="inactivos"].active .radio-count {
+    background: #f59e0b;
 }
 
 .aling-left {
@@ -436,6 +722,14 @@ main {
     -o-transition: all 0.3s ease-in-out;
 }
 
+.side_little {
+    max-width: 20% !important;
+}
+
+.w_max {
+    width: 10vw;
+}
+
 .col-md-6 {
     position: relative;
     min-height: 1px;
@@ -483,7 +777,8 @@ table {
 #servicesGrid thead th {
     position: sticky;
     top: 0;
-    background-color: #f8f9fa; /* Fondo para que no se vea el contenido detrás */
+    background-color: #f8f9fa;
+    /* Fondo para que no se vea el contenido detrás */
     z-index: 10;
     border-bottom: 2px solid #dee2e6;
     padding: 8px 12px;
@@ -495,7 +790,8 @@ table {
 #servicesGrid {
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed; /* Para controlar el ancho de columnas */
+    table-layout: fixed;
+    /* Para controlar el ancho de columnas */
 }
 
 #servicesGrid tbody td {
@@ -508,12 +804,14 @@ table {
 /* Anchos de columna (opcional) */
 #servicesGrid th:nth-child(1),
 #servicesGrid td:nth-child(1) {
-    width: 15%; /* Mes */
+    width: 15%;
+    /* Mes */
 }
 
 #servicesGrid th:not(:nth-child(1)),
 #servicesGrid td:not(:nth-child(1)) {
-    width: 17%; /* Cada semana */
+    width: 17%;
+    /* Cada semana */
 }
 
 .cabecera {
@@ -681,7 +979,8 @@ table {
 .time-hhmmss {
     width: 100px;
     padding: 6px 8px;
-    font-family: monospace; /* mejora la alineación de dígitos */
+    font-family: monospace;
+    /* mejora la alineación de dígitos */
     border: 1px solid #ccc;
     border-radius: 4px;
     text-align: center;
@@ -696,7 +995,7 @@ table {
 .form-group-ct-inline {
     display: flex;
     gap: 15px;
-    margin-bottom: 5px;    
+    margin-bottom: 5px;
     width: 100%;
 }
 
@@ -1534,6 +1833,17 @@ span {
     padding: 10px;
 }
 
+.grupo_user10 {
+    display: grid;
+    grid-template-rows: auto auto;
+    grid-template-columns: 60% 40%;
+    justify-content: stretch;
+
+    width: 100%;
+    margin: 0 auto;
+    padding: 10px;
+}
+
 .grupo_foto01 {
     grid-column: 1/2;
     grid-row: 1/3;
@@ -1562,6 +1872,27 @@ span {
     justify-items: center;
 }
 
+.photo-container-2 {
+    display: grid;
+    grid-template-columns: 50% 50%;
+    width: 100%;
+    height: 100%;
+    border: 2px solid #ccc;
+    border-radius: 1rem;
+    padding: 5px;
+    justify-items: center;
+}
+
+.photo-container_01 {
+    grid-column: 1/2;
+    width: 100% !important;
+}
+
+.photo-container_02 {
+    grid-column: 2/3;
+    width: 100% !important;
+}
+
 .photo-container-other {
     display: grid;
     grid-template-rows: 100%;
@@ -1572,13 +1903,13 @@ span {
     justify-items: center;
 }
 
-is-rounded{
-    border-radius:9999px;
+is-rounded {
+    border-radius: 9999px;
     transition: all 0.3s ease-in-out;
-    -webkit-border-radius:9999px;
-    -moz-border-radius:9999px;
-    -ms-border-radius:9999px;
-    -o-border-radius:9999px;
+    -webkit-border-radius: 9999px;
+    -moz-border-radius: 9999px;
+    -ms-border-radius: 9999px;
+    -o-border-radius: 9999px;
     -webkit-transition: all 0.3s ease-in-out;
     -moz-transition: all 0.3s ease-in-out;
     -ms-transition: all 0.3s ease-in-out;
@@ -1600,7 +1931,288 @@ is-rounded{
     width: 50%;
 }
 
+
+/* Contenedor principal del tab2 */
+#tab2 {
+    position: relative;
+    width: 100%;
+}
+
+/* Grid container para direcciones y mapa */
+.direcciones-container {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 20px;
+    margin-top: 20px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Contenedor de listbox - asegurar que no crezca */
+.direcciones-listbox-container {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Contenedor del mapa - CRÍTICO para contener Leaflet */
+.mapa-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-width: 100%;
+    min-height: 500px;
+    min-width: 0;
+    box-sizing: border-box;
+    position: relative;
+    width: 100%;
+}
+
+/* Contenedor interno del mapa con overflow hidden */
+.mapa-container>div {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    position: relative !important;
+}
+
+/* Estilos específicos para el mapa Leaflet */
+#mapaDirecciones {
+    width: 100% !important;
+    height: 450px !important;
+    position: relative !important;
+    display: block !important;
+    overflow: hidden !important;
+}
+
+#mapaDirecciones_inner,
+#mapaDirecciones .leaflet-container {
+    width: 100% !important;
+    height: 100% !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 1 !important;
+}
+
+/* Forzar visibilidad de tiles */
+#mapaDirecciones .leaflet-tile-pane {
+    z-index: 2 !important;
+}
+
+#mapaDirecciones .leaflet-tile {
+    position: absolute !important;
+    width: 256px !important;
+    height: 256px !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: block !important;
+}
+
+/* Pane de marcadores encima */
+#mapaDirecciones .leaflet-marker-pane {
+    z-index: 5 !important;
+}
+
+/* Controles visibles */
+#mapaDirecciones .leaflet-control-container {
+    z-index: 10 !important;
+}
+
+.leaflet-container {
+    width: 100% !important;
+    height: 100% !important;
+    position: absolute !important; /* O relativo según necesidad */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* Prevenir múltiples capas fantasmas */
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-pane > svg,
+.leaflet-pane > canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+/* Forzar que los tiles sean visibles correctamente */
+.leaflet-tile-loaded {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Prevenir que Leaflet se expanda */
+#mapaDirecciones .leaflet-container {
+    width: 100% !important;
+    height: 100% !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: #d0d0d0 !important;
+}
+
+#mapaDirecciones .leaflet-map-pane {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 2 !important;
+}
+
+#mapaDirecciones .leaflet-tile-container {
+    position: absolute !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+#mapaDirecciones .leaflet-tile {
+    position: absolute !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: block !important;
+}
+
+/* Pane de objetos (marcadores) */
+#mapaDirecciones .leaflet-objects-pane {
+    z-index: 3 !important;
+}
+
+/* Control de zoom visible */
+#mapaDirecciones .leaflet-control-zoom {
+    z-index: 1000 !important;
+}
+
+/* Atribución visible */
+#mapaDirecciones .leaflet-control-attribution {
+    z-index: 1000 !important;
+    background: rgba(255,255,255,0.8) !important;
+    padding: 2px 5px !important;
+}
+
+/* Items de dirección */
+.direccion-item {
+    background: white;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.direccion-item:hover {
+    background: #e7f3ff !important;
+}
+
+.direccion-item.active {
+    background: #d4edda !important;
+    border-left: 4px solid #28a745;
+}
+
+.direccion-item.active:hover {
+    background: #c3e6cb !important;
+}
+
+/* Responsive: en pantallas pequeñas, una columna */
+@media (max-width: 768px) {
+    .direcciones-container {
+        grid-template-columns: 1fr !important;
+    }
+
+    #mapaDirecciones {
+        height: 350px !important;
+        min-height: 350px !important;
+    }
+}
+
+/* Prevenir scroll horizontal en toda la página */
+body {
+    overflow-x: hidden;
+}
+
+/* Asegurar que el tab content no cause problemas */
+.tabcontent {
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+
+/* Contenedor del formulario */
+.form-container {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
 /* ---------------------------------------------------------------------- */
+/* Estilo para el modal de contratos */
+#modalSeleccionarContrato .modal-content {
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+#modalSeleccionarContrato .modal-header {
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    padding: 1rem 1.5rem;
+}
+
+#modalSeleccionarContrato .modal-body {
+    padding: 1.5rem;
+}
+
+#modalSeleccionarContrato .table {
+    margin-bottom: 0;
+}
+
+#modalSeleccionarContrato .table td,
+#modalSeleccionarContrato .table th {
+    vertical-align: middle;
+    padding: 0.75rem;
+}
+
+#modalSeleccionarContrato .badge {
+    padding: 0.4em 0.6em;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+#modalSeleccionarContrato .btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+#modalSeleccionarContrato .btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,123,255,0.3);
+}
+
+/* Animación suave al mostrar/ocultar modal */
+.modal.fade .modal-dialog {
+    transition: transform 0.3s ease-out;
+    transform: translate(0, -25%);
+}
+
+.modal.show .modal-dialog {
+    transform: translate(0, 0);
+}
+/* ---------------------------------------------------------------------- */
+
 /* Contenedor principal del switch */
 .switch-container {
     display: flex;
@@ -1626,11 +2238,13 @@ is-rounded{
 }
 
 .switch-label.on {
-    color: #27ae60; /* Verde para ON */
+    color: #27ae60;
+    /* Verde para ON */
 }
 
 .switch-label.off {
-    color: #e74c3c; /* Rojo para OFF */
+    color: #e74c3c;
+    /* Rojo para OFF */
 }
 
 /* Input oculto */
@@ -1663,16 +2277,17 @@ is-rounded{
     height: 22px;
     background-color: white;
     border-radius: 50%;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Estado activo */
-.switch-input:checked + .switch-track {
-    background-color: #2ecc71; /* Verde suave */
+.switch-input:checked+.switch-track {
+    background-color: #2ecc71;
+    /* Verde suave */
 }
 
-.switch-input:checked + .switch-track::before {
+.switch-input:checked+.switch-track::before {
     transform: translateX(26px);
 }
 
@@ -1681,9 +2296,10 @@ is-rounded{
     background-color: #bbb;
 }
 
-.switch-input:checked + .switch-track:hover {
+.switch-input:checked+.switch-track:hover {
     background-color: #27ae60;
 }
+
 /* ---------------------------------------------------------------------- */
 
 .facturacion-layout {
@@ -1692,7 +2308,8 @@ is-rounded{
     margin: 10px 0;
 }
 
-.panel-facturas, .panel-detalles {
+.panel-facturas,
+.panel-detalles {
     flex: 1;
     border: 1px solid #ddd;
     border-radius: 8px;
@@ -1762,16 +2379,28 @@ is-rounded{
     margin-top: 4px;
 }
 
-.estado-pendiente { background: #fdf2e9; color: #e74c3c; }
-.estado-pagada { background: #e8f5e9; color: #27ae60; }
-.estado-cancelada { background: #f8f9fa; color: #95a5a6; }
+.estado-pendiente {
+    background: #fdf2e9;
+    color: #e74c3c;
+}
+
+.estado-pagada {
+    background: #e8f5e9;
+    color: #27ae60;
+}
+
+.estado-cancelada {
+    background: #f8f9fa;
+    color: #95a5a6;
+}
 
 #tabla-detalles {
     width: 100%;
     border-collapse: collapse;
 }
 
-#tabla-detalles th, #tabla-detalles td {
+#tabla-detalles th,
+#tabla-detalles td {
     padding: 10px;
     text-align: left;
     border-bottom: 1px solid #eee;
@@ -1800,38 +2429,38 @@ is-rounded{
     background-color: #f8f9fa;
 }
 
-.grid_fact{
+.grid_fact {
     display: grid;
     grid-template-rows: auto auto;
     grid-template-columns: 30% 70%;
 }
 
-.grid_fact_01{
+.grid_fact_01 {
     grid-column: 1/2;
     grid-row: 1/3;
 }
 
-.grid_fact_02{
+.grid_fact_02 {
     grid-column: 2/3;
     grid-row: 1/2;
 }
 
-.grid_fact_03{
+.grid_fact_03 {
     grid-column: 2/3;
     grid-row: 2/3;
 }
 
-.text_center{
+.text_center {
     text-align: center !important;
 }
 
-.text_derecha{
+.text_derecha {
     text-align: right !important;
 }
 
-.tabla_sc{
-    width: 100%; 
-    table-layout: fixed; 
+.tabla_sc {
+    width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
 }
 
@@ -1876,4 +2505,49 @@ is-rounded{
     display: inline-block;
     vertical-align: middle;
     white-space: nowrap;
+}
+
+
+/* Estilo para dirección activa en la lista */
+.direccion-item.active {
+    background-color: #e3f2fd !important;
+    border-left: 4px solid #2196f3 !important;
+}
+
+/* Prevenir scroll horizontal */
+.tabcontent {
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .crud-container {
+        grid-template-columns: 250px 1fr;
+    }
+    
+    .crud-sidebar-filters:last-child {
+        display: none; /* Ocultar tercera columna en pantallas medianas */
+    }
+}
+
+@media (max-width: 768px) {
+    .crud-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .crud-sidebar-filters {
+        position: relative;
+        top: 0;
+    }
+    
+    .radio-group {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    
+    .radio-card {
+        flex: 1;
+        min-width: 140px;
+    }
 }

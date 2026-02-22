@@ -55,7 +55,7 @@ if (!$modulo) {
     exit();
 }
 
-// === 8. Cargar el controlador ===
+// === 8. Cargar el controlador === 
 require_once  '../controllers/rutas_mapaController.php';
 use app\controllers\rutas_mapaController;
 
@@ -91,68 +91,55 @@ switch ($modulo) {
         }
         break;
 
-    case 'obtener_clientes':
-        $id_ruta = $inputData['id_ruta'] ?? null;
-        if (!$id_ruta) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Falta el parámetro "id_ruta"']);
-            exit();
-        }
-        try {
-            $ruta = $controller->obtenerRutaConZonas_d($id_ruta);
-            http_response_code(200);
-            echo json_encode(['success' => true, 'data' => $ruta]);
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-        }
-        break;
-
     case 'crear_ruta':
         $nombre_ruta = $inputData['nombre_ruta'] ?? null;
         $color_ruta = $inputData['color_ruta'] ?? '#000000';
-        $direcciones_ids = $inputData['direcciones_ids'] ?? [];
-
+        $zonas = $inputData['zonas'] ?? []; // NUEVO: array de zonas con direcciones
+        
         if (!$nombre_ruta) {
             http_response_code(400);
             echo json_encode(['error' => 'Falta el parámetro "nombre_ruta"']);
             exit();
         }
-        if (!is_array($direcciones_ids) || empty($direcciones_ids)) {
+        if (empty($zonas)) {
             http_response_code(400);
-            echo json_encode(['error' => 'Parámetro "direcciones_ids" es requerido y debe ser un array no vacío']);
+            echo json_encode(['error' => 'Debe seleccionar al menos una zona']);
             exit();
         }
-
+        
         try {
-            $id_ruta = $controller->crearRuta($nombre_ruta, $color_ruta, $direcciones_ids);
-            echo json_encode(['success' => true, 'message' => 'Ruta creada exitosamente', 'id_ruta' => $id_ruta]);
+            $id_ruta = $controller->crearRutaCompleta($nombre_ruta, $color_ruta, $zonas);
+            echo json_encode([
+                'success' => true, 
+                'message' => 'Ruta creada exitosamente', 
+                'id_ruta' => $id_ruta
+            ]);
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
         break;
 
-    case 'actualizar_ruta':
+    case 'actualizar_ruta_completa':
         $id_ruta = $inputData['id_ruta'] ?? null;
         $nombre_ruta = $inputData['nombre_ruta'] ?? null;
-        $color_ruta = $inputData['color_ruta'] ?? '#000000';
-        $direcciones_ids = $inputData['direcciones_ids'] ?? [];
-
+        $color_ruta = $inputData['color_ruta'] ?? null;
+        $cambios = $inputData['cambios'] ?? null;
+        
         if (!$id_ruta || !$nombre_ruta) {
             http_response_code(400);
-            echo json_encode(['error' => 'Faltan los parámetros "id_ruta" o "nombre_ruta"']);
+            echo json_encode(['error' => 'Faltan parámetros requeridos']);
             exit();
         }
-        if (!is_array($direcciones_ids) || empty($direcciones_ids)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Parámetro "direcciones_ids" es requerido y debe ser un array no vacío']);
-            exit();
-        }
-
+        
         try {
-            $id_ruta = $controller->actualizarRuta($id_ruta, $nombre_ruta, $color_ruta, $direcciones_ids);
-            echo json_encode(['success' => true, 'message' => 'Ruta actualizada exitosamente', 'id_ruta' => $id_ruta]);
+            $resultado = $controller->actualizarRutaCompleta($id_ruta, $nombre_ruta, $color_ruta, $cambios);
+            http_response_code(200);
+            echo json_encode([
+                'success' => true,
+                'message' => 'Ruta actualizada exitosamente',
+                'data' => $resultado
+            ]);
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -175,6 +162,84 @@ switch ($modulo) {
         }
         break;
 
+    case 'listar_todas_zonas':
+        try {
+            $zonas = $controller->listarTodasZonas();
+            http_response_code(200);
+            echo json_encode(['success' => true, 'data' => $zonas]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
+
+    case 'obtener_direcciones_zona':
+        // Para modal de selección: direcciones disponibles en una zona
+        $id_zona = $inputData['id_zona'] ?? null;
+        $id_ruta_actual = $inputData['id_ruta_actual'] ?? null; // Para excluir o marcar las ya en ruta
+        
+        if (!$id_zona) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Falta el parámetro "id_zona"']);
+            exit();
+        }
+        
+        try {
+            $direcciones = $controller->obtenerDireccionesZonaParaSeleccion($id_zona, $id_ruta_actual);
+            http_response_code(200);
+            echo json_encode(['success' => true, 'data' => $direcciones]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
+
+    case 'listar_todas_direcciones_contrato':
+        // Todas las direcciones con contrato activo, indicando ruta asignada
+        try {
+            $direcciones = $controller->listarTodasDireccionesConContrato();
+            http_response_code(200);
+            echo json_encode(['success' => true, 'data' => $direcciones]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
+
+    case 'listar_direcciones_libres':
+        // CORREGIDO: quitado el $ del nombre del campo
+        $id_ruta_actual = $inputData['id_ruta_actual'] ?? null;
+        try {
+            // Usar el nombre real de la función en el controller
+            $direcciones = $controller->direcciones_libres($id_ruta_actual);
+            http_response_code(200);
+            echo json_encode(['success' => true, 'data' => $direcciones]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
+                
+    case 'actualizar_orden_direcciones':
+        $id_ruta = $inputData['id_ruta'] ?? null;
+        $orden_direcciones = $inputData['orden_direcciones'] ?? [];
+        
+        if (!$id_ruta || !is_array($orden_direcciones)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Parámetros inválidos']);
+            exit();
+        }
+        
+        try {
+            $controller->actualizarOrdenDirecciones($id_ruta, $orden_direcciones);
+            http_response_code(200);
+            echo json_encode(['success' => true, 'message' => 'Orden actualizado']);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
+
     case 'listar_zonas_por_ciudad':
         $id_ciudad = $inputData['id_ciudad'] ?? null;
         if (!$id_ciudad) {
@@ -184,17 +249,6 @@ switch ($modulo) {
         }
         try {
             $zonas = $controller->listarZonasPorCiudad($id_ciudad);
-            echo json_encode(['success' => true, 'data' => $zonas]);
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-        }
-        break;
-
-    case 'listar_todas_zonas':
-        try {
-            $zonas = $controller->listarTodasZonas();
-            http_response_code(200);
             echo json_encode(['success' => true, 'data' => $zonas]);
         } catch (Exception $e) {
             http_response_code(500);
@@ -237,14 +291,118 @@ switch ($modulo) {
         echo $cadena;
         break;
 
-    case 'actualizar_orden_direcciones':
+    case 'crear_select_dia':
         $id_ruta = $inputData['id_ruta'];
-        $orden_direcciones = $inputData['orden_direcciones'];
-        
-        $procesar = $controller->actualizarOrdenDirecciones($id_ruta, $orden_direcciones);
-        
+        $fecha_proceso = $inputData['fecha_proceso'];
+
+        $resulta = $controller->consultar_rutas_dia($fecha_proceso);
+
         http_response_code(200);
-        echo json_encode(['success' => true]);
+        echo json_encode([
+            'success' => true,
+            'resulta' => $resulta   
+        ]);
+        exit();
+
+    case 'asignar_direccion_a_ruta':
+        $id_ruta = $inputData['id_ruta'];
+        $id_direccion = $inputData['id_direccion'];
+        $id_zona = $inputData['id_zona'];
+
+        try {
+            $controller->asignarDireccionARuta($id_ruta, $id_direccion, $id_zona);
+            http_response_code(200);
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit();
+
+    case 'guardar_cambios_batch':
+        $id_ruta = $inputData['id_ruta'] ?? null;
+        $nombre_ruta = $inputData['nombre_ruta'] ?? null;
+        $color_ruta = $inputData['color_ruta'] ?? '#000000';
+        $cambios = $inputData['cambios'] ?? null;
+
+        if (!$id_ruta) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Falta el parámetro "id_ruta"']);
+            exit();
+        }
+
+        if (!is_array($cambios)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Parámetro "cambios" debe ser un array']);
+            exit();
+        }
+
+        try {
+            $resultado = $controller->guardarCambiosBatch($id_ruta, $nombre_ruta, $color_ruta, $cambios);
+            http_response_code(200);
+            echo json_encode([
+                'success' => true, 
+                'message' => 'Changes saved successfully',
+                'data' => $resultado
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
+        
+    // rutas_mapaAjax.php
+    case 'listar_direcciones_libres_con_contrato':
+        try {
+            $direcciones = $controller->listarDireccionesLibresConContrato();
+            echo json_encode(['success' => true, 'data' => $direcciones]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit();        
+
+    case 'obtener_clientes':
+        $id_ruta = $inputData['id_ruta'] ?? null;
+        if (!$id_ruta) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Falta el parámetro "id_ruta"']);
+            exit();
+        }
+        try {
+            $ruta = $controller->obtenerRutaConZonas_d($id_ruta);
+            http_response_code(200);
+            echo json_encode(['success' => true, 'data' => $ruta]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
+
+    case 'actualizar_ruta':
+        $id_ruta = $inputData['id_ruta'] ?? null;
+        $nombre_ruta = $inputData['nombre_ruta'] ?? null;
+        $color_ruta = $inputData['color_ruta'] ?? '#000000';
+        $direcciones_ids = $inputData['direcciones_ids'] ?? [];
+
+        if (!$id_ruta || !$nombre_ruta) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Faltan los parámetros "id_ruta" o "nombre_ruta"']);
+            exit();
+        }
+        if (!is_array($direcciones_ids) || empty($direcciones_ids)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Parámetro "direcciones_ids" es requerido y debe ser un array no vacío']);
+            exit();
+        }
+
+        try {
+            $id_ruta = $controller->actualizarRuta($id_ruta, $nombre_ruta, $color_ruta, $direcciones_ids);
+            echo json_encode(['success' => true, 'message' => 'Ruta actualizada exitosamente', 'id_ruta' => $id_ruta]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
         break;
 
     default:

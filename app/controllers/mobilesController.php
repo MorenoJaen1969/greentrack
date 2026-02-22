@@ -212,7 +212,14 @@ class mobilesController extends mainModel
 			$query = "SELECT
 						s.id_servicio, 
 						s.id_cliente,
-						c.nombre as cliente,
+						COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+								ELSE NULLIF(c.nombre, '')
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente, 
 						s.id_direccion,
 						s.id_truck,
 						s.id_crew_1,
@@ -252,14 +259,14 @@ class mobilesController extends mainModel
 							ELSE 'Pendiente'
 						END AS s_status,
 						CASE
-						    WHEN s.hora_inicio_gps IS NOT NULL AND s.hora_fin_gps IS NOT NULL THEN 
-						        CONCAT('Service Performed (', TIME_FORMAT(TIMEDIFF(s.hora_fin_gps, s.hora_inicio_gps), '%H:%i:%s'), ')')
-						    WHEN s.hora_inicio_gps IS NOT NULL AND s.hora_fin_gps IS NULL THEN 
-						        CONCAT('Started (', TIMESTAMPDIFF(MINUTE, s.hora_inicio_gps, NOW()), ' min ago)')
-						    WHEN s.hora_inicio_gps IS NULL AND s.hora_fin_gps IS NOT NULL THEN 
-						        'Finished'
-						    WHEN s.hora_inicio_gps IS NULL AND s.hora_fin_gps IS NULL THEN 
-						        'Not yet attended'
+							WHEN s.hora_inicio_gps IS NOT NULL AND s.hora_fin_gps IS NOT NULL THEN 
+								CONCAT('Service Performed (', TIME_FORMAT(TIMEDIFF(s.hora_fin_gps, s.hora_inicio_gps), '%H:%i:%s'), ')')
+							WHEN s.hora_inicio_gps IS NOT NULL AND s.hora_fin_gps IS NULL THEN 
+								CONCAT('Started (', TIMESTAMPDIFF(MINUTE, s.hora_inicio_gps, NOW()), ' min ago)')
+							WHEN s.hora_inicio_gps IS NULL AND s.hora_fin_gps IS NOT NULL THEN 
+								'Finished'
+							WHEN s.hora_inicio_gps IS NULL AND s.hora_fin_gps IS NULL THEN 
+								'Not yet attended'
 						END AS status_m2
 					FROM servicios AS s
 					LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
@@ -410,7 +417,15 @@ class mobilesController extends mainModel
 
 	public function cargar_clientes_y_direccion()
 	{
-		$sql = "SELECT c.nombre as cliente, d.direccion, d.lat, d.lng
+		$sql = "SELECT 
+				COALESCE(
+					CASE 
+						WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+						WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+						ELSE NULLIF(c.nombre, '')
+					END,
+					'[SIN NOMBRE]'
+				) AS cliente, d.direccion, d.lat, d.lng
 			FROM clientes c
 			LEFT JOIN direcciones d ON c.id_cliente = d.id_cliente
 			ORDER BY d.lat DESC, d.lng DESC";

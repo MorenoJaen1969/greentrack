@@ -239,6 +239,7 @@ $opcion = "route_day";
             });
 
             const data = await res.text();
+            document.getElementById('clientes-list').innerHTML = "Select a route to view its customers.";
 
             // Guardar día actual para cargar clientes
             window.diaActualModal = day;
@@ -294,6 +295,7 @@ $opcion = "route_day";
     }
 
     function closeZoneModal() {
+        document.getElementById('clientes-list').innerHTML = "Select a route to view its customers.";
         document.getElementById('zoneModal').style.display = 'none';
         currentDay = null;
     }
@@ -332,8 +334,8 @@ $opcion = "route_day";
             await suiteAlertError('Error', 'Failed to save. Please check your connection.');
         }
 
-        // ✅ Renderizar con nombre y color
-        renderSelectedZones(currentDay);
+        // ✅ Renderizar con nombre y color        renderSelectedZones(currentDay);
+        document.getElementById('clientes-list').innerHTML = "Select a route to view its customers.";
         closeZoneModal();
     }
 
@@ -454,3 +456,4 @@ $opcion = "route_day";
     document.addEventListener('DOMContentLoaded', loadCurrentAssignments);
 
 </script>
+

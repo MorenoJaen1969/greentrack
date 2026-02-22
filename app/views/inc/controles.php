@@ -17,11 +17,13 @@
         "dashboard",
         "dias_no_actividad",
         "direcciones",
+        "parametros",
         "proveedores",
         "route_day",
         "rutas_mapa",
         "salas",
         "servicios",
+        "usuarios",
         "vehiculos"
     ];
 
@@ -60,12 +62,14 @@
                 $txt_titulo = "Suppliers";       
             }elseif($raiz=="rutas_mapa"){
                 $txt_titulo = "Maps rute";       
-            }elseif($raiz=="vehiculos"){
-                $txt_titulo = "Vehicles";        
             }elseif($raiz=="route_day"){
                 $txt_titulo = "Route assignment on specific days";        
             }elseif($raiz=="salas"){
                 $txt_titulo = "Rooms";
+            }elseif($raiz=="usuarios"){
+                $txt_titulo = "Users";
+            }elseif($raiz=="vehiculos"){
+                $txt_titulo = "Vehicles";        
             }else{
                 $txt_titulo = $raiz;
             }                

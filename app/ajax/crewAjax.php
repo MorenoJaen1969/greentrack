@@ -81,7 +81,7 @@ switch ($modulo) {
         ];
 
         $tabla_html = $controller->listarcrewControlador($dato_ori);
-        echo $tabla_html; // Solo el HTML de la tabla + paginación
+        echo $tabla_html; // Solo el HTML de la tabla + paginación 
         break;
     
     case 'cambio_cant_reg':
@@ -113,6 +113,16 @@ switch ($modulo) {
         $tabla_html = $controller->listarcrewControlador($dato_ori);
         echo $tabla_html; // Solo el HTML de la tabla + paginación
         break;
+
+    case 'cargar_drivers':
+        $tipo = $inputData['tipo'];
+        $drivers = $controller->consultar_drivers($tipo);
+        http_response_code(200);
+        echo json_encode([
+            'success' => true,
+            'data' => $drivers
+        ]);
+        exit();
 
     default:
         http_response_code(400);

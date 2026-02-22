@@ -11,7 +11,7 @@ while (ob_get_level()) {
 // === 2. Iniciar sesión ===
 require_once "../views/inc/session_start.php"; 
 
-// === 3. Cargar configuración y autoload ===
+// === 3. Cargar configuración y autoload === 
 require_once "../../config/app.php";
 require_once "../../autoload.php";
 
@@ -200,6 +200,12 @@ try {
             } else {
                 echo json_encode(['success' => false, 'message' => 'File move failed']);
             }            
+            exit();
+
+        case 'update_usuario':
+            $resultado = $controller->guardarCambios($inputData, $_FILES);
+            $mensaje = $resultado[1];
+            echo json_encode($mensaje);
             exit();
 
         default:

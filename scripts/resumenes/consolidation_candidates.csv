@@ -1,0 +1,105 @@
+GRUPO;CLIENTE_A;NOMBRE_A;NOMBRE_COMERCIAL_A;CLIENTE_B;NOMBRE_B;NOMBRE_COMERCIAL_B;SIMILITUD_%;DIRECCIONES_A;DIRECCIONES_B;MISMAS_DIRECCIONES;RECOMENDACION;ACCION
+1;630;"BERGERON PEGGY";;203;PEGGY;;51.05;;;NO;"REVISAR (direcciones diferentes, similitud 51.05%)";REVIEW
+2;630;"BERGERON PEGGY";;388;PEGGY;;51.05;;;NO;"REVISAR (direcciones diferentes, similitud 51.05%)";REVIEW
+3;635;"BUCKALEW DENNY (NEW)";;441;"ELAINE BUCKALEW NEW";;54.62;;;NO;"REVISAR (direcciones diferentes, similitud 54.62%)";REVIEW
+4;650;"FRAZIER MARK";;435;"MARK FRAZIER 2";;64.62;;;NO;"REVISAR (direcciones diferentes, similitud 64.62%)";REVIEW
+5;654;"HANSON TRACY";;249;"TRACY HANSON";;80;;;NO;"REVISAR (direcciones diferentes, similitud 80%)";REVIEW
+6;654;"HANSON TRACY";;295;"TRACY HANSON";;80;;;NO;"REVISAR (direcciones diferentes, similitud 80%)";REVIEW
+7;654;"HANSON TRACY";;567;"TRACY HANSON 1";;61.54;;;NO;"REVISAR (direcciones diferentes, similitud 61.54%)";REVIEW
+8;353;"JUAN NUNEZ property 1";;354;"JUAN NUNEZ property 2";;74.1;;;NO;"REVISAR (direcciones diferentes, similitud 74.1%)";REVIEW
+9;353;"JUAN NUNEZ property 1";;355;"JUAN NUNEZ property 3";;74.1;;;NO;"REVISAR (direcciones diferentes, similitud 74.1%)";REVIEW
+10;353;"JUAN NUNEZ property 1";;356;"JUAN NUNEZ property 4";;74.1;;;NO;"REVISAR (direcciones diferentes, similitud 74.1%)";REVIEW
+11;354;"JUAN NUNEZ property 2";;355;"JUAN NUNEZ property 3";;74.1;;;NO;"REVISAR (direcciones diferentes, similitud 74.1%)";REVIEW
+12;354;"JUAN NUNEZ property 2";;356;"JUAN NUNEZ property 4";;74.1;;;NO;"REVISAR (direcciones diferentes, similitud 74.1%)";REVIEW
+13;355;"JUAN NUNEZ property 3";;356;"JUAN NUNEZ property 4";;74.1;;;NO;"REVISAR (direcciones diferentes, similitud 74.1%)";REVIEW
+14;707;"KATHERYN BERNHARDT";;709;"Kathryn Bernhardt";;58.86;;"11430 Supreme Court, Conroe, TX 77304";NO;"REVISAR (direcciones diferentes, similitud 58.86%)";REVIEW
+15;181;"MARY MOORE";;335;"MARY MOORE";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+16;181;"MARY MOORE";;742;"MOORE MARY";;80;;;NO;"REVISAR (direcciones diferentes, similitud 80%)";REVIEW
+17;335;"MARY MOORE";;742;"MOORE MARY";;80;;;NO;"REVISAR (direcciones diferentes, similitud 80%)";REVIEW
+18;664;"MILLER THELMA";;301;"THELMA MILLER";;78.46;;;NO;"REVISAR (direcciones diferentes, similitud 78.46%)";REVIEW
+19;665;"MOORE KATHY";;742;"MOORE MARY";;50.48;;;NO;"REVISAR (direcciones diferentes, similitud 50.48%)";REVIEW
+20;665;"MOORE KATHY";;182;"MOORE; KATHY";;98.26;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+21;757;"MOSS; TOM 1";;759;"MOSS; TOM 2";;66.36;;;NO;"REVISAR (direcciones diferentes, similitud 66.36%)";REVIEW
+22;757;"MOSS; TOM 1";;561;"ROBERTSON; TOM 1";;56.67;;;NO;"REVISAR (direcciones diferentes, similitud 56.67%)";REVIEW
+23;757;"MOSS; TOM 1";;550;"TOM MOSS";;56.84;;;NO;"REVISAR (direcciones diferentes, similitud 56.84%)";REVIEW
+24;759;"MOSS; TOM 2";;550;"TOM MOSS";;56.84;;;NO;"REVISAR (direcciones diferentes, similitud 56.84%)";REVIEW
+25;185;"Mr Price";;381;"Mr Price";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+26;185;"Mr Price";;551;"Mr Price 1";;75.56;;;NO;"REVISAR (direcciones diferentes, similitud 75.56%)";REVIEW
+27;185;"Mr Price";;575;"Mr Price 2";;75.56;;;NO;"REVISAR (direcciones diferentes, similitud 75.56%)";REVIEW
+28;381;"Mr Price";;551;"Mr Price 1";;75.56;;;NO;"REVISAR (direcciones diferentes, similitud 75.56%)";REVIEW
+29;381;"Mr Price";;575;"Mr Price 2";;75.56;;;NO;"REVISAR (direcciones diferentes, similitud 75.56%)";REVIEW
+30;551;"Mr Price 1";;575;"Mr Price 2";;66;;;NO;"REVISAR (direcciones diferentes, similitud 66%)";REVIEW
+31;306;"NEUENSCHWANDER, ALLEN";;189;"NEUENSCHWANDER; ALLEN";;98.1;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+32;203;PEGGY;;388;PEGGY;;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+33;203;PEGGY;;556;"PEGGY 1";;63.33;;;NO;"REVISAR (direcciones diferentes, similitud 63.33%)";REVIEW
+34;203;PEGGY;;583;"PEGGY 2";;63.33;;;NO;"REVISAR (direcciones diferentes, similitud 63.33%)";REVIEW
+35;388;PEGGY;;556;"PEGGY 1";;63.33;;;NO;"REVISAR (direcciones diferentes, similitud 63.33%)";REVIEW
+36;388;PEGGY;;583;"PEGGY 2";;63.33;;;NO;"REVISAR (direcciones diferentes, similitud 63.33%)";REVIEW
+37;556;"PEGGY 1";;583;"PEGGY 2";;54.29;;;NO;"REVISAR (direcciones diferentes, similitud 54.29%)";REVIEW
+38;205;"PETER DELANEY";;442;"PETER DELANEY";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+39;214;"RANDY POWELL";;342;"RANDY POWELL";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+40;215;"randy soffer";;423;"randy soffer";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+41;215;"randy soffer";;558;"randy soffer 1";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+42;215;"randy soffer";;585;"randy soffer 2";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+43;423;"randy soffer";;558;"randy soffer 1";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+44;423;"randy soffer";;585;"randy soffer 2";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+45;558;"randy soffer 1";;585;"randy soffer 2";;67.14;;;NO;"REVISAR (direcciones diferentes, similitud 67.14%)";REVIEW
+46;221;"ROBERT VRIJ";;425;"ROBERT VRIJ";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+47;221;"ROBERT VRIJ";;560;"ROBERT VRIJ 1";;76.67;;;NO;"REVISAR (direcciones diferentes, similitud 76.67%)";REVIEW
+48;425;"ROBERT VRIJ";;560;"ROBERT VRIJ 1";;76.67;;;NO;"REVISAR (direcciones diferentes, similitud 76.67%)";REVIEW
+49;222;"ROBERTSON; TOM";;561;"ROBERTSON; TOM 1";;77.33;;;NO;"REVISAR (direcciones diferentes, similitud 77.33%)";REVIEW
+50;223;"RODNEY JONSON";;437;"RODNEY JONSON";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+51;223;"RODNEY JONSON";;562;"RODNEY JONSON 1";;77.14;;;NO;"REVISAR (direcciones diferentes, similitud 77.14%)";REVIEW
+52;223;"RODNEY JONSON";;589;"RODNEY JONSON 2";;77.14;;;NO;"REVISAR (direcciones diferentes, similitud 77.14%)";REVIEW
+53;437;"RODNEY JONSON";;562;"RODNEY JONSON 1";;77.14;;;NO;"REVISAR (direcciones diferentes, similitud 77.14%)";REVIEW
+54;437;"RODNEY JONSON";;589;"RODNEY JONSON 2";;77.14;;;NO;"REVISAR (direcciones diferentes, similitud 77.14%)";REVIEW
+55;562;"RODNEY JONSON 1";;589;"RODNEY JONSON 2";;67.33;;;NO;"REVISAR (direcciones diferentes, similitud 67.33%)";REVIEW
+56;225;"ROY CLIFTON";;362;"ROY CLIFTON";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+57;590;"RUBY BOLTON";;764;"RUBY BOLTON (C/8 DIAS)";;56.67;"18 Silver Lute Place, Spring, TX, 77381, USA";;NO;"REVISAR (direcciones diferentes, similitud 56.67%)";REVIEW
+58;590;"RUBY BOLTON";;758;"RUBY BOLTON 1";;76.67;"18 Silver Lute Place, Spring, TX, 77381, USA";;NO;"REVISAR (direcciones diferentes, similitud 76.67%)";REVIEW
+59;590;"RUBY BOLTON";;760;"RUBY BOLTON 2";;76.67;"18 Silver Lute Place, Spring, TX, 77381, USA";;NO;"REVISAR (direcciones diferentes, similitud 76.67%)";REVIEW
+60;590;"RUBY BOLTON";;765;"RUDY BOLTON";;56.36;"18 Silver Lute Place, Spring, TX, 77381, USA";;NO;"REVISAR (direcciones diferentes, similitud 56.36%)";REVIEW
+61;764;"RUBY BOLTON (C/8 DIAS)";;758;"RUBY BOLTON 1";;51.43;;;NO;"REVISAR (direcciones diferentes, similitud 51.43%)";REVIEW
+62;764;"RUBY BOLTON (C/8 DIAS)";;760;"RUBY BOLTON 2";;51.43;;;NO;"REVISAR (direcciones diferentes, similitud 51.43%)";REVIEW
+63;758;"RUBY BOLTON 1";;760;"RUBY BOLTON 2";;66.92;;;NO;"REVISAR (direcciones diferentes, similitud 66.92%)";REVIEW
+64;228;"SCOTT GOFF";;229;"Scott goff";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+65;228;"SCOTT GOFF";;282;"SCOTT GOFF";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+66;228;"SCOTT GOFF";;348;"Scott goff";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+67;229;"Scott goff";;282;"SCOTT GOFF";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+68;229;"Scott goff";;348;"Scott goff";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+69;282;"SCOTT GOFF";;348;"Scott goff";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+70;236;"STACEY SHULTEA";;315;"STACEY SHULTEA";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+71;310;"STEVENS GUILLORY";;564;"STEVENS GUILLORY 1";;77.65;;;NO;"REVISAR (direcciones diferentes, similitud 77.65%)";REVIEW
+72;358;"TJ DIAZ";;566;"TJ DIAZ 1";;75;;;NO;"REVISAR (direcciones diferentes, similitud 75%)";REVIEW
+73;249;"TRACY HANSON";;295;"TRACY HANSON";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+74;249;"TRACY HANSON";;567;"TRACY HANSON 1";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+75;295;"TRACY HANSON";;567;"TRACY HANSON 1";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+76;316;"TRESY KNAPPS";;568;"TRESY KNAPPS 1";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+77;370;"TURNIPSEEDE, BRENDA";;258;"TURNIPSEEDE; BRENDA";;97.89;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+78;259;"TYLER  HANDT";;430;"TYLER  HANDT";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+79;259;"TYLER  HANDT";;715;"TYLER HANDT";;98.26;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+80;430;"TYLER  HANDT";;715;"TYLER HANDT";;98.26;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+81;420;"UMSTED RAY";;687;"UMSTED, RAY";;98.1;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+82;284;"UMSTED, RAY & KERRI BROWN";;262;"UMSTED; RAY & KERRI BROWN";;98.4;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+83;266;"VIC TARASIK";;429;"VIC TARASIK";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+84;266;"VIC TARASIK";;570;"VIC TARASIK 1";;76.67;;;NO;"REVISAR (direcciones diferentes, similitud 76.67%)";REVIEW
+85;266;"VIC TARASIK";;595;"VIC TARASIK 2";;76.67;;;NO;"REVISAR (direcciones diferentes, similitud 76.67%)";REVIEW
+86;429;"VIC TARASIK";;570;"VIC TARASIK 1";;76.67;;;NO;"REVISAR (direcciones diferentes, similitud 76.67%)";REVIEW
+87;429;"VIC TARASIK";;595;"VIC TARASIK 2";;76.67;;;NO;"REVISAR (direcciones diferentes, similitud 76.67%)";REVIEW
+88;570;"VIC TARASIK 1";;595;"VIC TARASIK 2";;66.92;;;NO;"REVISAR (direcciones diferentes, similitud 66.92%)";REVIEW
+89;267;"VICKERS PAULINE";;312;"VICKERS PAULINE";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+90;267;"VICKERS PAULINE";;571;"VICKERS PAULINE 1";;77.5;;;NO;"REVISAR (direcciones diferentes, similitud 77.5%)";REVIEW
+91;267;"VICKERS PAULINE";;596;"VICKERS PAULINE 2";;77.5;;;NO;"REVISAR (direcciones diferentes, similitud 77.5%)";REVIEW
+92;312;"VICKERS PAULINE";;571;"VICKERS PAULINE 1";;77.5;;;NO;"REVISAR (direcciones diferentes, similitud 77.5%)";REVIEW
+93;312;"VICKERS PAULINE";;596;"VICKERS PAULINE 2";;77.5;;;NO;"REVISAR (direcciones diferentes, similitud 77.5%)";REVIEW
+94;571;"VICKERS PAULINE 1";;596;"VICKERS PAULINE 2";;67.65;;;NO;"REVISAR (direcciones diferentes, similitud 67.65%)";REVIEW
+95;268;"VIRGINIA HILL";;288;"VIRGINIA HILL";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+96;275;"Wendy Juarez";;360;"Wendy Juarez";;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+97;275;"Wendy Juarez";;572;"Wendy Juarez 1";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+98;275;"Wendy Juarez";;597;"Wendy Juarez 2";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+99;360;"Wendy Juarez";;572;"Wendy Juarez 1";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+100;360;"Wendy Juarez";;597;"Wendy Juarez 2";;76.92;;;NO;"REVISAR (direcciones diferentes, similitud 76.92%)";REVIEW
+101;572;"Wendy Juarez 1";;597;"Wendy Juarez 2";;67.14;;;NO;"REVISAR (direcciones diferentes, similitud 67.14%)";REVIEW
+102;351;"WOLLEY, SEAN";;276;"WOLLEY; SEAN";;96.67;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+103;717;"YOCKEY DONALD";;278;"YOCKEY; DONALD";;98.52;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE
+104;279;Zolka;;389;Zolka;;100;;;NO;"CONSOLIDAR (similitud alta >=90%)";CONSOLIDATE

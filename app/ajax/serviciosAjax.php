@@ -1,7 +1,7 @@
 <?php
 // SERVICIOSAJAX.PHP
 // === 1. Iniciar buffer y sesión (lo primero) ===
-ob_start();
+//ob_start();
 require_once "../views/inc/session_start.php";
 
 // === 2. Cargar configuración y autoload ===
@@ -73,7 +73,7 @@ $controller = new serviciosController();
 // === 9. Enrutar según el módulo ===
 switch ($modulo) {
     case 'listar':
-        // Permitir filtrar por fecha y vehículo si se reciben  
+        // Permitir filtrar por fecha y vehículo si se reciben   
         $fecha = $inputData['fecha'] ?? null;
         $truck = $inputData['truck'] ?? null;
         if ($fecha || $truck) {
@@ -346,6 +346,35 @@ switch ($modulo) {
             exit();
         }
         $controller->verificar_ruta($id_cliente, $fecha);
+        break;
+
+    case 'generar_reporte':
+        $fecha_despacho = $inputData['fecha_despacho'] ?? null;
+        if (!$fecha_despacho) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Dispatch date is required']);
+            exit();
+        }
+        $controller->generarReporte($fecha_despacho);
+        break;
+
+    case 'guardar_servicios':
+        $fecha = $inputData['fecha'] ?? null;
+        $rutas = $inputData['rutas'] ?? [];
+
+        if (!$fecha) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Date is required']);
+            exit();
+        }
+
+        if (!$rutas) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Crew and Truck configurations are required']);
+            exit();
+        }
+
+        $controller->guardarServicios($fecha, $rutas);
         break;
 
     default:

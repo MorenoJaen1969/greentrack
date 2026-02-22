@@ -289,7 +289,16 @@ class zonasController extends mainModel
 	}	
 
 	public function listarDireccionesDeZona($id_zona) {
-		$sql = "SELECT d.id_direccion, c.nombre AS cliente_nombre, d.direccion, d.lat, d.lng
+		$sql = "SELECT d.id_direccion, 
+				COALESCE(
+					CASE 
+						WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+						WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+						ELSE NULLIF(c.nombre, '')
+					END,
+					'[SIN NOMBRE]'
+				) AS cliente_nombre, 
+				d.direccion, d.lat, d.lng
 			FROM rutas_direcciones rd
 			JOIN rutas_zonas_cuadricula rzc ON rd.id_ruta = rzc.id_ruta
 			JOIN direcciones d ON rd.id_direccion = d.id_direccion

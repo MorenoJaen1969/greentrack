@@ -120,6 +120,15 @@ switch ($modulo) {
         echo $tabla_html; // Solo el HTML de la tabla + paginación
         break;
 
+    case 'cargar_trucks':
+        $trucks = $controller->consultar_trucks();
+        http_response_code(200);
+        echo json_encode([
+            'success' => true,
+            'data' => $trucks
+        ]);
+        exit();
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);

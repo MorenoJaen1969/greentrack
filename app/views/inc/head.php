@@ -15,14 +15,16 @@ if (isset($url)) {
         "contratos",
         "crew",
         "dashboard",
-        "dias_no_actividad",        
+        "dias_no_actividad",
         "direcciones",
+        "parametros",
         "proveedores",
         "route_day",
-        "rutas_mapa", 
-        "salas",       
+        "rutas_mapa",
+        "salas",
         "servicios",
         "status_all",
+        "usuarios",
         "vehiculos"
     ];
 
@@ -42,50 +44,57 @@ if (isset($url)) {
     }
 
     if ($url[0] == "dashboard") {
-        ?>
-<!-- Carrusel: Estilos -->
-<link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/carrusel.css">
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-<link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/chat.css?v=<?= time() ?>">
-<?php
+?>
+        <!-- Carrusel: Estilos -->
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/carrusel.css">
+        <!-- Leaflet CSS -->
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/chat.css?v=<?= time() ?>">
+    <?php
     } elseif ($url[0] == "rutas_mapa") {
-        ?>
-<link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/rutas_mapa.css?v=<?= time() ?>">
-<link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/suiteAlert.css?v=<?= time() ?>">
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    ?>
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/rutas_mapa.css?v=<?= time() ?>">
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/suiteAlert.css?v=<?= time() ?>">
+        <!-- Leaflet CSS -->
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-<script src="<?= RUTA_REAL ?>/app/views/inc/js/suiteAlert.js?v=<?= time() ?>"></script>
-<?php
+        <script src="<?= RUTA_REAL ?>/app/views/inc/js/suiteAlert.js?v=<?= time() ?>"></script>
+    <?php
+
+    } elseif ($url[0] == "parametros") {
+    ?>
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/parametros.css?v=<?= time() ?>">
+    <?php
+
+
     } else {
-		// Desactivar el caché del navegador
-		header("Cache-Control: no-cache, must-revalidate"); // HTTP/1.1
-		header("Pragma: no-cache"); // HTTP/1.0
-		header("Expires: Sat, 1 Jul 2000 05:00:00 GMT"); // Fecha pasada para forzar la expiración
-		header("Content-Type: text/html; charset=utf-8");
-        ?>
-<!-- Font-Awesome CSS-->
-<link rel="stylesheet" href="<?php echo RUTA_FONTAWESOME; ?>css/all.min.css">
+        // Desactivar el caché del navegador
+        header("Cache-Control: no-cache, must-revalidate"); // HTTP/1.1
+        header("Pragma: no-cache"); // HTTP/1.0
+        header("Expires: Sat, 1 Jul 2000 05:00:00 GMT"); // Fecha pasada para forzar la expiración
+        header("Content-Type: text/html; charset=utf-8");
+    ?>
+        <!-- Font-Awesome CSS-->
+        <link rel="stylesheet" href="<?php echo RUTA_FONTAWESOME; ?>css/all.min.css">
 
-<link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/bulma.min.css">
-<link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/fuentes.css?v=<?= time() ?>">
-<link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/formularios.css?v=<?= time() ?>">
-<link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/suiteAlert.css?v=<?= time() ?>">
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/bulma.min.css">
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/fuentes.css?v=<?= time() ?>">
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/formularios.css?v=<?= time() ?>">
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/plat-cliente-mapa.css?v=<?= time() ?>">        
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/suiteAlert.css?v=<?= time() ?>">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/chat.css?v=<?= time() ?>">
+        <script src="<?= RUTA_REAL ?>/app/views/inc/js/suiteAlert.js?v=<?= time() ?>"></script>
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-<link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/chat.css?v=<?= time() ?>">
-<script src="<?= RUTA_REAL ?>/app/views/inc/js/suiteAlert.js?v=<?= time() ?>"></script>
-
-<?php
+        <?php
         if ($url[0] == "direcciones") {
-            ?>
-<link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/crud.css">
-<?php
+        ?>
+            <link rel="stylesheet" href="<?= RUTA_REAL ?>/app/views/inc/css/crud.css">
+        <?php
         } elseif ($url[0] == "direccionesVista") {
-            ?>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        ?>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />            
 <?php
         }
     }

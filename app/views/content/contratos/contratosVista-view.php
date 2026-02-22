@@ -26,6 +26,8 @@ $param_dat = [
 
 $row1 = $contratos->contratoCompleto_contrato($param_dat);
 
+$id_tipo_persona = $row1['id_tipo_persona'];
+
 if (is_null($row1['id_frecuencia_servicio'])) {
     $id_frecuencia_servicio = 1;
 } else {
@@ -36,10 +38,14 @@ $id_contrato = $row1['id_contrato'];
 $contrato_origen = $row1['contrato_origen'];
 
 $id_cliente = $row1['id_cliente'];
-if (is_null($row1['apellido'])) {
-    $cliente = $row1['nombre'];
+if ($id_tipo_persona==1){
+    if (is_null($row1['apellido'])) {
+        $cliente = $row1['nombre'];
+    } else {
+        $cliente = trim($row1['nombre'] . " " . $row1['apellido']);
+    }
 } else {
-    $cliente = trim($row1['nombre'] . " " . $row1['apellido']);
+    $cliente = trim($row1['nombre_comercial']);
 }
 
 if (is_null($row1['telefono'])) {
@@ -300,7 +306,6 @@ $opcion = "contratosVista";
                 </div>
 
                 <div id="tab2" class="tabcontent tab-link"  style="display:none">
-                    <!-- Formulario del Local alquilado -->
                     <div class="form-group-ct-inline">
                         <h3>Contract Characteristics</h3>
                         <h3 style="margin-left: auto; color: #6d1a72ff; font-weight: bold;">
@@ -468,11 +473,11 @@ $opcion = "contratosVista";
                     <div class="forma01">
                         <div class="form-group-ct">
                             <label class="ancho_label1" for="notas">Notes:</label>
-                            <textarea class="format_textarea" id="notas" name="notas" placeholder="Add notes"></textarea>
+                            <textarea class="format_textarea" id="notas" name="notas" placeholder="Add notes"><?php echo $notas; ?></textarea>
                         </div>
                         <div class="form-group-ct">
                             <label class="ancho_label1" for="observaciones">Comments:</label>
-                            <textarea class="format_textarea" id="observaciones" name="observaciones" placeholder="Add comments"></textarea>
+                            <textarea class="format_textarea" id="observaciones" name="observaciones" placeholder="Add comments"><?php echo $observaciones; ?></textarea>
                         </div>
                     </div>
                 </div>

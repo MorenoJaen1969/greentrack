@@ -450,4 +450,44 @@ class vehiculosController extends mainModel
 
 		return $resultado;
 	}
+
+    public function consultar_trucks() 
+    {
+		// 1. Consulta principal
+        $sql = "SELECT 
+                id_truck AS id, 
+                nombre AS name, 
+                CASE 
+                    WHEN foto IS NOT NULL AND foto != '' 
+                        THEN CONCAT('/app/views/fotos/', foto)
+                    ELSE '/app/views/fotos/pickup.png'
+                END AS img
+            FROM truck
+            WHERE id_status = 26";
+
+        $param = [];
+
+        $data = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
+
+		// 2. Extraer los nombres en un array separado para usarlo de guía
+		$nombres = array_column($data, 'name');
+
+		// 3. Aplicar ordenamiento natural a los nombres
+		// natsort mantiene la asociación de índices, lo cual es clave aquí
+		natsort($nombres);
+
+		// 4. Reconstruir el array original ($trucks) basado en el orden de $nombres
+		$trucks_ordenados = [];
+		foreach ($nombres as $nombre) {
+			foreach ($data as $item) {
+				if ($item['name'] === $nombre) {
+					$trucks_ordenados[] = $item;
+					break;
+				}
+			}
+		}
+
+        return $trucks_ordenados;
+    }
+
 }

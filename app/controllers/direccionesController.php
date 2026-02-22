@@ -1107,14 +1107,22 @@ error_log("Valor de zip: ". $id_zip . " y " . $zip_usar);
 
 	public function consultar_direcciones_con_coordenadas()
 	{
-		$sql = 'SELECT d.id_direccion, d.direccion, d.lat, d.lng, c.nombre AS cliente_nombre
+		$sql = "SELECT d.id_direccion, d.direccion, d.lat, d.lng, 
+				COALESCE(
+					CASE 
+						WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+						WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+						ELSE NULLIF(c.nombre, '')
+					END,
+					'[SIN NOMBRE]'
+				) AS cliente_nombre
 			FROM direcciones AS d
 			LEFT JOIN rutas_direcciones rd ON d.id_direccion = rd.id_direccion
 			LEFT JOIN clientes AS c ON d.id_cliente = c.id_cliente
 			WHERE lat IS NOT NULL 
 				AND lng IS NOT NULL
 				AND rd.id_direccion IS NULL
-			ORDER BY c.nombre';
+			ORDER BY cliente_nombre";
 		
 		$data = $this->ejecutarConsulta($sql, "", [], "fetchAll");
 
@@ -1130,7 +1138,15 @@ error_log("Valor de zip: ". $id_zip . " y " . $zip_usar);
 		$max_lat = max($lat_sw, $lat_ne);
 		$min_lng = min($lng_sw, $lng_ne);
 		$max_lng = max($lng_sw, $lng_ne);
-		$sql = "SELECT d.id_direccion, c.nombre AS cliente_nombre, d.direccion, d.lat, d.lng
+		$sql = "SELECT d.id_direccion, 
+					COALESCE(
+						CASE 
+							WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+							WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+							ELSE NULLIF(c.nombre, '')
+						END,
+						'[SIN NOMBRE]'
+					) AS cliente_nombre, d.direccion, d.lat, d.lng
 					FROM direcciones d
 					LEFT JOIN clientes c ON d.id_cliente = c.id_cliente
 					LEFT JOIN rutas_direcciones rd ON d.id_direccion = rd.id_direccion
@@ -1140,7 +1156,7 @@ error_log("Valor de zip: ". $id_zip . " y " . $zip_usar);
 						AND d.lng IS NOT NULL
 						AND rd.id_direccion IS NULL
 						AND d.id_cliente IS NOT NULL
-					ORDER BY c.nombre";
+					ORDER BY cliente_nombre";
 		$param = [
 			':min_lat' => $min_lat,
 			':max_lat' => $max_lat,

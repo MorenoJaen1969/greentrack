@@ -449,7 +449,7 @@ class mainModel
         }
     }
 
-    protected function ejecutarComando($comando)
+    public function ejecutarComando($comando)
     {
         $sql = $this->conectar();
         $sql->exec($comando);

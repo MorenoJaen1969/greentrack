@@ -77,10 +77,67 @@ switch ($modulo) {
         $controller->datos_para_gps();  
         break;
 
+    case 'verificar_acceso':
+        $result = $controller->verificarAccesoParametros();
+        http_response_code($result['success'] ? 200 : 401);
+        echo json_encode($result);
+        break;
+        
+    case 'autenticar':
+        $result = $controller->autenticarParametros($inputData);
+        http_response_code($result['success'] ? 200 : 401);
+        echo json_encode($result);
+        break;
+        
+    case 'cerrar_sesion':
+        $result = $controller->cerrarSesionParametros();
+        echo json_encode($result);
+        break;
+        
+    case 'set_redirect_url':
+        $url = $inputData['url'] ?? '';
+        $result = $controller->setRedirectUrl($url);
+        echo json_encode($result);
+        break;
+        
+    case 'clear_redirect_url':
+        $result = $controller->clearRedirectUrl();
+        echo json_encode($result);
+        break;
+        
+    case 'es_url_protegida':
+        $url = $inputData['url'] ?? '';
+        $result = [
+            'success' => true,
+            'protegida' => $controller->esUrlProtegida($url),
+            'nivel_seguridad' => $controller->obtenerNivelSeguridad($url)
+        ];
+        echo json_encode($result);
+        break;
+        
+    case 'obtener_procesos_protegidos':
+        $result = $controller->obtenerProcesosProtegidos();
+        http_response_code(200);
+        echo json_encode(['success' => true, 'procesos' => $result]);
+        break;
+        
+    // Configuration methods
+    case 'obtener_configuracion':
+        $result = $controller->obtenerConfiguracion();
+        http_response_code($result['success'] ? 200 : 500);
+        echo json_encode($result);
+        break;
+        
+    case 'guardar_configuracion':
+        $result = $controller->guardarConfiguracion($inputData);
+        http_response_code($result['success'] ? 200 : 400);
+        echo json_encode($result);
+        break;
+        
     default:
         http_response_code(400);
-        echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);
-        exit();
+        echo json_encode(['error' => 'Invalid module: ' . $modulo]);
+        break;
 }
 
 exit();

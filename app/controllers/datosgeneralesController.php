@@ -19,10 +19,27 @@ class datosgeneralesController extends mainModel
 
 	private $o_f;
 
+	private $session_timeout = 300; // 5 minutes
+    
+    private function initParametrosSession()
+    {
+        if (!isset($_SESSION['parametros_auth'])) {
+            $_SESSION['parametros_auth'] = [
+                'authenticated' => false,
+                'username' => null,
+                'login_time' => null,
+                'attempts' => 0,
+                'locked_until' => null
+            ];
+        }
+    }
+
 	public function __construct()
 	{
 		// ¡ESTA LÍNEA ES CRUCIAL!
 		parent::__construct();
+
+        $this->initParametrosSession();
 
 		// Nombre del controlador actual abreviado para reconocer el archivo
 		$nom_controlador = "datosgeneralesController";
@@ -136,46 +153,13 @@ class datosgeneralesController extends mainModel
 				];
 			}, $resultado);
 
-        	echo json_encode(['valor' => $clave]);
+            echo json_encode(['valor' => $clave]);
 
 		} catch (Exception $e) {
 			$this->logWithBacktrace("Error crítico en obtenerClave: " . $e->getMessage(), true);
-	        echo json_encode(['valor' => []]);
+            echo json_encode(['valor' => []]);
 		}
 
-    }
-
-    public function tiempos_de_actividad() 
-    {
-        $query = "SELECT clave, valor, TIME_FORMAT(valor, '%H:%i') AS valor_hora
-			FROM configuracion_sistema
-			WHERE clave IN ('hora_cierre_sesion', 'hora_fin_jornada', 'hora_inicio_jornada')";
-
-        $parametros = [];
-
-		try {
-			$resultado = $this->ejecutarConsulta($query, '', $parametros, 'fetchAll');
-
-			// Valores por defecto
-			$parametros = [
-				'hora_cierre_sesion' => '18:30',
-				'hora_fin_jornada'     => '18:00',
-				'hora_inicio_jornada'  => '08:00'
-			];
-
-			if ($resultado && is_array($resultado)) {
-				foreach ($resultado as $fila) {
-					if ($fila['valor'] !== null) {
-						$parametros[$fila['clave']] = $fila['valor'];
-					}
-				}
-			}
-		    return $parametros; // ✅ SOLO RETURN, NUNCA ECHO
-
-		} catch (Exception $e) {
-			$this->logWithBacktrace("Error crítico en obtenerClave: " . $e->getMessage(), true);
-	        echo json_encode(['valor' => []]);
-		}
     }
 
 	public function datos_para_gps()
@@ -215,5 +199,441 @@ class datosgeneralesController extends mainModel
 			]);
 		}
 	}
+
+    public function tiempos_de_actividad() 
+    {
+        $query = "SELECT clave, valor, TIME_FORMAT(valor, '%H:%i') AS valor_hora
+			FROM configuracion_sistema
+			WHERE clave IN ('hora_cierre_sesion', 'hora_fin_jornada', 'hora_inicio_jornada')";
+
+        $parametros = [];
+
+		try {
+			$resultado = $this->ejecutarConsulta($query, '', $parametros, 'fetchAll');
+
+			// Valores por defecto
+			$parametros = [
+				'hora_cierre_sesion' => '18:30',
+				'hora_fin_jornada'     => '18:00',
+				'hora_inicio_jornada'  => '08:00'
+			];
+
+			if ($resultado && is_array($resultado)) {
+				foreach ($resultado as $fila) {
+					if ($fila['valor'] !== null) {
+						$parametros[$fila['clave']] = $fila['valor'];
+					}
+				}
+			}
+		    return $parametros; // ✅ SOLO RETURN, NUNCA ECHO
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("Error crítico en obtenerClave: " . $e->getMessage(), true);
+	        echo json_encode(['valor' => []]);
+		}
+    }
+
+   	// ========== EXISTING METHOD - DO NOT MODIFY ==========
+    // public function tiempos_de_actividad()
+    // {
+    //     $sql = "SELECT hora_inicio_jornada, hora_fin_jornada, hora_cierre_sesion 
+    //             FROM configuracion_sistema 
+    //             WHERE clave IN ('hora_inicio_jornada', 'hora_fin_jornada', 'hora_cierre_sesion')";
+        
+    //     $resultados = $this->ejecutarConsulta($sql, "", [], "fetchAll");
+        
+    //     $horarios = [
+    //         'hora_inicio_jornada' => '08:00',
+    //         'hora_fin_jornada' => '18:00',
+    //         'hora_cierre_sesion' => '18:30'
+    //     ];
+        
+    //     foreach ($resultados as $row) {
+    //         $horarios[$row['clave']] = $row['valor'];
+    //     }
+        
+    //     return $horarios;
+    // }
+    
+    // ========== NEW METHODS FOR PARAMETROS ==========
+    
+    // ========== NEW METHODS FOR PARAMETROS ==========
+    
+    /**
+     * Get all protected processes from database
+     */
+    public function obtenerProcesosProtegidos()
+    {
+        $sql = "SELECT url_proceso, nombre_proceso, nivel_seguridad 
+                FROM procesos_criticos 
+                WHERE activo = 1 AND requiere_autenticacion = 1 
+                ORDER BY nivel_seguridad DESC, nombre_proceso";
+        
+        $resultados = $this->ejecutarConsulta($sql, "", [], "fetchAll");
+        $this->log("Resultado de la consulta: " . json_encode($resultados));
+        
+        $procesos = [];
+        foreach ($resultados as $row) {
+            $procesos[$row['url_proceso']] = [
+                'nombre' => $row['nombre_proceso'],
+                'nivel' => $row['nivel_seguridad']
+            ];
+        }
+        
+        return $procesos;
+    }
+    
+    /**
+     * Check if URL is protected
+     */
+    public function esUrlProtegida($url)
+    {
+        $sql = "SELECT COUNT(*) 
+                FROM procesos_criticos 
+                WHERE url_proceso = :url 
+                AND activo = 1 
+                AND requiere_autenticacion = 1";
+        
+        $params = [':url' => $url];
+        $count = $this->ejecutarConsulta($sql, "", $params, "fetchColumn");
+        
+        return $count > 0;
+    }
+    
+    /**
+     * Get security level of a process
+     */
+    public function obtenerNivelSeguridad($url)
+    {
+        $sql = "SELECT nivel_seguridad 
+                FROM procesos_criticos 
+                WHERE url_proceso = :url 
+                AND activo = 1";
+        
+        $params = [':url' => $url];
+        $nivel = $this->ejecutarConsulta($sql, "", $params, "fetchColumn");
+        
+        return $nivel ?? 1; // Default level 1 if not found
+    }
+
+    /**
+     * Verify if user is authenticated for parametros access
+     */
+    public function verificarAccesoParametros()
+    {
+        if ($this->estaBloqueado()) {
+            return ['success' => false, 'message' => 'Too many failed attempts. Please try again later.'];
+        }
+        
+        if ($this->sessionExpirada()) {
+            $this->cerrarSesionParametros();
+            return ['success' => false, 'message' => 'Session expired. Please authenticate again.'];
+        }
+        
+        return [
+            'success' => $_SESSION['parametros_auth']['authenticated'],
+            'username' => $_SESSION['parametros_auth']['username'],
+            'nombre' => $_SESSION['parametros_auth']['nombre'] ?? null,
+            'redirect_url' => $_SESSION['parametros_auth']['redirect_url'] ?? null
+        ];
+    }
+    
+    /**
+     * Set redirect URL before authentication
+     */
+    public function setRedirectUrl($url)
+    {
+        $_SESSION['parametros_auth']['redirect_url'] = $url;
+        return ['success' => true, 'message' => 'Redirect URL set.'];
+    }
+    
+    /**
+     * Clear redirect URL after successful authentication
+     */
+    public function clearRedirectUrl()
+    {
+        $_SESSION['parametros_auth']['redirect_url'] = null;
+        return ['success' => true, 'message' => 'Redirect URL cleared.'];
+    }
+
+    /**
+     * Authenticate user for parametros access
+     * Uses existing usuarios table
+     */
+    public function autenticarParametros($inputData)
+    {
+        if ($this->estaBloqueado()) {
+            return ['success' => false, 'message' => 'Account temporarily locked.'];
+        }
+        
+        $username = $inputData['username'] ?? '';
+        $password = $inputData['password'] ?? '';
+        
+        if (empty($username) || empty($password)) {
+            return ['success' => false, 'message' => 'Username and password are required.'];
+        }
+        
+        // Check if user exists and has access to parametros
+        $usuario = $this->obtenerUsuario($username);
+        
+        if (!$usuario || !password_verify($password, $usuario['password_hash'])) {
+            $this->registrarIntentoFallido();
+            return ['success' => false, 'message' => 'Invalid credentials.'];
+        }
+        
+        // Check if user has permission to access parametros
+        if (!$this->tienePermisoParametros($usuario['id'])) {
+            return ['success' => false, 'message' => 'You do not have permission to access General Parameters.'];
+        }
+        
+        $_SESSION['parametros_auth'] = [
+            'authenticated' => true,
+            'username' => $username,
+            'nombre' => $usuario['nombre'],
+            'email' => $usuario['email'],
+            'login_time' => time(),
+            'attempts' => 0,
+            'locked_until' => null,
+            'redirect_url' => $_SESSION['parametros_auth']['redirect_url'] ?? null
+        ];
+        
+        return [
+            'success' => true, 
+            'message' => 'Authentication successful.',
+            'user' => [
+                'username' => $username,
+                'nombre' => $usuario['nombre'],
+                'email' => $usuario['email']
+            ],
+            'redirect_url' => $_SESSION['parametros_auth']['redirect_url']
+        ];
+    }
+    
+    /**
+     * Close parametros session
+     */
+    public function cerrarSesionParametros()
+    {
+        $_SESSION['parametros_auth'] = [
+            'authenticated' => false,
+            'username' => null,
+            'nombre' => null,
+            'login_time' => null,
+            'attempts' => 0,
+            'locked_until' => null,
+            'redirect_url' => null
+        ];
+        
+        return ['success' => true, 'message' => 'Session closed successfully.'];
+    }
+    
+    /**
+     * Get all configuration parameters
+     */
+    public function obtenerConfiguracion()
+    {
+        $sql = "SELECT clave, valor, descripcion FROM configuracion_sistema ORDER BY clave";
+        $resultados = $this->ejecutarConsulta($sql, "", [], "fetchAll");
+        
+        $config = [];
+        foreach ($resultados as $row) {
+            $config[$row['clave']] = [
+                'valor' => $row['valor'],
+                'descripcion' => $row['descripcion']
+            ];
+        }
+        
+        return ['success' => true, 'config' => $config];
+    }
+    
+    /**
+     * Save configuration parameter
+     */
+    public function guardarConfiguracion($inputData)
+    {
+        $clave = $this->limpiarCadena($inputData['clave'] ?? '');
+        $valor = $this->limpiarCadena($inputData['valor'] ?? '');
+        
+        if (empty($clave)) {
+            return ['success' => false, 'message' => 'Parameter key is required.'];
+        }
+        
+        // Validate specific parameters
+        $validacion = $this->validarParametro($clave, $valor);
+        if (!$validacion['success']) {
+            return $validacion;
+        }
+        
+        // Check if parameter exists
+        $sql_check = "SELECT COUNT(*) FROM configuracion_sistema WHERE clave = :clave";
+        $exists = $this->ejecutarConsulta($sql_check, "", [':clave' => $clave], "fetchColumn");
+        
+        if ($exists) {
+            // Update existing parameter
+            $datos = [
+                ['campo_nombre' => 'valor', 'campo_marcador' => ':valor', 'campo_valor' => $valor]
+            ];
+            $condicion = [
+                'condicion_campo' => 'clave',
+                'condicion_operador' => '=',
+                'condicion_marcador' => ':clave',
+                'condicion_valor' => $clave
+            ];
+            
+            $result = $this->actualizarDatos('configuracion_sistema', $datos, $condicion);
+            
+            if ($result) {
+                return ['success' => true, 'message' => "Parameter '{$clave}' updated successfully."];
+            } else {
+                return ['success' => false, 'message' => 'Error updating parameter.'];
+            }
+        } else {
+            // Insert new parameter
+            $datos = [
+                ['campo_nombre' => 'clave', 'campo_marcador' => ':clave', 'campo_valor' => $clave],
+                ['campo_nombre' => 'valor', 'campo_marcador' => ':valor', 'campo_valor' => $valor],
+                ['campo_nombre' => 'descripcion', 'campo_marcador' => ':descripcion', 'campo_valor' => $inputData['descripcion'] ?? '']
+            ];
+            
+            $result = $this->guardarDatos('configuracion_sistema', $datos);
+            
+            if ($result) {
+                return ['success' => true, 'message' => "Parameter '{$clave}' created successfully."];
+            } else {
+                return ['success' => false, 'message' => 'Error creating parameter.'];
+            }
+        }
+    }
+    
+    /**
+     * Validate parameter value based on key
+     */
+    private function validarParametro($clave, $valor)
+    {
+        switch ($clave) {
+            case 'hora_inicio_jornada':
+            case 'hora_fin_jornada':
+            case 'hora_cierre_sesion':
+                // Validate time format HH:mm:ss
+                if (!preg_match('/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/', $valor)) {
+                    return ['success' => false, 'message' => 'Invalid time format. Use HH:mm:ss'];
+                }
+                break;
+                
+            case 'inicio_invierno':
+            case 'fin_invierno':
+                // Validate date format MM-DD
+                if (!preg_match('/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/', $valor)) {
+                    return ['success' => false, 'message' => 'Invalid date format. Use MM-DD'];
+                }
+                break;
+                
+            case 'mapa_base':
+                // Validate allowed values
+                if (!in_array($valor, ['OSM', 'ESRI', 'GMAP'])) {
+                    return ['success' => false, 'message' => 'Invalid map base. Allowed values: OSM, ESRI, GMAP'];
+                }
+                break;
+                
+            case 'reorganizar_invierno':
+                // Validate boolean
+                if (!in_array(strtolower($valor), ['true', 'false', '1', '0'])) {
+                    return ['success' => false, 'message' => 'Invalid boolean value. Use true/false or 1/0'];
+                }
+                break;
+                
+            case 'radio_geocerca':
+            case 'tiempo_minimo_parada':
+            case 'umbral_course':
+            case 'umbral_metros':
+            case 'umbral_minutos':
+                // Validate positive integer
+                if (!preg_match('/^\d+$/', $valor) || intval($valor) < 0) {
+                    return ['success' => false, 'message' => 'Invalid number. Must be a positive integer.'];
+                }
+                break;
+                
+            default:
+                // No validation for other parameters
+                break;
+        }
+        
+        return ['success' => true, 'message' => 'Validation passed.'];
+    }
+    
+    /**
+     * Get user from database
+     */
+    private function obtenerUsuario($username)
+    {
+        $sql = "SELECT id, username, password_hash, nombre, email 
+                FROM usuarios_ejecutivos 
+                WHERE username = :username AND activo = 1";
+        $params = [':username' => $username];
+        
+        return $this->ejecutarConsulta($sql, "", $params);
+    }
+    
+    /**
+     * Check if user has permission to access parametros
+     * You can customize this logic based on your permission system
+     */
+    private function tienePermisoParametros($id_usuario)
+    {
+        // Option 1: Check if user is in specific role/area
+        $sql = "SELECT area FROM usuarios_ejecutivos WHERE id = :id_usuario";
+        $params = [
+            ':id_usuario' => $id_usuario
+        ];
+        $area = $this->ejecutarConsulta($sql, "", $params, "fetchColumn");
+        
+        // Allow access if user is in 'sistema' area or similar
+        $areas_autorizadas = ['sistema', 'administracion'];
+        return in_array($area, $areas_autorizadas);
+        
+        // Option 2: Check specific permission table
+        // $sql = "SELECT COUNT(*) FROM permisos_usuarios 
+        //         WHERE id_usuario = :id_usuario AND permiso = 'parametros'";
+        // $tiene_permiso = $this->ejecutarConsulta($sql, "", [':id_usuario' => $id_usuario], "fetchColumn");
+        // return $tiene_permiso > 0;
+    }
+    
+    // ========== PRIVATE METHODS ==========
+    
+    private function registrarIntentoFallido()
+    {
+        $_SESSION['parametros_auth']['attempts']++;
+        
+        if ($_SESSION['parametros_auth']['attempts'] >= 5) {
+            $_SESSION['parametros_auth']['locked_until'] = time() + 300; // 5 minutes
+        }
+    }
+    
+    private function estaBloqueado()
+    {
+        if (!isset($_SESSION['parametros_auth']['locked_until'])) {
+            return false;
+        }
+        
+        if ($_SESSION['parametros_auth']['locked_until'] !== null && 
+            time() < $_SESSION['parametros_auth']['locked_until']) {
+            return true;
+        }
+        
+        // Reset lock
+        $_SESSION['parametros_auth']['locked_until'] = null;
+        $_SESSION['parametros_auth']['attempts'] = 0;
+        return false;
+    }
+    
+    private function sessionExpirada()
+    {
+        if (!$_SESSION['parametros_auth']['authenticated']) {
+            return true;
+        }
+        
+        $login_time = $_SESSION['parametros_auth']['login_time'];
+        return (time() - $login_time) > $this->session_timeout;
+    }	
 }
 ?>    

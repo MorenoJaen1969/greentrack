@@ -1422,6 +1422,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // === Variables de estado ===
     let estadoTemporal = null;
 
+    function carga_manual(){
+
+    }
+
     // === Habilitar edición por botón ===
     window.prepararAccion = function (id_servicio, nuevoEstado) {
         const acciones = document.getElementById('acciones-notas');
@@ -1818,7 +1822,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // === Control botón "Select Despacho" ===
+    // === Control botón "Select Despacho" === 
     document.getElementById('btn-select-despacho').addEventListener('click', async () => {
         let formFlotante = document.getElementById('form-flotante-historico');
         if (formFlotante) {
@@ -1850,7 +1854,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // 👇 OBSERVADOR DEL PANEL DERECHO
+        // 👇 OBSERVADOR DEL PANEL DERECHO 
         const panelDerecho = document.getElementById('lista-no-asignados');
         if (panelDerecho) {
             const observer = new MutationObserver((mutations) => {
@@ -1873,18 +1877,94 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.getElementById('fecha-despacho')?.addEventListener('change', async (e) => {
-        // Opcional: guardar en una variable global o recargar
+        // Opcional: guardar en una variable global o recargar 
         window.fechaDespachoSeleccionada = e.target.value;
         await cargarListaDespacho();
+    });
+
+    document.getElementById('btn-guardar-despacho')?.addEventListener('click', async (e) => {
+        const fecha_des = document.getElementById('fecha-despacho').value;
+        const confirmado = await suiteConfirm(
+            "Generate Service Records",
+            `This process cannot be reversed. Are you sure you want to process the service for ${fecha_des}?\n\nPlease confirm your response.`
+        );
+
+        if (!confirmado) return;
+
+        const tipo_servicio = await suiteConfirm(
+            "Service dynamics",
+            `Will the process be performed MANUALLY, or AUTOMATICALLY?\n\nPlease confirm your response.`,
+            {
+                aceptar: 'Manual',
+                cancelar: 'Automatic'
+            }                
+        );
+
+        let sel_tipo_ser = 0;
+        if (!tipo_servicio) {
+            await suiteAlertInfo("Automatic Process", "You have chosen to process the service AUTOMATICALLY. Please proceed with the necessary steps.");
+            sel_tipo_ser = 0;
+        }else{
+            await openModal();
+            sel_tipo_ser = 1;
+        }
+        await cargarListaDespacho();
+    });
+
+    document.getElementById('reporte')?.addEventListener('click', async (e) => {
+        const fecha_des = document.getElementById('fecha-despacho').value;
+
+        const res = await fetch('/app/ajax/serviciosAjax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                modulo_servicios: 'generar_reporte',
+                fecha_despacho: fecha_des
+            })
+        });
+
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const respuesta = await res.json();
+
+        if (respuesta.success && respuesta.pdfs) {
+            // Descargar cada PDF
+            respuesta.pdfs.forEach(pdf => {
+                const link = document.createElement('a');
+                link.href = pdf.url;
+                link.download = pdf.nombre;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+            
+            await suiteAlertSuccess("Success", `${respuesta.pdfs.length} downloaded reports`);
+        } else {
+            await suiteAlertError("Error", respuesta.error || "It could not be completed");
+        }
     });
 
     async function cargarListaDespacho() {
         try {
             const fecha_despacho = document.getElementById('fecha-despacho')?.value || formatearFechaInput(new Date());
 
+            // Validar fecha para habilitar/deshabilitar botones
+            if (fecha_despacho < formatearFechaInput(new Date())) {
+                document.getElementById('reordenar')?.setAttribute('disabled', 'disabled');
+                document.getElementById('btn-guardar-despacho')?.setAttribute('disabled', 'disabled');
+            } else {
+                document.getElementById('reordenar')?.removeAttribute('disabled');
+                document.getElementById('btn-guardar-despacho')?.removeAttribute('disabled');
+            }
+            
             window.listaAsignados = document.getElementById('lista-asignados');
             window.listaNoAsignados = document.getElementById('lista-no-asignados');
             window.htmlTotalTiempo = document.getElementById('htmlTotalTiempo');
+
+            // --- CORRECCIÓN: Validar que los elementos existen ---
+            if (!window.listaAsignados || !window.listaNoAsignados) {
+                console.error('❌ Los contenedores de listas no existen en el DOM');
+                return;
+            }
 
             let editable = true;
 
@@ -1901,17 +1981,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (!res.ok) throw new Error('HTTP ' + res.status);
             const respuesta = await res.json();
-            if (respuesta.success === false) {
-                const la = document.getElementById('lista-asignados');
-                const lna = document.getElementById('lista-no-asignados');
-                if (la) la.innerHTML = `<p>❌ ${respuesta.mess} </p>`;
-                if (lna) lna.innerHTML = `<p>❌ ${respuesta.mess} </p>`;
-            } else {
 
+            if (respuesta.success === false) {
+                window.listaAsignados.innerHTML = `<p>❌ ${respuesta.mess} </p>`;
+                window.listaNoAsignados.innerHTML = `<p>❌ ${respuesta.mess} </p>`;
+            } else {
                 window.listaNoAsignados.innerHTML = respuesta.html_no_asignados;
                 window.listaAsignados.innerHTML = respuesta.html_asignados;
-                window.htmlTotalTiempo.innerHTML = respuesta.htmlTotalTiempo;
 
+                // --- CORRECCIÓN: Validar antes de asignar innerHTML ---
+                console.log("container: ", window.htmlTotalTiempo);
+                console.log("Respuesta: ", respuesta.htmlTotalTiempo);
+                
+                if (window.htmlTotalTiempo) {
+                    window.htmlTotalTiempo.innerHTML = respuesta.htmlTotalTiempo;
+                } else {
+                    console.warn('⚠️ El elemento #htmlTotalTiempo no existe en el DOM');
+                }
+                
                 editable = respuesta.editable;
 
                 const tit_tipo_servicio = document.getElementById('tit_tipo_servicio');
@@ -2265,7 +2352,8 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
         }
 
         // ✅ Actualizar contadores
-        actualizarContadorPanel(window.listaAsignados, 'pie_panel_izquierdo');
+        //actualizarContadorPanel(window.listaAsignados, 'pie_panel_izquierdo');
+        actualizarContadorPanel(window.listaAsignados, 'totalRegistros');
         actualizarContadorPanel(window.listaNoAsignados, 'pie_panel_derecho');
 
         // Deshabilitar botones

@@ -66,6 +66,12 @@ switch ($opcion) {
         $nuevo_reg = "status_allNew";
         break;
 
+    case 'usuarios':
+        $titulo_act = "Users";
+        $clase = "fa-solid fa-users";
+        $nuevo_reg = "usuariosNew";
+        break;
+
     case 'vehiculos':
         $titulo_act = "Vehicles";
         $clase = "fa-solid fa-truck-pickup";

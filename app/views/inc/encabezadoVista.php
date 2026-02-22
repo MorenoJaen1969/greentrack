@@ -10,7 +10,7 @@ switch ($opcion) {
         $clase = "fa-solid fa-tags";
         break;
 
-    case 'clienteVista':
+    case 'clientesVista':
         $titulo_act = "Customer view";
         $clase = "fa-solid fa-user-pen";
         break;
@@ -41,8 +41,13 @@ switch ($opcion) {
         break;
 
     case 'serviciosLista':
-        $titulo_act = "Service List";
+        $titulo_act = "Service List view";
         $clase = "fa-solid fa-person-digging";
+        break;
+
+    case 'usuariosVista':
+        $titulo_act = "User view";
+        $clase = "fa-solid fa-user-gear";
         break;
 
     case 'vehiculoVista':

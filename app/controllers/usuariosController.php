@@ -24,7 +24,7 @@ class usuariosController extends mainModel
 		// ¡ESTA LÍNEA ES CRUCIAL!
 		parent::__construct();
 
-		// Nombre del controlador actual abreviado para reconocer el archivo
+		// Nombre del controlador actual abreviado para reconocer el archivo 
 		$nom_controlador = "usuariosController";
 		// ____________________________________________________________________
 
@@ -120,6 +120,196 @@ class usuariosController extends mainModel
 		$logMessage = sprintf("[%s] %s - Called from %s::%s (Line %d)%s%s", date('Y-m-d H:i:s'), $message, $caller['class'] ?? '', $caller['function'], $caller['line'], PHP_EOL, "Stack trace:" . PHP_EOL . json_encode($backtrace, JSON_PRETTY_PRINT));
 		file_put_contents($this->errorLogFile, $logMessage . PHP_EOL, FILE_APPEND | LOCK_EX);
 	}
+
+	/*----------  Controlador listar usuario  ----------*/
+	public function listarUsuarioControlador($dato_ori)
+	{
+		$pagina_usuarios = $dato_ori[0];
+		$registrosPorPagina = $dato_ori[1];
+		$url1 = $dato_ori[2];
+		$busca_frase = $dato_ori[3];
+		$ruta_retorno = $dato_ori[4];
+		$orden = $dato_ori[5];
+		$direccion  = $dato_ori[6];
+
+
+		$pagina = $this->limpiarCadena($pagina_usuarios);
+		$registros = $this->limpiarCadena($registrosPorPagina);
+
+		$url = $this->limpiarCadena($url1);
+		$url = APP_URL . $url . "/";
+
+		$busqueda = $this->limpiarCadena($busca_frase);
+		$tabla = "";
+
+		$pagina = (isset($pagina) && $pagina > 0) ? (int) $pagina : 1;
+		$inicio = ($pagina > 0) ? (($pagina * $registros) - $registros) : 0;
+
+		if (isset($busqueda) && $busqueda != "") {
+			$consulta_datos = "SELECT * 
+				FROM usuarios_ejecutivos 
+				WHERE ((id != 1 AND id != 7)
+					AND (nombre LIKE '%$busqueda%' OR email LIKE '%$busqueda%' OR username LIKE '%$busqueda%')) 
+				ORDER BY nombre ASC LIMIT $inicio,$registros";
+
+			$consulta_total = "SELECT COUNT(id) 
+				FROM usuarios_ejecutivos 
+				WHERE ((id != 1 AND id != 7)
+					AND (nombre LIKE '%$busqueda%' OR email LIKE '%$busqueda%' OR username LIKE '%$busqueda%'))";
+		} else {
+			$consulta_datos = "SELECT * 
+				FROM usuarios_ejecutivos 
+				WHERE (id != 1 AND id != 7)
+					ORDER BY nombre ASC LIMIT $inicio,$registros";
+
+			$consulta_total = "SELECT COUNT(id) 
+				FROM usuarios_ejecutivos
+				WHERE (id != 1 AND id != 7)";
+		}
+
+		$datos = $this->ejecutarConsulta($consulta_datos, "", [], "fetchAll");
+
+		$total = $this->ejecutarConsulta($consulta_total, "", [], "fetchColumn");
+
+		$numeroPaginas = ceil($total / $registros);
+
+		$tabla .= '
+				<div class="table-container">
+				<table class="table is-bordered is-striped is-narrow is-hoverable is-fullwidth">
+					<thead class="cabecera">
+						<tr>
+							<th class="has-text-centered">#</th>
+							<th class="has-text-centered w_max"><i class="fa-solid fa-camera"></i></th>
+							<th class="has-text-centered">Name</th>
+							<th class="has-text-centered">User</th>
+							<th class="has-text-centered">Email</th>
+							<th class="has-text-centered" colspan="2">Options</th>
+						</tr>
+					</thead>
+					<tbody>
+			';
+
+		if ($total >= 1 && $pagina <= $numeroPaginas) {
+			$contador = $inicio + 1;
+			$pag_inicio = $inicio + 1;
+
+			$ruta_usuarios = '/usuarios/' . $pagina . '/';
+
+			foreach ($datos as $rows) {
+				$ruta_destino = RUTA_APP . "/usuariosVista/usuarios/" . $rows['id'] . $ruta_usuarios;
+				$ruta_Photo = RUTA_APP . "/usuariosPhoto/usuariosVista/" . $rows['id'] . $ruta_usuarios;
+
+				$tabla .= '
+						<tr class="has-text-centered" >
+							<td>' . $contador . '</td>
+                            <td class="person-info">';
+
+                if (empty($rows['usuario_foto'])) {
+                    if ($rows['id_sexo'] == 1) {
+                        $tabla .= '<img class="is-rounded side_little" src="/app/views/fotos/responsable.png">';
+                    } else {
+                        $tabla .= '<img class="is-rounded side_little" src="/app/views/fotos/responsable-mujer.png">';
+                    }
+                } else {
+                    //$ruta_img = RUTA_APP . '/app/views/img/uploads/fotos/'. $rows['usuario_foto'];
+                    $ruta_img = '/app/views/img/uploads/fotos/' . $rows['usuario_foto'];
+                    if ($this->isFile($ruta_img)) {
+                        $foto_act = '/app/views/img/uploads/fotos/'. $rows['usuario_foto'];
+                        $tabla .= '<img class="is-rounded  side_little" src="' . $foto_act . '">';
+                    } else {
+                        if ($rows['id_sexo'] == 1) {
+                            $tabla .= '<img class="is-rounded side_little" src="/app/views/fotos/responsable.png">';
+                        } else {
+                            $tabla .= '<img class="is-rounded side_little" src="/app/views/fotos/responsable-mujer.png">';
+                        }
+                    }
+                }
+                $tabla .= '
+                            </td>
+							<td>' . $rows['nombre'] . '</td>
+							<td>' . $rows['username'] . '</td>
+							<td>' . $rows['email'] . '</td>
+							<td>
+                                <a href="' . $ruta_destino . $rows['id'] . '" 
+									class="button is-link is-rounded is-small" 
+									id="a_id" 
+									name="a_id"
+									title="View User details">
+										<span class="fas fa-eye">
+								</a>
+                            </td>
+
+							<td>
+								<form class="FormularioAjax" action="' . APP_URL . 'app/ajax/usuariosAjax.php" method="POST" autocomplete="off" >
+
+									<input type="hidden" name="modulo_usuarios" value="eliminar">
+									<input type="hidden" name="id" value="' . $rows['id'] . '">
+
+									<button type="submit" class="button is-danger is-rounded is-small"><span class="fa fa-trash"></span></button>
+								</form>
+							</td>
+						</tr>
+					';
+				$contador++;
+			}
+			$pag_final = $contador - 1;
+		} else {
+			if ($total >= 1) {
+				$tabla .= '
+						<tr class="has-text-centered" >
+							<td colspan="7">
+								<a href="' . $url . '1/" class="button is-link is-rounded is-small mt-4 mb-4">
+									Click here to refresh the list.
+								</a>
+							</td>
+						</tr>
+					';
+			} else {
+				$tabla .= '
+						<tr class="has-text-centered" >
+							<td colspan="7">
+								There are no records in the system.
+							</td>
+						</tr>
+					';
+			}
+		}
+
+		$tabla .= '</tbody></table></div>';
+
+		### Paginacion ###
+		if ($total > 0 && $pagina <= $numeroPaginas) {
+			$tabla .= '
+                    <div class="vis_min">    
+						<p class="has-text-right">Showing users <strong>' . $pag_inicio . '</strong> to <strong>' . $pag_final . '</strong> of a <strong>total of ' . $total . '</strong></p>
+					</div>';
+			$id_codigos = [
+				'id_obra' => 0,
+				'id_partida' => 0
+			];
+			$tabla .= $this->paginadorTablas($pagina, $numeroPaginas, $url, 7, $id_codigos);
+		}
+		return $tabla;
+	}
+
+	/*---------- Funcion seleccionar datos ----------*/
+	public function seleccionarDatos($id)
+	{
+		$sql = "SELECT * 
+			FROM usuarios_ejecutivos 
+			WHERE id = :v_id_user";
+		$paramValue = [
+			'v_id_user' => $id
+		];
+		$res_imagenes = $this->ejecutarConsulta($sql, "", $paramValue);
+
+		return $res_imagenes;
+	}
+
+	public function isFile($file) {
+        $f = pathinfo($file, PATHINFO_EXTENSION);
+        return (strlen($f) > 0) ? true : false;
+    }	
 
     public function nuevo_usuario($paquete){
 
@@ -337,5 +527,135 @@ class usuariosController extends mainModel
 			$this->logWithBacktrace("Intento de cambio de avatar fallido: error al mover el archivo", true);
 			return false; // Error al mover el archivo
 		}
+	}
+
+	public function consulta_registro($param_dat)
+	{
+		$id_usuario = $param_dat['id_usuario'];
+		$sql = "SELECT * 
+			FROM usuarios_ejecutivos
+			WHERE id = :v_user_id";
+
+		$params = [
+			':v_user_id' => $id_usuario
+		];
+
+		$this->log("Consulta de Usuario unico" . $sql);
+		
+		$result = $this->ejecutarConsulta($sql, '', $params);
+		return $result;
+	}
+
+	public function guardarCambios($datos, $archivo){
+		$id = (int) $datos['id_usuario'];
+		$nombre = $datos['nombre'];
+		$username = $datos['username'];
+		$activo = (int) $datos['activo'];
+		$phone = $datos['phone'];
+		$chat_activo = (int) $datos['chat_activo'];
+
+		// Llamar al controlador
+		$datos_actualizar = [
+			['campo_nombre' => 'nombre', 'campo_marcador' => ':nombre', 'campo_valor' => $nombre],
+			['campo_nombre' => 'username', 'campo_marcador' => ':username', 'campo_valor' => $username],
+			['campo_nombre' => 'activo', 'campo_marcador' => ':activo', 'campo_valor' => $activo],
+			['campo_nombre' => 'phone', 'campo_marcador' => ':phone', 'campo_valor' => $phone],
+			['campo_nombre' => 'chat_activo', 'campo_marcador' => ':chat_activo', 'campo_valor' => $chat_activo]
+		];
+
+		$condicion = [
+			'condicion_campo' => 'id',
+			'condicion_operador' => '=', 
+			'condicion_marcador' => ':id',
+			'condicion_valor' => $id
+		];
+
+		$cod_respuesta = 200;
+		// Manejar subida de imagen si existe
+		$file = $archivo['fileInput'];
+		if(!empty($file['name']) && !empty($file['tmp_name'])) {
+			$target_dir = "../views/img/uploads/fotos/";
+			$imageFileType = strtolower(pathinfo($file["name"], PATHINFO_EXTENSION));
+			$new_filename = $username . "_" . uniqid() . "." . $imageFileType;
+			$target_file = $target_dir . $new_filename;
+
+			// Validar que sea una imagen
+			$check = getimagesize($file["tmp_name"]);
+			if($check === false) {
+				$cod_respuesta = 400;
+				$mensaje = [
+					'tipo' => 'error',
+					'texto' => 'The file is not a valid image.'
+				];
+			}
+
+			// Verificar tamaño (4MB límite)
+			if ($file["size"] > 4000000) {
+				$cod_respuesta = 400;
+				$mensaje = [
+					'tipo' => 'error',
+					'texto' => 'The file is too large. Maximum size is 4MB.'
+				];
+			}
+
+			// Verificar formato de archivo
+			if(!in_array($imageFileType, ["jpg", "jpeg", "png", "gif"])) {
+				$cod_respuesta = 400;
+				$mensaje = [
+					'tipo' => 'error',
+					'texto' => 'Only JPG, JPEG, PNG and GIF files are allowed.'
+				];
+			}
+
+			// Subir archivo
+			if(move_uploaded_file($file["tmp_name"], $target_file)) {
+				// Agregar campo de imagen a los datos a actualizar
+				$datos_actualizar[] = [
+					'campo_nombre' => 'usuario_foto',
+					'campo_marcador' => ':usuario_foto',
+					'campo_valor' => $new_filename
+				];
+			} else {
+				$cod_respuesta = 500;
+				$mensaje = [
+					'tipo' => 'error',
+					'texto' => 'Error uploading the image. Please try again.'
+				];
+			}
+		}
+
+		// Actualizar datos en la base de datos
+		if ($cod_respuesta == 200){
+			try {
+				$resulta = $this->actualizarDatos("usuarios_ejecutivos", $datos_actualizar, $condicion);
+				
+				if ($resulta === "No hay cambios") {
+					$mensaje = [
+						'tipo' => 'info', 
+						'texto' => 'There were no changes to be made.'
+					];
+				} elseif ($resulta === 1) {
+					$mensaje = [
+						'tipo' => 'success', 
+						'texto' => 'User updated successfully.'
+					];
+				} else {
+					throw new Exception("The user could not be updated.");
+				}
+				
+			} catch (Exception $e) {
+				$cod_respuesta = 500;
+				$mensaje = [
+					'tipo' => 'error', 
+					'texto' => $e->getMessage()
+				];
+			}
+		} 
+
+		$resulta = [
+			$cod_respuesta,
+			$mensaje
+		];
+		return $resulta;
 	}
 }

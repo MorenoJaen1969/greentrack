@@ -201,7 +201,8 @@ class contratosController extends mainModel
 		$semanas_var = "Weeks";
 		$dias_var = "Days";
 
-		$campos = "c.*, ct.nombre AS cliente_nombre, ct.apellido AS cliente_apellido, d.dia_ingles AS day_work, ar.descripcion as area_desc,
+		$campos = "c.*, ct.id_tipo_persona, ct.nombre AS cliente_nombre, ct.apellido AS cliente_apellido, ct.nombre_comercial, 
+			d.dia_ingles AS day_work, ar.descripcion as area_desc,
 			ct.telefono AS cliente_telefono, ct.email AS cliente_email, s.status, fs.concepto, se.id_servicio, se.fecha_programada,
 			CASE
 				WHEN c.fecha_fin <= CURDATE() THEN '$vencido_var'
@@ -230,11 +231,23 @@ class contratosController extends mainModel
 
 		$where = " c.id_status != 49 ";
 
+		// === Generar la cláusula ORDER BY ===
+		$orden_r = "CASE 
+			WHEN ct.id_tipo_persona = 1 THEN 
+				LOWER(CONCAT(
+					COALESCE(ct.nombre, ''),
+					' ',
+					COALESCE(ct.apellido, '')
+				))
+			WHEN ct.id_tipo_persona = 2 THEN 
+				LOWER(COALESCE(ct.nombre_comercial, ''))
+			ELSE ''
+		END";
+
 		if (isset($busqueda) && $busqueda != "") {
 			// === Generar la cláusula ORDER BY ===
-			$orden_r = "ct.nombre";
 
-			$campos_filtro = "ct.nombre LIKE '%$busqueda%' OR ct.apellido LIKE '%$busqueda%' OR d.dia_ingles LIKE '%$busqueda%'";
+			$campos_filtro = "ct.nombre LIKE '%$busqueda%' OR ct.apellido LIKE '%$busqueda%' OR ct.nombre_comercial LIKE '%$busqueda%' OR d.dia_ingles LIKE '%$busqueda%'";
 
 			$consulta_datos = "SELECT " . $campos . " 
                     FROM contratos c
@@ -272,9 +285,6 @@ class contratosController extends mainModel
 					WHERE " . $where . " AND " . $campos_filtro;
 
 		} else {
-			// === Generar la cláusula ORDER BY ===
-			$orden_r = "ct.nombre";
-
 			// Consulta principal: lista todos los contratos con tiempo restante
 			$consulta_datos = "SELECT " . $campos . " 
                     FROM contratos c
@@ -342,6 +352,7 @@ class contratosController extends mainModel
 							<th class="has-text-centered">#</th>
 							<th class="has-text-centered">Contract</th>
 							<th class="has-text-centered">Responsible</th>
+							<th class="has-text-centered">Contract</th>
 							<th class="has-text-centered">Time Remaining</th>
 							<th class="has-text-centered">Area</th>
 							<th class="has-text-centered">Service Frequency</th>
@@ -409,8 +420,24 @@ class contratosController extends mainModel
 				$tabla .= '
                         <tr class="has-text-centered table-row">
                             <td>' . $contador . '</td>
-                            <td>' . $this->ceros($rows['id_contrato']) . '</td>
-                            <td>' . $rows['cliente_nombre'] . " " . $rows['cliente_apellido'] . '</td>
+                            <td>' . $this->ceros($rows['id_contrato']) . '</td>';
+				if (empty($rows['nombre_comercial'])){
+				$tabla .= '
+                            <td>' . $rows['cliente_nombre'] . " " . $rows['cliente_apellido'] . '</td>';
+				}else{
+				$tabla .= '
+                            <td>' . $rows['nombre_comercial'] . '</td>';
+				}	
+
+				if (empty($rows['nombre'])){
+					$nom_contrato = $rows['nombre_comercial'];
+				} else {
+					$nom_contrato = $rows['nombre'];
+				}
+				$tabla .= '
+							<td>' . $nom_contrato . '</td>';
+										
+				$tabla .= '
                             <td>
 								<div style="width: 10vw; height: 25px; background: linear-gradient(to right, #4CAF50, #2196F3, #F44336);
 									position: relative; border-radius: 8px; overflow: hidden; margin-right: auto; margin-left: auto;">
@@ -484,7 +511,15 @@ class contratosController extends mainModel
 
 	public function crearContratos()
 	{
-		$query = "SELECT s.id_servicio, s.id_cliente, c.nombre AS cliente, s.id_direccion, d.direccion
+		$query = "SELECT s.id_servicio, s.id_cliente, 
+					COALESCE(
+						CASE 
+							WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+							WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+							ELSE NULLIF(c.nombre, '')
+						END,
+						'[SIN NOMBRE]'
+					) AS cliente, s.id_direccion, d.direccion
 				FROM servicios AS s
 				LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
 				LEFT JOIN direcciones AS d ON s.id_direccion = d.id_direccion
@@ -529,7 +564,7 @@ class contratosController extends mainModel
 		$sql = "SELECT c.id_contrato, c.contrato_origen, c.id_cliente, c.nombre AS nom_contrato, cl.nombre, cl.apellido, cl.telefono, cl.email, c.id_direccion,
 					d.direccion, c.costo, c.fecha_ini, c.fecha_fin, c.id_status, s.status, s.color, c.id_ruta, c.id_frecuencia_servicio, fs.concepto, 
 					c.id_frecuencia_pago, c.id_dia_semana, c.secondary_day, ds.dia_ingles AS day_work, c.notas, c.observaciones, c.num_semanas, c.tiempo_servicio,
-					c.retraso_invierno, ar.descripcion as nom_area, c.id_area, c.fecha_cancelacion
+					c.retraso_invierno, ar.descripcion as nom_area, c.id_area, c.fecha_cancelacion, cl.nombre_comercial, cl.id_tipo_persona
 				FROM contratos c
 				LEFT JOIN clientes AS cl ON cl.id_cliente = c.id_cliente
 				LEFT JOIN direcciones AS d ON d.id_direccion = c.id_direccion
@@ -1007,7 +1042,7 @@ class contratosController extends mainModel
 							AND ss.fecha_programada > ct.fecha_cancelacion";
 					$params = [
 						":v_id_contrato" => $id_contrato,
-						"v_id_status" => $id_status
+						":v_id_status" => $id_status
 					];
 					$borrados = $this->ejecutarConsulta($sql, "", $params, "fetchAll");
 				}			

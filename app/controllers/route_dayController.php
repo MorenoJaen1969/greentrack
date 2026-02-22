@@ -122,50 +122,50 @@ class route_dayController extends mainModel
 	}
 
 	public function rutas_disponibles($day){
+		$consulta = "SELECT id_dia_semana
+			FROM dias_semana
+			WHERE dia_ingles = :v_dia_ingles";
+		$param = [
+			':v_dia_ingles' => $day
+		];
+		$id_dia_semana = $this->ejecutarConsulta($consulta, "", $param, "fetchColumn");
 
 		$sql = "SELECT r.id_ruta, r.nombre_ruta, r.color_ruta, 000000 AS clientes_compatibles
 			FROM rutas r
+			LEFT JOIN rutas_direcciones rd ON rd.id_ruta = r.id_ruta
+			LEFT JOIN contratos c ON c.id_direccion = rd.id_direccion
+			WHERE r.activo = 1
+				AND c.id_dia_semana = :v_id_dia_semana
 			GROUP BY r.id_ruta, r.nombre_ruta, r.color_ruta
 			ORDER BY r.nombre_ruta";
-		$param = [];
-		$result = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
-
-		$sql = "SELECT r.id_ruta, r.nombre_ruta, r.color_ruta, COUNT(ct.id_cliente) AS clientes_compatibles
-			FROM rutas r
-			LEFT JOIN rutas_zonas_cuadricula rz ON r.id_ruta = rz.id_ruta
-			LEFT JOIN rutas_direcciones rd ON rz.id_ruta = rd.id_ruta
-			LEFT JOIN direcciones d ON rd.id_direccion = d.id_direccion
-			LEFT JOIN contratos ct ON d.id_direccion = ct.id_direccion
-			LEFT JOIN dias_semana di ON ct.id_dia_semana = di.id_dia_semana
-			WHERE ct.id_status = 18 
-				AND di.id_dia_semana = :v_id_dia_semana
-			GROUP BY r.id_ruta, r.nombre_ruta, r.color_ruta
-			ORDER BY r.nombre_ruta";
-
 		$param = [
-			':v_id_dia_semana' => $this->valor_dia(strtoupper($day))
+			':v_id_dia_semana' => $id_dia_semana
 		];
-		$totales = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
-
-		foreach($result as $row){
-			$id_ruta = $row['id_ruta'];
-			foreach($totales as $total){
-				if($total['id_ruta'] == $id_ruta){
-					$row['clientes_compatibles'] = $total['clientes_compatibles'];
-					break;
-				}	
-			}
-		}
+		$result = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
 
 		$tabla = '';
 
 		if ($result) {
 			$tabla .= '<div style="display:flex; flex-direction: column;">';
 			foreach ($result as $ruta) {
+
+				$cons = "SELECT COUNT(rd.id_ruta) AS total
+					FROM rutas_direcciones rd 
+					LEFT JOIN direcciones AS d ON d.id_direccion = rd.id_direccion
+					LEFT JOIN contratos AS ct ON ct.id_cliente = d.id_cliente
+					WHERE ct.id_status = 18
+						AND rd.id_ruta = :v_id_ruta";
+
+				$param = [
+					':v_id_ruta' => $ruta['id_ruta']
+				];
+				$total = $this->ejecutarConsulta($cons, "", $param, "fetchColumn");
+
+
 				// Asegurar color válido
 				$color = $ruta['color_ruta'] ?? '#f0f0f0';
 				
-				// --- SUAVIZAR EL COLOR (equivalente a softenColor en PHP) ---
+				// --- SUAVIZAR EL COLOR (equivalente a softenColor en PHP) --- 
 				// Reutilizamos la función softenColor() que ya tienes
 				$softColor = $this->softenColor($color, 0.8); // 80% blanco → muy tenue
 
@@ -187,7 +187,7 @@ class route_dayController extends mainModel
 						
 						<div>
 							<strong>' . htmlspecialchars($ruta['nombre_ruta']) . '</strong><br>
-							<small>Customers: <b>' . (int)$ruta['clientes_compatibles'] . '</b></small>
+							<small>Customers: <b>' . (int)$total . '</b></small>
 						</div>
 
 						<label style="margin: 0; display: flex; align-items: center;">
@@ -304,20 +304,26 @@ class route_dayController extends mainModel
 
 	public function cliente_en_rutas($day, $id_ruta){
 		$stmt = "SELECT 
-				c.nombre AS cliente,
+				COALESCE(
+					CASE 
+						WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+						WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+						ELSE NULLIF(c.nombre, '')
+					END,
+					'[SIN NOMBRE]'
+				) AS cliente, d.direccion, 
 				di.dia_ingles AS dia_servicio
-			FROM contratos ct
+			FROM route_day_assignments rda  
+			JOIN rutas_direcciones rd ON rda.id_ruta = rd.id_ruta
+			JOIN direcciones d ON rd.id_direccion = d.id_direccion
+			JOIN contratos ct ON ct.id_direccion = d.id_direccion
 			JOIN clientes c ON ct.id_cliente = c.id_cliente
-			JOIN direcciones d ON ct.id_direccion = d.id_direccion
-			JOIN rutas_direcciones rd ON d.id_direccion = rd.id_direccion
-			JOIN rutas_zonas_cuadricula rz ON rd.id_ruta = rz.id_ruta
 			JOIN dias_semana di ON ct.id_dia_semana = di.id_dia_semana
 			WHERE 
 				ct.id_status = 18
-				AND rz.id_ruta = :v_id_ruta
+				AND rda.id_ruta = :v_id_ruta
 				AND di.dia_ingles = :v_dia_ingles
-			ORDER BY c.nombre
-		";
+			ORDER BY rd.orden_en_ruta";
 
 		$params = [
 			':v_id_ruta' => $id_ruta,
@@ -335,6 +341,7 @@ class route_dayController extends mainModel
 				'<li style="padding: 6px 0; border-bottom: 1px solid #f0f0f0;">
 					<strong>' . $cliente['cliente'] . '</strong> 
 					<span style="color: #666; font-size: 0.9em;">' . $cliente['dia_servicio'] . '</span>
+					<span style="color: #000a99; font-size: 0.9em;">' . $cliente['direccion'] . '</span>
 				</li>';
 			}
 			$tabla .= '</ul>';

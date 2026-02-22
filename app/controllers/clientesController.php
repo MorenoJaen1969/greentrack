@@ -191,6 +191,25 @@ class clientesController extends mainModel
 		exit;
 	}
 
+	public function contar_status(){
+		$sql = "SELECT s.id_status, s.status, COUNT(c.id_cliente) AS total
+			FROM status_all AS s
+			LEFT JOIN clientes AS c ON c.id_status = s.id_status
+			WHERE s.id_status IN (1, 2) AND c.id_status != 4
+			GROUP BY s.id_status, s.status";
+
+		$resultado = $this->ejecutarConsulta($sql, "", [], "fetchAll");
+
+		foreach ($resultado as $row) {
+			if ($row['id_status'] == $this->id_status_activo) {
+				$respuesta['activos'] = $row['total'];
+			} elseif ($row['id_status'] == $this->id_status_inactivo) {
+				$respuesta['inactivos'] = $row['total'];
+			}
+		}
+		return $respuesta;
+	}
+
 	public function listarclientesControlador($dato_ori)
 	{
 		$pagina_clientes = $dato_ori[0];
@@ -200,6 +219,15 @@ class clientesController extends mainModel
 		$ruta_retorno = $dato_ori[4];
 		$orden = $dato_ori[5];
 		$direccion  = $dato_ori[6];
+		$filtro_cto =  $dato_ori[7];
+
+		if ($filtro_cto == 1) {
+			$id_status = 1;
+		}else if ($filtro_cto == 2) {
+			$id_status = 2;
+		} else {
+			$id_status = null;
+		}
 
 		$pagina = (isset($pagina_clientes) && $pagina_clientes > 0) ? (int) $pagina_clientes : 1;
         $pagina = $this->limpiarCadena($pagina);
@@ -219,17 +247,33 @@ class clientesController extends mainModel
 		$semanas_var = "Weeks";
 		$dias_var = "Days";
 
-		$campos = "c.*, s.status";
+		$campos = "c.*, s.status, tp.descripcion, t.abreviatura";
 
         $where = " c.id_status != " . $this->id_status_eliminado;
-		// === Generar la cláusula ORDER BY ===
-		$orden_r = "c.nombre";
+		if ($id_status !== null) {
+			$where .= " AND c.id_status = " . $id_status;
+		}
+
+		// === Generar la cláusula ORDER BY combinada === 
+		$orden_r = "CASE 
+			WHEN c.id_tipo_persona = 1 THEN 
+				LOWER(CONCAT(
+					COALESCE(c.nombre, ''),
+					' ',
+					COALESCE(c.apellido, '')
+				))
+			WHEN c.id_tipo_persona = 2 THEN 
+				LOWER(COALESCE(c.nombre_comercial, ''))
+			ELSE ''
+		END";
 
         if (isset($busqueda) && $busqueda != "") {
-            $campos_filtro = "c.nombre LIKE '%$busqueda%' OR c.apellido LIKE '%$busqueda%'";
+            $campos_filtro = "c.nombre LIKE '%$busqueda%' OR c.apellido LIKE '%$busqueda%' OR c.nombre_comercial LIKE '%$busqueda%'";
             $consulta_datos = "SELECT " . $campos . " 
                     FROM clientes c
 					LEFT JOIN status_all AS s ON s.id_status = c.id_status
+					LEFT JOIN tipo_persona AS tp ON tp.id_tipo_persona = c.id_tipo_persona
+					LEFT JOIN tratamientos AS t ON t.id_tratamiento = c.id_tratamiento
 					WHERE (" . $campos_filtro . ") AND " . $where . 
                     " ORDER BY " . $orden_r . "
                     LIMIT " . $inicio . ", " . $registros;
@@ -245,6 +289,8 @@ class clientesController extends mainModel
             $consulta_datos = "SELECT " . $campos . " 
                     FROM clientes c
 					LEFT JOIN status_all AS s ON s.id_status = c.id_status
+					LEFT JOIN tipo_persona AS tp ON tp.id_tipo_persona = c.id_tipo_persona
+					LEFT JOIN tratamientos AS t ON t.id_tratamiento = c.id_tratamiento
 					WHERE " . $where . 
                     " ORDER BY " . $orden_r . "
                     LIMIT " . $inicio . ", " . $registros;
@@ -283,8 +329,7 @@ class clientesController extends mainModel
 					<thead class="cabecera">
 						<tr>
 							<th class="has-text-centered">#</th>
-							<th class="has-text-centered">Name</th>
-							<th class="has-text-centered">Last name</th>
+							<th class="has-text-centered">Identification</th>
 							<th class="has-text-centered">Type of Person</th>
 							<th class="has-text-centered">Status</th>
 							<th class="has-text-centered" colspan="4">Options</th>
@@ -315,7 +360,7 @@ class clientesController extends mainModel
 				$estilo = '';
 
 				if ($total_s == 0) {
-					// Deshabilitar visualmente y funcionalmente
+					// Deshabilitar visualmente y funcionalmente 
 					$claseBoton .= ' is-disabled';
 					$estilo = 'pointer-events: none; opacity: 0.5; color: white !important;';
 				} elseif ($total_s > 0) {
@@ -329,12 +374,61 @@ class clientesController extends mainModel
 		
 				$total_c = $this->ejecutarConsulta($sql, "", [], "fetchColumn");
 
+				// Obtener contratos activos si hay más de uno
+				$contratos_activos = [];
 				if ($total_c == 0) {
 					// Deshabilitar visualmente y funcionalmente
 					$estilo2 = 'opacity: 0.5; color: red !important;';
 				} elseif ($total_c > 0) {
 					// Color de texto negro
 					$estilo2 = 'color: black !important;';
+					if ($total_c > 1) {
+						$sql_contratos = "SELECT c.id_contrato, c.nombre, c.fecha_ini, c.fecha_fin, s.status
+							FROM contratos AS c
+							LEFT JOIN status_all AS s ON s.id_status = c.id_status
+							WHERE c.id_cliente = " . $id_cliente . "
+							AND c.id_status != 49
+							ORDER BY c.fecha_ini DESC";
+						$contratos_activos = $this->ejecutarConsulta($sql_contratos, "", [], "fetchAll");
+					}
+				}
+
+				// Generar botón de contratos
+				if ($total_c == 0) {
+					$estilo2 = 'opacity: 0.5; color: red !important;';
+					$boton_contratos = '
+						<a href="javascript:void(0);" 
+							class="button is-warning is-rounded is-small is-disabled" 
+							style="' . $estilo2 . '"
+							title="No Contract assigned">
+							<span class="fas fa-file-signature"> 0</span>
+						</a>';
+				} elseif ($total_c == 1) {
+					// Un solo contrato - redirección directa
+					$estilo2 = 'color: black !important;';
+					$ruta_destino_c = RUTA_APP . "/contratosVista/contrato/" . $rows['id_cliente'] . "/1";
+					$boton_contratos = '
+						<a href="' . $ruta_destino_c . '" 
+							class="button is-warning is-rounded is-small" 
+							style="' . $estilo2 . '"
+							title="View Contract">
+							<span class="fas fa-file-signature"> 1</span>
+						</a>';
+				} else {
+					// Múltiples contratos - abrir modal
+					$estilo2 = 'color: black !important; background-color: #ffc107 !important;';
+					$boton_contratos = '
+						<button type="button" 
+								class="button is-warning is-rounded is-small btn-ver-contratos" 
+								data-cliente-id="' . $rows['id_cliente'] . '"
+								data-cliente-nombre="' . htmlspecialchars($rows['nombre_comercial'] ?? ($rows['abreviatura'] . ' ' . $rows['nombre'] . ' ' . $rows['apellido'])) . '"
+								style="' . $estilo2 . '"
+								title="View Contracts (' . $total_c . ')">
+							<span class="fas fa-file-signature"> ' . $total_c . '</span>
+						</button>';
+					
+					// Guardar contratos en sesión para el modal
+					$_SESSION['contratos_cliente_' . $rows['id_cliente']] = $contratos_activos;
 				}
 
                 $ruta_destino = RUTA_APP . "/clientesVista/clientes/" . $rows['id_cliente'] . $ruta_clientes;
@@ -343,21 +437,22 @@ class clientesController extends mainModel
 
 				$tabla .= '
                         <tr class="has-text-centered table-row">
-                            <td>' . $contador . '</td>
-                            <td>' . $rows['nombre'] . '</td>
-							<td>' . $rows['apellido'] . '</td>
-                            <td>' . $rows['id_tipo_persona'] . '</td>
+                            <td>' . $contador . '</td>';
+				if ($rows['id_tipo_persona'] == 1) {
+					$abre = $rows['abreviatura'] ? trim($rows['abreviatura']) : "";
+					$nomb = $rows['nombre'] ? trim($rows['nombre']) : "";
+					$apel = $rows['apellido'] ? trim($rows['apellido']) : "";
+					$cliente = $abre . " " . $nomb . " " . $apel;
+					$tabla .= '
+							<td>' . $cliente . '</td>';
+				} else {
+					$tabla .= '
+							<td>' . $rows['nombre_comercial'] . '</td>';
+				}
+				$tabla .= '
+                            <td>' . $rows['descripcion'] . '</td>
                             <td>' . $rows['status'] . '</td>
-                            <td>
-								<a href="' . $ruta_destino_c . $rows['id_cliente'] . '" 
-									class="button is-warning is-rounded is-small" 
-									id="b_id_cliente" 
-									name="b_id_cliente"
-									style="' . $estilo2 . '"
-									title="' . ($total_c > 0 ? 'View Contract for this client' : 'No Contract assigned') . '">
-										<span class="fas fa-file-signature"> '. $total_c .'
-								</a>
-							</td>
+                            <td>' . $boton_contratos . '</td>
                             <td>
 								<a href="' . $href . '" 
 									class="' . $claseBoton . '" 
@@ -501,9 +596,17 @@ class clientesController extends mainModel
 
 	public function consultar_clientes()
 	{
-        $sql = 'SELECT id_cliente, nombre AS cliente
+        $sql = "SELECT id_cliente,
+				COALESCE(
+					CASE 
+						WHEN id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(nombre, ''), NULLIF(apellido, '')))
+						WHEN id_tipo_persona = 2 THEN NULLIF(nombre_comercial, '')
+						ELSE NULLIF(nombre, '')
+					END,
+					'[SIN NOMBRE]'
+				) AS cliente
 			FROM clientes
-			ORDER BY nombre';
+			ORDER BY cliente";
         
         $param = [];
 
@@ -511,5 +614,81 @@ class clientesController extends mainModel
 
         return $data;
 
+	}
+
+	public function consulta_registro($paquete)
+	{
+		$id_cliente = $paquete['id_cliente'];
+
+		$sql = "SELECT c.id_cliente, c.nombre, c.telefono, c.email, c.id_status, DATE(c.fecha_creacion) AS fecha_creacion,
+				c.apellido, c.id_tipo_persona, c.id_frecuencia_pago, c.nombre_comercial, 
+				s.status, tp.descripcion, c.notas, c.observaciones, c.fecha_status, c.id_tratamiento, 
+				t.descripcion AS tratamiento, c.cliente_foto, c.id_sexo, c.telefono
+			FROM clientes AS c
+			LEFT JOIN status_all AS s ON c.id_status = s.id_status 
+			LEFT JOIN tipo_persona AS tp ON tp.id_tipo_persona = c.id_tipo_persona
+			LEFT JOIN tratamientos AS t ON t.id_tratamiento = c.id_tratamiento
+			WHERE c.id_cliente = :v_id_cliente
+				AND s.id_tabla = 5
+				AND c.id_status != 4";
+		$param = [
+			':v_id_cliente' => $id_cliente
+		];
+
+		$consulta = $this->ejecutarConsulta($sql, "", $param);
+
+		$sql_d = "SELECT c.id_direccion, c.id_cliente, d.direccion, d.lat, d.lng, s.status, d.id_pais, d.id_estado, d.id_condado, d.id_ciudad, d.id_zip
+				FROM contratos AS c
+				LEFT JOIN direcciones AS d ON d.id_direccion = c.id_direccion
+				LEFT JOIN status_all AS s ON d.id_status = s.id_status
+				WHERE c.id_cliente = :v_id_cliente
+				GROUP BY c.id_cliente, c.id_direccion";
+
+		$param = [
+			':v_id_cliente' => $id_cliente
+		];
+
+		$direcciones = $this->ejecutarConsulta($sql_d, "", $param, "fetchAll");
+
+		$paquete = [
+			'datos' => $consulta,
+			'direcciones' => $direcciones
+		];
+
+		return $paquete;
+	}
+
+	public function isFile($file) {
+        $f = pathinfo($file, PATHINFO_EXTENSION);
+        return (strlen($f) > 0) ? true : false;
+    }	
+
+    public function consultar_clientes_contratos($id_cliente)
+	{
+        try {
+            $sql = "SELECT c.id_contrato, c.nombre, c.fecha_ini, c.fecha_fin, s.status
+                FROM contratos AS c
+                LEFT JOIN status_all AS s ON s.id_status = c.id_status
+                WHERE c.id_cliente = :id_cliente
+                AND c.id_status != 49
+                ORDER BY c.fecha_ini DESC";
+            
+			$param = [
+				':id_cliente' => $id_cliente
+			];
+			$contratos = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
+
+            echo json_encode([
+                'success' => true,
+                'contratos' => $contratos,
+                'total' => count($contratos)
+            ]);
+            
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error retrieving contracts: ' . $e->getMessage()
+            ]);
+        }
 	}
 }

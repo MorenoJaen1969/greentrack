@@ -33,6 +33,8 @@
 				"direcciones",
 				"direccionesNew",
 				"direccionesVista",
+				"parametros",
+				"parametros-login",
 				"proveedores",
 				"route_day",
 				"rutas_mapa",
@@ -41,6 +43,10 @@
 				"serviciosLista",
 				"status_all",
 				"status_allNew",
+				"usuarios",
+				"usuariosNew",
+				"usuariosVista",
+				"usuariosPhoto",
 				"vehiculos"
 			];
 
@@ -54,12 +60,14 @@
                 "dashboard",
 				"dias_no_actividad",
 				"direcciones",
+				"parametros",
 				"proveedores",
 				"route_day",
 				"rutas_mapa",
 				"salas",
 				"servicios",
 				"status_all",
+				"usuarios",
 				"vehiculos"
             ];
 

@@ -70,13 +70,13 @@ switch ($modulo) {
         $lng = $inputData['lng'];
         $cambio = $inputData['cambio'];
 
-        $controller->actualizar_direccion($id_direccion, $direccion, $lat, $lng, $cambio);
+//        $controller->actualizar_direccion($id_direccion, $direccion, $lat, $lng, $cambio); 
         break;
     
     case 'eliminar':
         $id_direccion = $inputData['id_direccion'];
 
-        $controller->eliminar_direccion($id_direccion);
+//        $controller->eliminar_direccion($id_direccion);
         break;
     
     case 'listar_tabla':
@@ -84,6 +84,15 @@ switch ($modulo) {
         $registros_por_pagina = $inputData['registros_por_pagina'] ?? 10;
         $url_origen = $inputData['url_origen'] ?? 'Customers';
         $busca_frase = $inputData['busca_frase'] ?? '';
+        $filtro = $inputData['filtro_estado'] ?? 'todos';
+
+		if ($filtro == 'activos') {
+			$filtro_estado = 1;
+		}else if ($filtro == 'inactivos') {
+			$filtro_estado = 2;
+		} else {
+			$filtro_estado = null;
+		}
 
         // Llamar a tu método existente
         $dato_ori = [
@@ -93,7 +102,8 @@ switch ($modulo) {
             $busca_frase,
             '', // ruta_retorno (no usado aquí)
             '', // orden
-            ''  // direccion
+            '', // direccion
+            $filtro_estado
         ];
 
         $tabla_html = $controller->listarclientesControlador($dato_ori);
@@ -148,6 +158,12 @@ switch ($modulo) {
             $cadena = $cadena. $curr['cliente'] . '</option>';
         }
         echo $cadena;
+        break;
+
+    case 'obtener_contratos_cliente':
+        $id_cliente = (int)$inputData['id_cliente'];
+
+        $controller->consultar_clientes_contratos($id_cliente);
         break;
 
     default:

@@ -60,6 +60,9 @@
     });
 </script>
 
+
+<script src="<?= RUTA_REAL ?>/app/views/inc/js/menu-control.js?v=<?= time() ?>"></script>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js?v=<?= time() ?>"></script>
 <!-- Carrusel: JS (solo animación) -->
 

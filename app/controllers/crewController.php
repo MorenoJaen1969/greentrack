@@ -24,7 +24,7 @@ class crewController extends mainModel
 		// ¡ESTA LÍNEA ES CRUCIAL!
 		parent::__construct();
 
-		// Nombre del controlador actual abreviado para reconocer el archivo
+		// Nombre del controlador actual abreviado para reconocer el archivo 
 		$nom_controlador = "crewController";
 		// ____________________________________________________________________
 
@@ -206,6 +206,7 @@ class crewController extends mainModel
 							<th class="has-text-centered">#</th>
 							<th class="has-text-centered">Code</th>
 							<th class="has-text-centered">Full Name</th>
+							<th class="has-text-centered w_max"><i class="fa-solid fa-camera"></i></th>
 							<th class="has-text-centered">Position</th>
 							<th class="has-text-centered">Phone</th>
 							<th class="has-text-centered">Status</th>
@@ -229,6 +230,34 @@ class crewController extends mainModel
                             <td>' . $contador . '</td>
                             <td>' . $this->ceros($rows['id_crew']) . '</td>
                             <td style="background:' . $this->lightenHexColor($rows['color'], 0.8) . ';">' . $rows['nombre_completo'] . '</td>
+                            <td class="person-info">';
+
+                if (empty($rows['foto'])) {
+                    if ($rows['id_sexo'] == "1") {
+                        $tabla .= '<img class="is-rounded side_little" src="/app/views/fotos/contratista.png">';
+                    } else {
+                        $tabla .= '<img class="is-rounded side_little" src="/app/views/fotos/contratista_mujer.png">';
+                    }
+                } else {
+                    $bd_uso = trim($_SESSION['db_name']);
+                    $ruta_img = './app/views/img/uploads' . DIRECTORY_SEPARATOR . $bd_uso . DIRECTORY_SEPARATOR . 'fotos' . DIRECTORY_SEPARATOR;
+                    if (is_file($ruta_img . $rows['foto'])) {
+                        $bd_uso = trim($_SESSION['db_name']);
+                        $uploads_dir = APP_URL . 'app/views/img/uploads' . DIRECTORY_SEPARATOR . $bd_uso . DIRECTORY_SEPARATOR . 'fotos' . DIRECTORY_SEPARATOR;
+                        $foto_act = $uploads_dir . $rows['foto'];
+
+                        $tabla .= '<img class="is-rounded" src="' . $foto_act . '">';
+                    } else {
+                        if ($rows['id_sexo'] == "1") {
+                            $tabla .= '<img class="is-rounded side_little" src="/app/views/fotos/contratista.png">';
+                        } else {
+                            $tabla .= '<img class="is-rounded side_little" src="/app/views/fotos/contratista_mujer.png">';
+                        }
+                    }
+                }
+                $tabla .= '
+                            </td>
+
                             <td>' . $rows['cargo'] . '</td>
                             <td>' . $rows['telefono'] . '</td>
                             <td>' . $rows['status'] . '</td>
@@ -367,4 +396,32 @@ class crewController extends mainModel
         return $val_fin;
     }
 
+    public function consultar_drivers($tipo) 
+    {
+        if ($tipo == 1) {
+            $cargo_ids = "1, 2"; // IDs para Drivers
+        } elseif ($tipo == 2) {
+            $cargo_ids = "3"; // ID para Crew
+        } else {
+            return []; // Tipo no válido, retornar arreglo vacío
+        }
+        $sql = "SELECT 
+                id_crew AS id, 
+                nombre_completo AS name, 
+                CASE 
+                    WHEN foto IS NOT NULL AND foto != '' 
+                        THEN CONCAT('/app/views/fotos/', foto)
+                    ELSE '/app/views/fotos/contratista.png'
+                END AS img
+            FROM crew
+            WHERE id_cargo IN (" . $cargo_ids . ") 
+                AND id_status = 32
+            ORDER BY nombre_completo ASC";
+
+        $param = [];
+
+        $data = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
+
+        return $data;
+    }
 }

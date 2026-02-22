@@ -1,1490 +1,496 @@
 <?php
 // app/views/content/rutas_mapa-view.php
-// Ruta Mapa - Inglés de Texas (Conroe Style)
-
-// Verificar si el usuario tiene permisos para acceder a esta vista
-// if (!isset($_SESSION['user_id']) || $_SESSION['user_rol'] !== 'admin') {
-//     exit("Access denied, partner.");
-// }
+// Ruta Mapa - GreenTrack Live (Conroe Style)
+// Versión 2.0 - Sistema de Estados Puros
 
 $ruta_rutas_mapa_ajax = RUTA_APP . "/app/ajax/rutas_mapaAjax.php";
-$ruta_direcciones_ajax = RUTA_APP . "/app/ajax/direccionesAjax.php";
 ?>
 
 <!-- Contenedor Principal -->
 <div id="rutas-map-container" class="principal">
+
     <!-- Barra de título superior -->
-    <div id="rutas-title-bar"
-        style="background-color: #2c3e50; color: white; padding: 10px; display: flex; justify-content: space-between; align-items: center;">
+    <div id="rutas-title-bar" style="background-color: #2c3e50; color: white; padding: 10px; display: flex; justify-content: space-between; align-items: center;">
         <h2 style="margin: 0; padding-left: 40px; font-size: 1.5em;">Ruta Map - GreenTrack Live</h2>
         <div>
-            <!-- Botón para volver o menú de usuario -->
             <button id="btn-volver" style="margin-right: 10px; padding: 5px 10px;">Back</button>
             <span>Hey there, <?php echo $_SESSION['user_name'] ?? 'Partner'; ?>!</span>
         </div>
     </div>
 
     <!-- Contenedor principal con panel lateral y mapa -->
-    <div style="display: flex; flex: 1; overflow: hidden;">
+    <div style="display: flex; flex: 1; overflow: hidden; height: calc(100vh - 100px);">
 
-        <!-- Panel Lateral (Opciones, Lista de Rutas, etc.) -->
-        <div id="rutas-sidebar"
-            style="width: 300px; background-color: #ecf0f1; padding: 15px; overflow-y: auto; border-right: 1px solid #bdc3c7;">
-            <h4>Route Builder</h4>
-            <div id="modo-indicador"
-                style="text-align: right; margin-bottom: 10px; font-weight: bold; font-size: 1.2em; color: #2c3e50;">
+        <!-- Panel Lateral -->
+        <div id="rutas-sidebar" style="width: 300px; background-color: #ecf0f1; padding: 15px; overflow-y: auto; border-right: 1px solid #bdc3c7; display: flex; flex-direction: column;">
+
+            <!-- Indicador de Estado -->
+            <div id="estado-indicador" style="text-align: center; margin-bottom: 15px; padding: 8px; border-radius: 4px; font-weight: bold; font-size: 0.9em; background-color: #95a5a6; color: white;">
+                Ready
             </div>
-            <div id="rutas-controls">
+
+            <!-- Sección: Crear/Editar Ruta -->
+            <div id="seccion-ruta-builder" style="margin-bottom: 15px;">
+                <h4>Route Builder</h4>
+
                 <label for="input-nombre-ruta">Route Name:</label>
-                <div style="position: relative; margin-bottom: 10px;">
-                    <input type="text" id="input-nombre-ruta" placeholder="Like 'Monday Rute - Conroe'"
-                        style="width: 100%; padding: 5px; margin-bottom: 0;" disabled>
-                    <div id="tooltip-nombre-ruta" style="display: none; position: absolute; top: 100%; left: 90px; 
-                                background: #e9dc29ff; color: #000000ff; padding: 6px 10px; 
-                                border-radius: 4px; font-size: 0.85em; z-index: 10; 
-                                margin-top: 5px; white-space: nowrap;">
-                        ➤ Enter a name for your new route
-                        <div style="position: absolute; top: -6px; left: 10px; 
-                                    width: 0; height: 0; 
-                                    border-left: 6px solid transparent;
-                                    border-right: 6px solid transparent;
-                                    border-bottom: 6px solid #3498db;"></div>
-                    </div>
-                </div>
+                <input type="text" id="input-nombre-ruta" placeholder="Like 'Monday Route - Conroe'"
+                    style="width: 100%; padding: 5px; margin-bottom: 10px;" disabled>
 
                 <label for="input-color-ruta">Route Color:</label>
-                <input type="color" id="input-color-ruta" value="#3498db" title="Click to pick a route color"
-                    style="width: 100%; margin-bottom: 10px; height: 40px; cursor: pointer; opacity: 0.6;" disabled>
-                <div id="guia-color-ruta"
-                    style="font-size: 0.8em; color: #7f8c8d; margin-bottom: 15px; font-style: italic;">
-                    🎨 Click 'Create New Route' to enable color picker
-                </div>
+                <input type="color" id="input-color-ruta" value="#3498db"
+                    style="width: 100%; margin-bottom: 10px; height: 40px; cursor: pointer;" disabled>
 
-                <button id="btn-crear-ruta"
-                    style="width: 100%; padding: 10px; margin-bottom: 5px; background-color: #27ae60; color: white; border: none; cursor: pointer;">Create
-                    New Route</button>
-                <button id="btn-cancelar-accion"
-                    style="width: 100%; padding: 10px; margin-bottom: 10px; background-color: #95a5a6; color: white; border: none; cursor: pointer; display: none;">Cancel
-                    Action</button>
-                <button id="btn-actualizar-ruta"
-                    style="width: 100%; padding: 10px; margin-bottom: 5px; background-color: #f39c12; color: white; border: none; cursor: pointer; display: none;">Update
-                    This Route</button>
-                <button id="btn-eliminar-ruta"
-                    style="width: 100%; padding: 10px; margin-bottom: 10px; background-color: #e74c3c; color: white; border: none; cursor: pointer; display: none;">Delete
-                    This One</button>
-
-                <hr>
-
-                <h4>Selected Zones (<span id="contador-zonas">0</span>)</h4>
-                <div id="zonas-seleccionadas-lista"
-                    style="max-height: 150px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; background-color: #fff;">
-                    <!-- Selected zones will show up here -->
-                </div>
-
-                <hr>
-
-                <h4>Existing Routes</h4>
-                <div id="rutas-lista"
-                    style="max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; background-color: #fff;">
-                    <!-- Routes will load here -->
-                    <p>Loading routes...</p>
+                <div id="builder-buttons">
+                    <button id="btn-crear-ruta" style="width: 100%; padding: 10px; margin-bottom: 5px; background-color: #27ae60; color: white; border: none; cursor: pointer;">Create New Route</button>
+                    <button id="btn-cancelar-accion" style="width: 100%; padding: 10px; margin-bottom: 10px; background-color: #95a5a6; color: white; border: none; cursor: pointer; display: none;">Cancel</button>
+                    <button id="btn-guardar-ruta" style="width: 100%; padding: 10px; margin-bottom: 5px; background-color: #f39c12; color: white; border: none; cursor: pointer; display: none;">Save Route</button>
                 </div>
             </div>
+
+            <hr style="margin: 15px 0;">
+
+            <!-- Sección: Rutas Existentes -->
+            <div id="seccion-rutas-existentes" style="flex: 1; display: flex; flex-direction: column; min-height: 150px;">
+                <h4>Existing Routes</h4>
+                <div id="rutas-lista" style="flex: 1; overflow-y: auto; border: 1px solid #ccc; padding: 5px; background-color: #fff;">
+                    <p style="color: #7f8c8d; font-style: italic;">Loading routes...</p>
+                </div>
+            </div>
+
+            <hr style="margin: 15px 0;">
+
+            <!-- Sección: Zonas Seleccionadas (solo en creación/edición) -->
+            <div id="seccion-zonas-seleccionadas" style="display: none;">
+                <h4>Selected Zones (<span id="contador-zonas">0</span>)</h4>
+                <div id="zonas-seleccionadas-lista" style="max-height: 150px; overflow-y: auto; border: 1px solid #ccc; padding: 5px; background-color: #fff;">
+                </div>
+            </div>
+
         </div>
 
-        <!-- Contenedor del Mapa Leaflet -->
-        <div id="mapa_geo" style="flex: 1; z-index: 1;"></div>
+        <!-- Contenedor del Mapa -->
+        <div id="mapa_geo" style="flex: 1; position: relative; z-index: 1;"></div>
 
     </div>
 
-    <!-- Pie de página opcional -->
+    <!-- Footer -->
     <div id="rutas-footer" style="background-color: #bdc3c7; padding: 5px; text-align: center; font-size: 0.9em;">
         GreenTrack Live — Built for Conroe, TX
     </div>
 
 </div>
 
-<!-- Script Incrustado (JavaScript) -->
+<!-- Formulario Movible (creado dinámicamente) -->
+
+<!-- Scripts -->
 <script>
-    let direccionesSeleccionadas = new Set();
+    // ============================================
+    // CONFIGURACIÓN Y CONSTANTES
+    // ============================================
 
-    // Variables de Ruta (ya definidas en PHP)
-    const ruta_rutas_mapa_ajax = "<?php echo $ruta_rutas_mapa_ajax; ?>";
-    const ruta_direcciones_ajax = "<?php echo $ruta_direcciones_ajax; ?>";
+    const RUTA_AJAX = "<?php echo $ruta_rutas_mapa_ajax; ?>";
+    const HQ_COORDS = [30.3204272, -95.4217815];
+    const HQ_ICON_SVG = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="-16 -16 32 32">
+        <polygon points="0,-14 12,7 -12,7" fill="#0066FF" stroke="#003d99" stroke-width="1"/>
+        <polygon points="0,14 12,-7 -12,-7" fill="#0066FF" stroke="#003d99" stroke-width="1"/>
+    </svg>
+`;
 
-    // Inicializar variables globales para el mapa y elementos Leaflet
-    let map = null;
-    let zonasLayerGroup = null;
-    let rutasLayerGroup = null;
-
-    let direccionesLayerGroup = null;
-    let direccionesRutaLayerGroup = false;
-
-    //let cuadriculaLayerGroup = null; // Agrupar la cuadrícula de 1km
-    let zonasSeleccionadas = new Set();
-    let modoEdicionRuta = null;
-    let modoGuardarRuta = null;
-    let rutaActual = null;
-
-    let direccionesCargadas = false;
-    let _actualizandoEstado = false;
-
-    let btnToggleDirecciones = null;
-
-    // Variables para controlar el formulario de direcciones
-    let formularioZonaActiva = null;
-    let zonaActivaId = null;
-
-    let tTiempo = "00:00:00";
-
-    // Indicador de si la cuadrícula está activa
-    //let cuadriculaActiva = false;
-
-    // Coordenadas del Headquarter (HQ) - Conroe, TX
-    const HQ_LAT = 30.3204272;
-    const HQ_LNG = -95.4217815;
-    const HQ_COORDS = [HQ_LAT, HQ_LNG];
-
-    // --- Funciones auxiliares ---
-
-    // Mostrar alertas con estilo de Texas
-    function suiteAlertSuccess(titulo, mensaje) {
-        return mostrarSuiteAlert('success', titulo, mensaje);
-    }
-
-    function suiteAlertError(titulo, mensaje) {
-        return mostrarSuiteAlert('error', titulo, mensaje);
-    }
-
-    function suiteAlertWarning(titulo, mensaje) {
-        return mostrarSuiteAlert('warning', titulo, mensaje);
-    }
-
-    function suiteAlertInfo(titulo, mensaje) {
-        return mostrarSuiteAlert('info', titulo, mensaje);
-    }
-
-    // Modal de confirmación
-    function suiteConfirm(titulo, mensaje, opcionesConfirm = {}) {
-        const opciones = {
-            botones: [
-                { texto: opcionesConfirm.cancelar || 'Nah, forget it', tipo: 'secondary', valor: false },
-                { texto: opcionesConfirm.aceptar || 'Yep, do it', tipo: 'primary', valor: true }
-            ]
-        };
-        return mostrarSuiteAlert('warning', titulo, mensaje, opciones);
-    }
-
-    function mostrarTooltipNombre(mostrar = true) {
-        const tooltip = document.getElementById('tooltip-nombre-ruta');
-        if (tooltip) {
-            tooltip.style.display = mostrar ? 'block' : 'none';
-        }
-    }
-
-    function mostrarSuiteAlert(tipo, titulo, mensaje, opciones = {}) {
-        return new Promise((resolve) => {
-            // Eliminar alerta existente
-            const alertaExistente = document.querySelector('.alerta-overlay');
-            if (alertaExistente) {
-                alertaExistente.remove();
-            }
-
-            // Crear elementos de la alerta
-            const overlay = document.createElement('div');
-            overlay.className = 'alerta-overlay';
-
-            const alerta = document.createElement('div');
-            alerta.className = 'suite-alerta-box';
-
-            const header = document.createElement('div');
-            header.className = `alerta-header ${tipo}`;
-
-            const icon = document.createElement('div');
-            icon.className = 'alerta-icon';
-
-            // Iconos según el tipo
-            const iconos = {
-                success: '✓',
-                error: '✕',
-                warning: '⚠',
-                info: 'ℹ'
-            };
-            icon.textContent = iconos[tipo] || 'ℹ';
-
-            const title = document.createElement('h2');
-            title.className = 'alerta-title';
-            title.textContent = titulo;
-
-            const body = document.createElement('div');
-            body.className = 'alerta-body';
-
-            const message = document.createElement('p');
-            message.className = 'alerta-message';
-            message.textContent = mensaje;
-
-            const actions = document.createElement('div');
-            actions.className = 'alerta-actions';
-
-            // Botones según opciones
-            const botones = opciones.botones || [{ texto: 'Alright', tipo: 'primary' }];
-
-            botones.forEach((btn, index) => {
-                const button = document.createElement('button');
-                button.className = `btn-alerta btn-alerta-${btn.tipo}`;
-                button.textContent = btn.texto;
-                button.onclick = () => {
-                    overlay.classList.remove('activo');
-                    setTimeout(() => {
-                        overlay.remove();
-                        resolve(btn.valor || index);
-                    }, 300);
-                };
-                actions.appendChild(button);
-            });
-
-            // Construir la alerta
-            header.appendChild(icon);
-            header.appendChild(title);
-            body.appendChild(message);
-            body.appendChild(actions);
-            alerta.appendChild(header);
-            alerta.appendChild(body);
-            overlay.appendChild(alerta);
-
-            // Añadir al documento
-            document.body.appendChild(overlay);
-
-            // Mostrar con animación
-            setTimeout(() => {
-                overlay.classList.add('activo');
-                alerta.classList.add('alerta-pulse');
-            }, 10);
-
-            // Cerrar con Escape
-            const teclaEscape = (e) => {
-                if (e.key === 'Escape') {
-                    overlay.classList.remove('activo');
-                    setTimeout(() => {
-                        overlay.remove();
-                        document.removeEventListener('keydown', teclaEscape);
-                        resolve(null);
-                    }, 300);
-                }
-            };
-            document.addEventListener('keydown', teclaEscape);
-
-            // Cerrar haciendo clic fuera de la alerta
-            if (opciones.cerrarClickFuera !== false) {
-                overlay.onclick = (e) => {
-                    if (e.target === overlay) {
-                        overlay.classList.remove('activo');
-                        setTimeout(() => {
-                            overlay.remove();
-                            resolve(null);
-                        }, 300);
-                    }
-                };
-            }
-        });
-    }
-
-    /**
-    * Convierte minutos enteros a formato HH:mm:ss
-    * @param {number} totalMinutos - Número entero de minutos (puede ser >= 0)
-    * @returns {string} Cadena en formato "HH:mm:ss"
-    */
-    function minutosToHHMMSS(totalMinutos) {
-        if (totalMinutos == null || totalMinutos < 0) {
-            return "00:00:00";
-        }
-
-        const totalSegundos = Math.round(totalMinutos * 60); // redondea para evitar decimales
-        const horas = Math.floor(totalSegundos / 3600);
-        const minutos = Math.floor((totalSegundos % 3600) / 60);
-        const segundos = totalSegundos % 60;
-
-        // Formatear con ceros a la izquierda
-        const pad = (num) => String(num).padStart(2, '0');
-        return `${pad(horas)}:${pad(minutos)}:${pad(segundos)}`;
-    }
-
-    function suiteLoading(action = 'show') {
-        const existingLoading = document.getElementById('suite-loading');
-
-        if (action === 'show') {
-            if (existingLoading) {
-                existingLoading.style.display = 'flex';
-                return;
-            }
-
-            const loadingOverlay = document.createElement('div');
-            loadingOverlay.id = 'suite-loading';
-            loadingOverlay.className = 'suite-loading-overlay';
-
-            // SVG del INFINITO HORIZONTAL correcto
-            const svgHTML = `
-                <svg class="infinity-svg" viewBox="-40 -20 480 160" preserveAspectRatio="xMidYMid meet">
-                    <defs>
-                        <linearGradient id="glassGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stop-color="#00d4aa" />
-                            <stop offset="50%" stop-color="#0099ff" />
-                            <stop offset="100%" stop-color="#00d4aa" />
-                        </linearGradient>
-                    </defs>
-                    <path class="infinity-path" 
-                        d="M 200,60 
-                            C 100,0 100,120 200,60 
-                            C 300,120 300,0 200,60 
-                            Z" 
-                        fill="none" 
-                        stroke="url(#glassGradient)" 
-                        stroke-width="20" 
-                        stroke-linecap="round"/>
-                </svg>
-            `;
-
-            loadingOverlay.innerHTML = svgHTML;
-            document.body.appendChild(loadingOverlay);
-            document.body.classList.add('suite-loading-active');
-
-        } else if (action === 'hide') {
-            if (existingLoading) {
-                existingLoading.remove();
-                document.body.classList.remove('suite-loading-active');
-            }
-        }
-    }
-
-    function hexToRgba(hex, alpha = 0.3) {
-        // Eliminar el símbolo # si existe
-        hex = hex.replace('#', '');
-        // Asegurar que tenga 6 caracteres
-        if (hex.length === 3) {
-            hex = hex.split('').map(c => c + c).join('');
-        }
-        const r = parseInt(hex.substr(0, 2), 16);
-        const g = parseInt(hex.substr(2, 2), 16);
-        const b = parseInt(hex.substr(4, 2), 16);
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-
-    suiteLoading.while = async function (promise) {
-        this('show');
-        try {
-            const result = await promise;
-            return result;
-        } finally {
-            this('hide');
-        }
+    // Estados del sistema
+    const ESTADOS = {
+        NEUTRO: 'NEUTRO', // Inicial, sin ruta seleccionada
+        ADDRESSES: 'ADDRESSES', // Mostrando todas las direcciones
+        RUTA_VER: 'RUTA_VER', // Viendo ruta existente (solo lectura)
+        RUTA_EDITAR: 'RUTA_EDITAR' // Editando ruta existente
     };
 
-    async function cargarConfigYIniciar() {
-        try {
-            const response = await fetch('/app/ajax/datosgeneralesAjax.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_DG: 'datos_para_gps'
-                })
-            });
+    // ============================================
+    // VARIABLES GLOBALES
+    // ============================================
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
+    let map = null;
+    let estadoActual = ESTADOS.NEUTRO;
+    let rutaActual = null; // Ruta cargada (en VER o EDITAR)
+    let zonasData = new Map(); // Cache de zonas (id -> datos)
+    let direccionesRutaActual = []; // Direcciones de la ruta activa
 
-            const data = await response.json();
-            // Asignar valor por defecto
-            const DEFAULT_CONFIG = {
-                mapa_base: 'ESRI',
-                umbral_metros: 150,
-                umbral_minutos: 5
-            };
+    // LayerGroups
+    let capaZonas = null;
+    let capaDireccionesRuta = null; // Direcciones de ruta actual (colores)
+    let capaDireccionesLibres = null; // Direcciones sin ruta (rojas)
+    let capaTodasDirecciones = null; // Para modo ADDRESSES
+    let marcadorHQ = null;
 
-            if (data.error) {
-                console.warn('⚠️ Error en datosgeneralesAjax:', data.error);
-            } else {
-                // === Variable global para almacenar configuración crítica ===
-                window.APP_CONFIG = window.APP_CONFIG || {};
-                // Guardar en configuración global
-                // Dentro del fetch, tras obtener y hacer .json() a la respuesta
+    // Creación de ruta (estado temporal)
+    let rutaEnConstruccion = {
+        nombre: '',
+        color: '#3498db',
+        zonas: new Map() // id_zona -> {direcciones: Set(id_direccion)}
+    };
 
-                if (data.success && data.config) {
-                    window.APP_CONFIG = {
-                        mapa_base: data.config.mapa_base || DEFAULT_CONFIG.mapa_base,
-                        umbral_metros: parseInt(data.config.umbral_metros, 10) || DEFAULT_CONFIG.umbral_metros,
-                        umbral_minutos: parseInt(data.config.umbral_minutos, 10) || DEFAULT_CONFIG.umbral_minutos
-                    };
+    // ============================================
+    // INICIALIZACIÓN
+    // ============================================
 
-                    // Validar NaN
-                    if (isNaN(window.APP_CONFIG.umbral_metros)) {
-                        window.APP_CONFIG.umbral_metros = DEFAULT_CONFIG.umbral_metros;
-                    }
-                    if (isNaN(window.APP_CONFIG.umbral_minutos)) {
-                        window.APP_CONFIG.umbral_minutos = DEFAULT_CONFIG.umbral_minutos;
-                    }
-                } else {
-                    console.warn('⚠️ Config no recibida o error:', data.error);
-                    window.APP_CONFIG = { ...DEFAULT_CONFIG };
-                }
-
-                console.log('✅ APP_CONFIG final:', window.APP_CONFIG);
-                // ✅ Solo ahora dispara el evento
-                window.dispatchEvent(new Event('configListo'));
-
-            }
-
-            console.log('✅ mapa_base cargado:', window.APP_CONFIG.mapa_base);
-        } catch (err) {
-            console.error('❌ Error al cargar datos generales:', err.message);
-            // Fallback
-            window.APP_CONFIG.mapa_base = 'ESRI';
-            window.APP_CONFIG.umbral_metros = 150;
-            window.APP_CONFIG.umbral_minutos = 5;
-            window.dispatchEvent(new Event('configListo'));
-        }
-    }
-
-    async function cargarDireccionesDeZonaenRutas(id_ruta) {
-        try {
-            suiteLoading('show');
-
-            const response = await fetch(ruta_rutas_mapa_ajax, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_rutas: 'obtener_clientes',
-                    id_ruta: id_ruta
-                })
-            });
-
-            const data = await response.json();
-            const direcciones = data.success ? data.data : [];
-            console.log("Direcciones de la Zona: ", direcciones);
-            cargarDirecciones();
-
-            // Crear HTML de la lista
-            const lista = document.getElementById('lista-direcciones-zona');
-            if (!lista) return;
-
-            if (direcciones.length === 0) {
-                lista.innerHTML = '<p style="color:#7f8c8d; font-style:italic;">No addresses assigned.</p>';
-            } else {
-                lista.innerHTML = direcciones.map(dir => `
-                    <div class="direccion-item-en-formulario elem_direcc" data-id="${dir.id_direccion}">
-                        <span>
-                            <strong>${dir.cliente_nombre || '—'}</strong><br>
-                            <small>${dir.direccion}</small><br>
-                            <em class="ele_hora">⏱️ ${dir.tiempo_servicio || 0} min</em>
-                        </span>
-                        <button class="btn-eliminar-direccion" data-id="${dir.id_direccion}" data-id_zona="${dir.id_zona}" data-nom_zona="${dir.nombre_zona}" style="background:#e74c3c; color:white; border:none; border-radius:4px; padding:2px 8px; font-size:0.85em; cursor:pointer;">
-                            Remove
-                        </button>
-                    </div>
-                `).join('');
-
-                // Asignar listeners a los elementos clicables
-                lista.querySelectorAll('.direccion-item-en-formulario').forEach(item => {
-                    item.addEventListener('click', (e) => {
-                        // Evitar que el clic en el botón "Remove" active el popup
-                        if (e.target.closest('.btn-eliminar-direccion')) return;
-
-                        const idDireccion = parseInt(item.dataset.id);
-                        const marker = window.direccionesMarkers?.[idDireccion];
-
-                        if (marker && typeof marker.openPopup === 'function') {
-                            // Opcional: centrar el mapa en el marcador
-                            map.setView(marker.getLatLng(), 15);
-                            // Cerrar todos los popups abiertos
-                            map.closePopup();                            
-                            // Abrir el popup
-                            marker.openPopup();
-                        } else {
-                            console.warn('Marcador no encontrado para ID:', idDireccion);
-                        }
-                    });
-                });
-
-                // Asignar listeners a los botones
-                lista.querySelectorAll('.btn-eliminar-direccion').forEach(btn => {
-                    btn.addEventListener('click', async (e) => {
-                        e.stopPropagation();
-                        const idDireccion = btn.dataset.id;
-                        const idZona = btn.dataset.id_zona;
-                        const nombreZona = btn.dataset.nom_zona;
-                        await eliminarDireccionDeZona(idZona, idDireccion);
-                        cargarDireccionesDeZona(idZona, nombreZona); // Recargar
-                    });
-                });
-            }
-
-        } catch (err) {
-            console.error("Error al cargar direcciones de la zona:", err);
-            suiteAlertError('Uh oh!', 'Failed to load zone addresses. function cargarDireccionesDeZonaenRutas');
-        } finally {
-            suiteLoading('hide');
-        }
-    }
-
-    async function cargarDireccionesDeZona(idZona, nombreZona) {
-        try {
-            suiteLoading('show');
-
-            const response = await fetch("<?php echo RUTA_APP; ?>/app/ajax/zonasAjax.php", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_zonas: 'listar_direcciones_de_zona',
-                    id_zona: idZona
-                })
-            });
-
-            const data = await response.json();
-            const direcciones = data.success ? data.data : [];
-
-            // Crear HTML de la lista
-            const lista = document.getElementById('lista-direcciones-zona');
-            if (!lista) return;
-
-            if (direcciones.length === 0) {
-                lista.innerHTML = '<p style="color:#7f8c8d; font-style:italic;">No addresses assigned.</p>';
-            } else {
-                lista.innerHTML = direcciones.map(dir => `
-                    <div style="padding: 6px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                        <span><strong>${dir.cliente_nombre || '—'}</strong><br><small>${dir.direccion}</small></span>
-                        <button class="btn-eliminar-direccion" data-id="${dir.id_direccion}" style="background:#e74c3c; color:white; border:none; border-radius:4px; padding:2px 8px; font-size:0.85em; cursor:pointer;">
-                            Remove
-                        </button>
-                    </div>
-                `).join('');
-
-                // Asignar listeners a los botones
-                lista.querySelectorAll('.btn-eliminar-direccion').forEach(btn => {
-                    btn.addEventListener('click', async (e) => {
-                        e.stopPropagation();
-                        const idDireccion = btn.dataset.id;
-                        await eliminarDireccionDeZona(idZona, idDireccion);
-                        cargarDireccionesDeZona(idZona, nombreZona); // Recargar
-                    });
-                });
-            }
-
-        } catch (err) {
-            console.error("Error al cargar direcciones de la zona:", err);
-            suiteAlertError('Uh oh!', 'Failed to load zone addresses. function cargarDireccionesDeZona');
-        } finally {
-            suiteLoading('hide');
-        }
-    }
-
-    async function eliminarDireccionDeZona(idZona, idDireccion) {
-        const confirmar = await suiteConfirm(
-            'Remove Address?',
-            'Are you sure you want to remove this address from the zone?',
-            { aceptar: 'Yes, Remove', cancelar: 'Keep It' }
-        );
-        if (!confirmar) return;
-
-        try {
-            suiteLoading('show');
-            const response = await fetch("<?php echo RUTA_APP; ?>/app/ajax/zonasAjax.php", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_zonas: 'eliminar_direccion_de_zona',
-                    id_zona: idZona,
-                    id_direccion: idDireccion
-                })
-            });
-            const data = await response.json();
-            if (data.success) {
-                suiteAlertSuccess('Removed!', 'Address removed from zone.');
-                // 👇 Recargar la ruta COMPLETA (zonas + direcciones actualizadas)
-                if (rutaActual) {
-                    cargarZonasRuta(rutaActual.id_ruta);
-                }
-            } else {
-                throw new Error(data.error || 'Failed to remove address.');
-            }
-            actualizarTotalTiempo();
-        } catch (err) {
-            suiteAlertError('Dang it!', err.message);
-        } finally {
-            suiteLoading('hide');
-        }
-    }
-
-    function actualizarEstadoInterfaz() {
-        if (_actualizandoEstado) return; // 👈 Evita recursión
-        _actualizandoEstado = true;
-
-        try {
-            const btnCrear = document.getElementById('btn-crear-ruta');
-            const btnCancelar = document.getElementById('btn-cancelar-accion');
-            const inputNombre = document.getElementById('input-nombre-ruta');
-            const inputColor = document.getElementById('input-color-ruta');
-            const guiaColor = document.getElementById('guia-color-ruta');
-
-            const btnActualizar = document.getElementById('btn-actualizar-ruta');
-            const btnEliminar = document.getElementById('btn-eliminar-ruta');
-            const modoIndicador = document.getElementById('modo-indicador');
-
-            if (modoEdicionRuta === 'crear') {
-                modoIndicador.textContent = '🟢 Creating Route';
-                modoIndicador.style.backgroundColor = '#d5f5d5';
-                modoIndicador.style.padding = '6px';
-                modoIndicador.style.borderRadius = '4px';
-            } else if (modoEdicionRuta === 'editar') {
-                modoIndicador.textContent = '✏️ Editing Route';
-                modoIndicador.style.backgroundColor = '#fef5d4';
-                modoIndicador.style.padding = '6px';
-                modoIndicador.style.borderRadius = '4px';
-            } else if (modoEdicionRuta === 'eliminar') {
-                modoIndicador.textContent = '🗑️ Deleting Route';
-                modoIndicador.style.backgroundColor = '#fadbd8';
-                modoIndicador.style.padding = '6px';
-                modoIndicador.style.borderRadius = '4px';
-            } else {
-                modoIndicador.textContent = '';
-                modoIndicador.style.backgroundColor = 'transparent';
-                modoIndicador.style.padding = '0';
-                modoIndicador.style.borderRadius = '0';
-            }
-
-            // 1. Restablecer estilos de zonas SI NO hay edición activa
-            if (modoEdicionRuta === null) {
-                zonasLayerGroup.eachLayer(layer => {
-                    layer.setStyle({ color: "#3388ff", weight: 1, fillOpacity: 0.1 });
-                });
-                zonasSeleccionadas.clear();
-                actualizarListaZonasSeleccionadas();
-                // Limpiar selección de direcciones
-                direccionesSeleccionadas.clear();                
-            }
-
-            // 2. Actualizar botones según el modo
-            if (modoEdicionRuta === 'crear' || modoEdicionRuta === 'editar') {
-                // Modo edición → mostrar Cancel y ocultar Crear
-
-                btnCancelar.style.display = 'block';
-                // Actualizar texto del botón principal
-                btnCrear.textContent = (modoEdicionRuta === 'crear' && zonasSeleccionadas.size > 0)
-                    ? 'Save Route'
-                    : 'Create New Route';
-
-                btnActualizar.style.display = (modoEdicionRuta === 'editar') ? 'block' : 'none';
-                btnEliminar.style.display = (modoEdicionRuta === 'editar') ? 'block' : 'none';
-            } else {
-                // Modo neutro → mostrar Crear, ocultar los demás
-                btnCancelar.style.display = 'none';
-                btnCrear.textContent = 'Create New Route';
-                btnActualizar.style.display = 'none';
-                btnEliminar.style.display = 'none';
-            }
-
-            // 3. Habilitar/deshabilitar inputs y tooltip
-            const enModoEdicion = (modoEdicionRuta === 'crear' || modoEdicionRuta === 'editar');
-            inputNombre.disabled = !enModoEdicion;
-            inputColor.disabled = !enModoEdicion;
-            inputColor.style.opacity = enModoEdicion ? '1' : '0.6';
-            guiaColor.textContent = enModoEdicion
-                ? "🎨 Select a color for your route"
-                : "🎨 Click 'Create New Route' to enable color picker";
-            mostrarTooltipNombre(enModoEdicion && modoEdicionRuta === 'crear' && zonasSeleccionadas.size === 0);
-
-
-            // 4. Restablecer color del botón Addresses
-            if (btnToggleDirecciones && map.hasLayer(direccionesLayerGroup)) {
-                btnToggleDirecciones.style.backgroundColor = '#fff';
-                map.removeLayer(direccionesLayerGroup);
-            }
-            // 4. Actualizar texto del botón "Crear"
-            btnCrear.textContent = (modoEdicionRuta === 'crear' && zonasSeleccionadas.size > 0)
-                ? 'Save Route'
-                : 'Create New Route';
-        } finally {
-            _actualizandoEstado = false;
-        }
-    }
+    document.addEventListener('DOMContentLoaded', function() {
+        inicializarMapa();
+        configurarEventListeners();
+        cargarRutasExistentes();
+        cargarTodasZonas();
+    });
 
     function inicializarMapa() {
-        const contenedorId = 'mapa_geo';
-        const contEl = document.getElementById(contenedorId);
-
-        console.log('[initMapa] checking container:', contenedorId, '->', contEl);
-        console.log('[initMapa] document.querySelectorAll("#mapa_geo").length =', document.querySelectorAll('#mapa_geo').length);
-        if (contEl) console.log('[initMapa] contEl.isConnected =', contEl.isConnected, ', parentNode =', contEl.parentNode);
-
-        if (!contEl) {
-            console.warn('❌ No se encontró el contenedor del mapa (id="mapa_geo")');
+        const contenedor = document.getElementById('mapa_geo');
+        if (!contenedor) {
+            console.error('Contenedor del mapa no encontrado');
             return;
         }
 
-        // Si ya existe un mapa, eliminarlo antes de crear uno nuevo
-        if (window.map) {
-            try {
-                window.map.remove();
-            } catch (err) {
-                console.warn('⚠️ Error al remover window.map existente:', err);
-            }
-            delete window.map;
-        }
+        // Crear mapa centrado en HQ
+        map = L.map(contenedor).setView(HQ_COORDS, 13);
 
-        // Diagnostic: comprobar qué devuelve L.DomUtil.get si está disponible
-        try {
-            if (L && L.DomUtil && typeof L.DomUtil.get === 'function') {
-                console.log('[initMapa] L.DomUtil.get("mapa_geo") =>', L.DomUtil.get(contenedorId));
-            }
-        } catch (e) {
-            console.warn('[initMapa] L.DomUtil.get threw:', e);
-        }
+        // Capa base (ESRI por defecto, configurable)
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri',
+            maxZoom: 20
+        }).addTo(map);
 
-        try {
-            // Pasar el elemento DOM directamente a L.map en lugar del id
-            const mapInstance = L.map(contEl).setView(HQ_COORDS, 13);
+        // Inicializar LayerGroups
+        capaZonas = L.layerGroup().addTo(map);
+        capaDireccionesRuta = L.layerGroup();
+        capaDireccionesLibres = L.layerGroup();
+        capaTodasDirecciones = L.layerGroup();
 
-            // Elegir capa base según configuración ya cargada
-            const tipo = (window.APP_CONFIG && window.APP_CONFIG.mapa_base) ? window.APP_CONFIG.mapa_base.toUpperCase() : 'ESRI';
-            console.log('🌍 Inicializando mapa con capa:', tipo);
+        // Agregar HQ
+        marcadorHQ = L.marker(HQ_COORDS, {
+            icon: L.divIcon({
+                html: HQ_ICON_SVG,
+                className: 'sede-marker',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            })
+        }).addTo(map).bindPopup('<b>Sergio\'s Landscape</b><br>Headquarters • Starting Point');
 
-            switch (tipo) {
-                case 'OSM':
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '&copy; OpenStreetMap contributors'
-                    }).addTo(mapInstance);
-                    break;
-                case 'ESRI':
-                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                        attribution: 'Tiles &copy; Esri',
-                        maxZoom: 20
-                    }).addTo(mapInstance);
-                    break;
-                default:
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '&copy; OpenStreetMap'
-                    }).addTo(mapInstance);
-            }
-
-            // Guardar referencia global
-            window.map = mapInstance;
-            map = window.map; // asignar también a la variable global usada por el resto del script
-
-            console.log('✅ Mapa inicializado con éxito (mapInstance).');
-        } catch (err) {
-            console.error('❌ Error al inicializar L.map(contenedor):', err);
-            // si quieres, re-lanzamos para capturar en tu try externo; por ahora lo dejamos logueado
-        }
-    }
-
-    function restablecerEstiloZonas() {
-        zonasLayerGroup.eachLayer(function (layer) {
-            layer.setStyle({ color: "#3388ff", weight: 1, fillOpacity: 0.1 });
+        // Control personalizado: Botón Addresses
+        const btnAddresses = L.control({
+            position: 'topleft'
         });
-    }
-
-    function ocultarFormularioZona() {
-        if (formularioZonaActiva) {
-            formularioZonaActiva.remove();
-            formularioZonaActiva = null;
-            zonaActivaId = null;
-        }
-    }
-
-    /**
-     * Abre un modal para reordenar direcciones de una ruta.
-     * @param {Array} direcciones - Array de objetos con: id_direccion, cliente_nombre, direccion, tiempo_servicio
-     * @returns {Promise<Array|null>} - Array de id_direccion en nuevo orden, o null si se cancela
-     */
-    function abrirModalOrdenarDirecciones(direcciones) {
-        return new Promise((resolve) => {
-            // Validación
-            if (!Array.isArray(direcciones) || direcciones.length === 0) {
-                resolve(null);
-                return;
-            }
-
-            // Crear overlay
-            const overlay = document.createElement('div');
-            overlay.style.cssText = `
-                position: fixed;
-                top: 0; left: 0;
-                width: 100%; height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 20000;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            `;
-
-            // Crear modal
-            const modal = document.createElement('div');
-            modal.style.cssText = `
-                background: white;
-                border-radius: 8px;
-                width: 90%;
-                max-width: 500px;
-                max-height: 80vh;
-                overflow: hidden;
-                font-family: Arial, sans-serif;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            `;
-
-            // Título
-            const header = document.createElement('div');
-            header.innerHTML = '<h3 style="margin: 0; padding: 16px; font-size: 1.1em; color: #2c3e50;">Reorder Route Addresses</h3>';
-            modal.appendChild(header);
-
-            // Contenedor de lista
-            const lista = document.createElement('div');
-            lista.style.cssText = `
-                padding: 0 16px;
-                max-height: 50vh;
-                overflow-y: auto;
-            `;
-            modal.appendChild(lista);
-
-            // Botones
-            const footer = document.createElement('div');
-            footer.style.cssText = `
-                padding: 16px;
-                text-align: right;
-                border-top: 1px solid #eee;
-            `;
-            footer.innerHTML = `
-                <button id="btn-cancelar-orden" style="
-                    margin-right: 10px;
-                    padding: 6px 12px;
-                    background: #95a5a6;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                ">Cancel</button>
-                <button id="btn-guardar-orden" style="
-                    padding: 6px 12px;
-                    background: #27ae60;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                ">Save Order</button>
-            `;
-            modal.appendChild(footer);
-
-            // Copia local para manipular
-            let items = direcciones.map(dir => ({
-                id_direccion: dir.id_direccion,
-                cliente_nombre: dir.cliente_nombre || '—',
-                direccion: dir.direccion || '—',
-                tiempo_servicio: dir.tiempo_servicio || 0
-            }));
-
-            // Renderizar lista
-            function renderLista() {
-                lista.innerHTML = '';
-                items.forEach((item, index) => {
-                    const itemEl = document.createElement('div');
-                    itemEl.style.cssText = `
-                        display: flex;
-                        align-items: center;
-                        padding: 10px 0;
-                        border-bottom: 1px solid #f0f0f0;
-                    `;
-
-                    const info = document.createElement('div');
-                    info.style.flex = '1';
-                    info.innerHTML = `
-                        <strong>${item.cliente_nombre}</strong><br>
-                        <small style="color: #555;">${item.direccion}</small><br>
-                        <em style="color: #27ae60; font-size: 0.85em;">⏱️ ${item.tiempo_servicio} min</em>
-                    `;
-
-                    const btns = document.createElement('div');
-                    btns.style.display = 'flex';
-                    btns.style.gap = '6px';
-                    btns.style.marginLeft = '12px';
-
-                    const btnUp = document.createElement('button');
-                    btnUp.textContent = '↑';
-                    btnUp.style.cssText = `
-                        width: 28px; height: 28px;
-                        background: #bdc3c7;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        font-weight: bold;
-                    `;
-                    btnUp.disabled = (index === 0);
-                    btnUp.onclick = () => {
-                        if (index > 0) {
-                            [items[index - 1], items[index]] = [items[index], items[index - 1]];
-                            renderLista();
-                        }
-                    };
-
-                    const btnDown = document.createElement('button');
-                    btnDown.textContent = '↓';
-                    btnDown.style.cssText = `
-                        width: 28px; height: 28px;
-                        background: #bdc3c7;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        font-weight: bold;
-                    `;
-                    btnDown.disabled = (index === items.length - 1);
-                    btnDown.onclick = () => {
-                        if (index < items.length - 1) {
-                            [items[index], items[index + 1]] = [items[index + 1], items[index]];
-                            renderLista();
-                        }
-                    };
-
-                    btns.appendChild(btnUp);
-                    btns.appendChild(btnDown);
-                    itemEl.appendChild(info);
-                    itemEl.appendChild(btns);
-                    lista.appendChild(itemEl);
-                });
-            }
-
-            renderLista();
-
-            // Eventos de botones
-            footer.querySelector('#btn-cancelar-orden').onclick = () => {
-                document.body.removeChild(overlay);
-                resolve(null);
-            };
-
-            footer.querySelector('#btn-guardar-orden').onclick = () => {
-                const idsOrdenados = items.map(item => item.id_direccion);
-                document.body.removeChild(overlay);
-                resolve(idsOrdenados);
-            };
-
-            // Cerrar al hacer clic fuera del modal
-            overlay.onclick = (e) => {
-                if (e.target === overlay) {
-                    document.body.removeChild(overlay);
-                    resolve(null);
-                }
-            };
-
-            // Agregar al DOM
-            modal.appendChild(footer);
-            overlay.appendChild(modal);
-            document.body.appendChild(overlay);
-        });
-    }
-
-    function crearFormularioFlotante(nombre_ruta = "", color_ruta = "white") {
-        if (formularioZonaActiva) formularioZonaActiva.remove();
-
-        const btnReordenar = document.createElement('button');
-        btnReordenar.textContent = 'Reorder';
-        btnReordenar.style = `
-            float: left;
-            background: #3498db;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 4px 8px;
-            font-size: 0.85em;
-            cursor: pointer;
-        `;
-
-        formularioZonaActiva = L.DomUtil.create('div', 'formulario-zona-flotante');
-        formularioZonaActiva.style = `
-            position: fixed;
-            top: 100px;
-            right: 20px;
-            width: 320px;
-            max-height: 70vh;
-            display: flex;
-            flex-direction: column;
-            background: ${color_ruta};
-            border: 2px solid #3498db;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-            z-index: 10000;
-            font-family: Arial, sans-serif;
-            cursor: move;
-            `;
-
-        let totalTiempo = 0;
-        if (rutaActual?.zonas) {
-            rutaActual.zonas.forEach(z => {
-                console.log("✅ Duracion de Servicios: ", rutaActual.zonas);
-                if (z.direcciones) {
-                    z.direcciones.forEach(d => {
-                        totalTiempo += parseInt(d.tiempo_servicio) || 0;
-                    });
-                }
-            });
-        }
-        tTiempo = minutosToHHMMSS(totalTiempo);
-
-        // Encabezado fijo con fondo blanco
-        const header = document.createElement('div');
-        header.style = `
-            background: white;
-            padding: 15px 15px 10px 15px;
-            border-bottom: 1px solid #eee;
-            border-radius: 8px 8px 0 0;
-        `;
-        header.innerHTML = `
-            <h4 style="margin:0; color:#2c3e50; font-size:1.1em;">
-                Zone Addresses ${nombre_ruta}
-                <span id="total-tiempo-ruta" style="float:right; font-weight:normal; font-size:0.9em; color:#e74c3c;">
-                    Total: ${tTiempo}
-                </span>
-            </h4>
-        `;
-
-        // Contenedor desplazable para la lista
-        const listaContenedor = document.createElement('div');
-        listaContenedor.id = 'lista-direcciones-zona';
-        listaContenedor.style = `
-            padding: 10px 15px 15px 15px;
-            max-height: calc(70vh - 80px);
-            overflow-y: auto;
-        `;
-
-        formularioZonaActiva.appendChild(header);
-        formularioZonaActiva.appendChild(listaContenedor);
-
-        // Hacerlo movible
-        let isDragging = false;
-        let offsetX, offsetY;
-
-        formularioZonaActiva.addEventListener('mousedown', (e) => {
-            if (e.target.classList.contains('btn-eliminar-direccion')) return;
-            isDragging = true;
-            offsetX = e.clientX - formularioZonaActiva.getBoundingClientRect().left;
-            offsetY = e.clientY - formularioZonaActiva.getBoundingClientRect().top;
-            formularioZonaActiva.style.cursor = 'grabbing';
-            e.preventDefault();
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            // Mover manteniendo alineación derecha relativa
-            const newRight = window.innerWidth - e.clientX - offsetX;
-            const newTop = e.clientY - offsetY;
-            formularioZonaActiva.style.right = `${newRight}px`;
-            formularioZonaActiva.style.top = `${newTop}px`;
-        });
-
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-            if (formularioZonaActiva) {
-                formularioZonaActiva.style.cursor = 'move';
-            }
-        });
-
-        document.body.appendChild(formularioZonaActiva);
-
-        btnReordenar.onclick = async () => {
-            if (!rutaActual?.zonas) {
-                suiteAlertWarning('Hold up!', 'No route loaded to reorder.');
-                return;
-            }
-            // Aplanar todas las direcciones de todas las zonas
-            const todasDirecciones = [];
-            rutaActual.zonas.forEach(z => {
-                if (z.direcciones && Array.isArray(z.direcciones)) {
-                    z.direcciones.forEach(d => {
-                        todasDirecciones.push({
-                            id_direccion: d.id_direccion,
-                            cliente_nombre: d.cliente_nombre,
-                            direccion: d.direccion,
-                            tiempo_servicio: d.tiempo_servicio || 0
-                        });
-                    });
-                }
-            });
-            const ordenNuevo = await abrirModalOrdenarDirecciones(todasDirecciones);
-            if (ordenNuevo) {
-                // Enviar al backend
-                try {
-                    suiteLoading('show');
-                    const res = await fetch(ruta_rutas_mapa_ajax, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            modulo_rutas: 'actualizar_orden_direcciones',
-                            id_ruta: rutaActual.id_ruta,
-                            orden_direcciones: ordenNuevo
-                        })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        suiteAlertSuccess('Order Saved!', 'Route order updated successfully.');
-                        // Recargar ruta para reflejar cambios
-                        await cargarZonasRuta(rutaActual.id_ruta);
-                    } else {
-                        throw new Error(data.error || 'Failed to save order');
-                    }
-                } catch (err) {
-                    suiteAlertError('Oops!', err.message);
-                } finally {
-                    suiteLoading('hide');
-                }
-            }
+        btnAddresses.onAdd = function() {
+            const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+            div.innerHTML = '<button id="leaflet-btn-addresses" style="padding: 6px 10px; background: white; border: 2px solid rgba(0,0,0,0.2); border-radius: 4px; cursor: pointer; font-weight: bold;">📍 Addresses</button>';
+            L.DomEvent.disableClickPropagation(div);
+            return div;
         };
-        header.appendChild(btnReordenar);
+        btnAddresses.addTo(map);
 
-        console.log('✅ Se creo el Formulario de Direcciones con éxito (formularioZonaActiva).');
-
+        // Evento del botón Addresses
+        document.getElementById('leaflet-btn-addresses').addEventListener('click', toggleModoAddresses);
     }
 
-    // --- Inicialización del Mapa (robusta) ---
-    document.addEventListener('DOMContentLoaded', function () {
-        // Handler que inicializa el mapa cuando la configuración esté lista
-        function onConfigReady() {
-            window.removeEventListener('configListo', onConfigReady);
+    // ============================================
+    // GESTIÓN DE ESTADOS
+    // ============================================
 
-            // Intentar inicializar el mapa, con varios reintentos si el contenedor no existe aún
-            let tries = 0;
-            const maxTries = 5;
+    function cambiarEstado(nuevoEstado, datos = {}) {
+        console.log(`🔄 Transición: ${estadoActual} → ${nuevoEstado}`);
 
-            const tryInit = function () {
-                tries++;
-                const contenedorEl = document.getElementById('mapa_geo');
+        const estadoAnterior = estadoActual;
+        estadoActual = nuevoEstado;
 
-                console.log(`🔎 [map-init] intento ${tries} - document.readyState=${document.readyState} - contenedorEl=`, contenedorEl);
-
-                if (!contenedorEl) {
-                    if (tries < maxTries) {
-                        console.warn('⚠️ [map-init] contenedor #map no encontrado, reintentando en 200ms...');
-                        setTimeout(tryInit, 200);
-                        return;
-                    } else {
-                        console.error('⛔ [map-init] contenedor #map NO encontrado tras varios intentos; abortando inicialización del mapa.');
-                        return;
-                    }
-                }
-
-                // Llamar a la función central que crea el L.map y guarda window.map
-                try {
-                    inicializarMapa(); // esta función contiene `const map = L.map(contenedor)...` y guardará `window.map`
-                } catch (err) {
-                    console.error('❌ Error al llamar inicializarMapa():', err);
-                    return;
-                }
-
-                // Recojo la referencia global creada por inicializarMapa()
-                map = window.map;
-                if (!map) {
-                    console.error('❌ inicializarMapa NO dejó window.map definido. Abortando setup adicional.');
-                    return;
-                }
-
-                console.log('✅ Mapa creado. Referencia global `map` OK.');
-
-                // === MARCADOR FIJO: Sede ===
-                const starSvgUniform = `
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="-16 -16 32 32">
-                    <!-- Triángulo hacia arriba -->
-                    <polygon
-                        points="0,-14 12,7 -12,7"
-                        fill="#0066FF"
-                        stroke="#0066FF"
-                        stroke-width="1"
-                    />
-                    <!-- Triángulo hacia abajo -->
-                    <polygon
-                        points="0,14 12,-7 -12,-7"
-                        fill="#0066FF"
-                        stroke="#0066FF"
-                        stroke-width="1"
-                    />
-                    </svg>`;
-
-                L.marker(HQ_COORDS, {
-                    icon: L.divIcon({
-                        html: starSvgUniform,
-                        className: 'sede-marker',
-                        iconSize: [32, 32],
-                        iconAnchor: [16, 16],
-                        popupAnchor: [0, -16]
-                    })
-                }).addTo(map).bindPopup(`
-                    <b>Sergio's Landscape</b><br>
-                    <span style="font-size: 0.9em; color: #555;">Headquarters • Starting Point</span>
-                `);
-
-                // Inicializar grupos de capas
-                zonasLayerGroup = L.layerGroup().addTo(map);
-                rutasLayerGroup = L.layerGroup().addTo(map);
-
-                direccionesLayerGroup = L.layerGroup(); // Se añadirá/quitara según necesidad
-                direccionesRutaLayerGroup = L.layerGroup(); // Solo para direcciones de la ruta cargada                
-                direccionesLibresLayerGroup = L.layerGroup();
-
-                direccionesAsignadasLayerGroup = L.layerGroup();
-                //cuadriculaLayerGroup = L.layerGroup(); // Se añadirá/quitara según estado
-
-                // Cargar zonas existentes
-                cargarZonas();
-
-                // Cargar rutas existentes
-                cargarRutas();
-
-                // UI buttons & controls (declarar y añadir)
-                // --- Eventos de Interfaz ---
-                document.getElementById('btn-crear-ruta').addEventListener('click', function () {
-                    if (modoEdicionRuta === null && zonasSeleccionadas.size === 0) {
-                        iniciarCreacionRuta(); // entra en modo
-                    } else {
-                        crearRuta(); // guarda
-                    }
-                });
-                document.getElementById('btn-crear-ruta').textContent = zonasSeleccionadas.size > 0 ? 'Save Route' : 'Create New Route';
-
-                document.getElementById('btn-actualizar-ruta').addEventListener('click', function () {
-console.log('Condicion al precionar el boton: ',modoEdicionRuta );
-                    if (modoEdicionRuta === 'editar' && modoGuardarRuta === null) {
-                        // Entrar en modo edición
-                        iniciarActualizacionRuta();
-                        // Cambiar texto del botón a "Save Changes"
-                        this.textContent = 'Save Changes';
-                        modoGuardarRuta = 'guardar';
-                    } else {
-                        // Guardar cambios
-                        actualizarRuta();
-                        this.textContent = 'Update This Route';
-                        modoGuardarRuta = null;
-                    }
-                });
-
-                document.getElementById('btn-eliminar-ruta').addEventListener('click', iniciarEliminacionRuta);
-                document.getElementById('btn-volver').addEventListener('click', function () {
-                    window.location.href = '<?= RUTA_REAL ?>/dashboard';
-                });
-
-                document.getElementById('btn-cancelar-accion').addEventListener('click', function () {
-                    modoEdicionRuta = null;
-                    rutaActual = null;
-                    ocultarFormularioZona();
-
-                    // Limpiar rutas y direcciones de ruta
-                    if (map.hasLayer(direccionesRutaLayerGroup)) {
-                        map.removeLayer(direccionesRutaLayerGroup);
-                        direccionesRutaLayerGroup.clearLayers();
-                    }
-                    // ✅ Solo limpiar las direcciones LIBRES si están activas
-                    if (map.hasLayer(direccionesLibresLayerGroup)) {
-                        map.removeLayer(direccionesLibresLayerGroup);
-                        direccionesLibresLayerGroup.clearLayers();
-                    }
-
-
-
-                    // ✅ Pero mantener las direcciones de la ruta solo si estás en modo edición
-                    // Como modoEdicionRuta = null, no hay ruta activa → puedes limpiar direccionesLayerGroup
-                    // if (map.hasLayer(direccionesLayerGroup)) {
-                    //     map.removeLayer(direccionesLayerGroup);
-                    //     direccionesLayerGroup.clearLayers();
-                    // }
-
-                    actualizarEstadoInterfaz();
-
-                    direccionesLayerGroup.clearLayers(); // limpia en caso de reuso
-
-                    // ✅ 2. Restablecer estilo de todas las zonas
-                    zonasLayerGroup.eachLayer(layer => {
-                        layer.setStyle({ color: "#3388ff", weight: 1, fillOpacity: 0.1 });
-                    });
-                    zonasSeleccionadas.clear();
-                    actualizarListaZonasSeleccionadas();
-
-                    // ✅ 3. Restablecer botón Addresses
-                    if (btnToggleDirecciones) {
-                        btnToggleDirecciones.style.backgroundColor = '#fff';
-                    }
-
-                    suiteAlertInfo('Action Canceled', 'Back to neutral state.');
-                });
-
-                // Botón para activar/desactivar direcciones
-                const btnToggleDirecciones = L.DomUtil.create('button', 'leaflet-bar leaflet-control leaflet-control-custom');
-                btnToggleDirecciones.title = 'Toggle Addresses';
-                btnToggleDirecciones.innerHTML = 'Addresses'; // Puedes usar un ícono si prefieres
-                btnToggleDirecciones.style.backgroundColor = '#fff';
-                btnToggleDirecciones.style.border = '1px solid #ccc';
-                btnToggleDirecciones.style.borderRadius = '4px';
-                btnToggleDirecciones.style.padding = '5px 10px';
-                btnToggleDirecciones.style.cursor = 'pointer';
-
-                btnToggleDirecciones.addEventListener('click', function () {
-                    if (map.hasLayer(direccionesLibresLayerGroup)) {
-                        map.removeLayer(direccionesLibresLayerGroup);
-                        btnToggleDirecciones.style.backgroundColor = '#fff';
-                    } else {
-                        // ✅ 1. Forzar estado neutro ANTES de mostrar direcciones
-                        modoEdicionRuta = null;
-                        rutaActual = null;
-                        zonasSeleccionadas.clear();
-                        actualizarListaZonasSeleccionadas();
-
-                        // Restablecer estilo de zonas
-                        zonasLayerGroup.eachLayer(layer => {
-                            layer.setStyle({ color: "#3388ff", weight: 1, fillOpacity: 0.1 });
-                        });
-
-                        // Restablecer botones
-                        document.getElementById('btn-crear-ruta').style.display = 'block';
-                        document.getElementById('btn-actualizar-ruta').style.display = 'none';
-                        document.getElementById('btn-eliminar-ruta').style.display = 'none';
-                        document.getElementById('btn-cancelar-accion').style.display = 'none';
-
-                        // ✅ 2. Cargar SOLO direcciones libres
-                        suiteLoading('show');
-                        cargarDirecciones().then(() => {
-                            // ✅ Bien: siempre asegúrate de que esté en el mapa
-                            if (!map.hasLayer(direccionesLibresLayerGroup)) {
-                                map.addLayer(direccionesLibresLayerGroup);
-                            }
-                            btnToggleDirecciones.style.backgroundColor = '#a3d2a3';
-                            // Habilitar botón crear ruta si es la primera vez
-                            if (!direccionesCargadas) {
-                                const btnCrear = document.getElementById('btn-crear-ruta');
-                                btnCrear.disabled = false;
-                                btnCrear.style.opacity = '1';
-                                btnCrear.title = '';
-                                direccionesCargadas = true;
-                            }
-                            map.addLayer(direccionesLibresLayerGroup); // ✅
-                            btnToggleDirecciones.style.backgroundColor = '#a3d2a3';
-
-                        }).catch(err => {
-                            suiteLoading('hide');
-                            suiteAlertError("Uh oh!", "Failed to load addresses.");
-                        }).finally(() => {
-                            suiteLoading('hide');
-                        });
-                    }
-                });
-
-                // Añadir botón al control del mapa (arriba a la izquierda por defecto)
-                //const customControlContainer = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-                //customControlContainer.appendChild(btnToggleCuadricula);
-                //map.addControl(L.control({ position: 'topleft' }).addTo(map).getContainer().appendChild(customControlContainer));
-
-                // Crear contenedor para controles personalizados
-                const customControlContainer = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-
-                // Evitar que los clicks en los botones propaguen al mapa (para poder clicar botones sin mover el mapa)
-                L.DomEvent.disableClickPropagation(customControlContainer);
-
-                // Añadir los botones al contenedor
-                customControlContainer.appendChild(btnToggleDirecciones);
-
-                // Crear un control válido de Leaflet y devolver el contenedor desde onAdd
-                const CustomControl = L.Control.extend({
-                    options: { position: 'topleft' },
-                    onAdd: function () {
-                        return customControlContainer;
-                    }
-                });
-
-                // Añadir el control al mapa correctamente
-                map.addControl(new CustomControl());
-
-                // Añadir botón de direcciones al mismo contenedor
-                customControlContainer.appendChild(btnToggleDirecciones);
-            };
-
-            // arranque del intento
-            tryInit();
-        } // end onConfigReady
-
-        // Deshabilitar botón al inicio
-        document.getElementById('btn-crear-ruta').disabled = true;
-        document.getElementById('btn-crear-ruta').style.opacity = '0.6';
-        document.getElementById('btn-crear-ruta').title = 'Enable addresses first';
-
-        // Registrar el listener ANTES de disparar la carga (evita perder el evento)
-        window.addEventListener('configListo', onConfigReady);
-
-        // Iniciar la carga de configuración (async)
-        cargarConfigYIniciar();
-    });
-
-    function actualizarTotalTiempo() {
-        let total = 0;
-        if (rutaActual?.zonas) {
-            rutaActual.zonas.forEach(z => {
-                z.direcciones?.forEach(d => {
-                    total += parseInt(d.tiempo_servicio) || 0;
-                });
-            });
+        // Limpiar según transición
+        if (estadoAnterior === ESTADOS.ADDRESSES && nuevoEstado !== ESTADOS.ADDRESSES) {
+            limpiarModoAddresses();
         }
-        tTiempo = minutosToHHMMSS(total);
-        console.log('Tiempo calculado: ', tTiempo);
 
-        const span = document.getElementById('total-tiempo-ruta');
-        if (span) span.textContent = `Total: ${tTiempo}`;
-    }    
+        if (estadoAnterior === ESTADOS.RUTA_VER && nuevoEstado === ESTADOS.NEUTRO) {
+            limpiarRutaActual();
+        }
 
-    // --- Funciones del Mapa y Lógica de Rutas ---
+        // Configurar nuevo estado
+        switch (nuevoEstado) {
+            case ESTADOS.NEUTRO:
+                configurarUI_Neutro();
+                break;
+            case ESTADOS.ADDRESSES:
+                configurarUI_Addresses();
+                break;
+            case ESTADOS.RUTA_VER:
+                rutaActual = datos.ruta || null;
+                configurarUI_RutaVer();
+                break;
+            case ESTADOS.RUTA_EDITAR:
+                configurarUI_RutaEditar();
+                break;
+        }
 
-    // Función para dibujar la cuadrícula de 1 km en el área visible
-    function dibujarCuadricula() {
-        // Limpiar la capa de cuadrícula antes de redibujar
-        //cuadriculaLayerGroup.clearLayers();
+        actualizarIndicadorEstado();
+    }
 
-        // Obtener los límites del mapa visible
-        const bounds = map.getBounds();
-        const southWest = bounds.getSouthWest();
-        const northEast = bounds.getNorthEast();
+    // ============================================
+    // CONFIGURACIONES DE UI POR ESTADO
+    // ============================================
 
-        // Tamaño aproximado de 1 km en grados (varía con la latitud)
-        // Aproximadamente 0.009 grados de latitud = 1 km
-        // Aproximadamente 0.012 grados de longitud = 1 km en Conroe, TX
-        const kmInLat = 0.009;
-        const kmInLng = 0.012;
+    function configurarUI_Neutro() {
+        // Limpiar selecciones
+        rutaEnConstruccion.zonas.clear();
+        rutaEnConstruccion.nombre = '';
 
-        // Calcular el rango de celdas a dibujar
-        const startLat = Math.floor(southWest.lat / kmInLat) * kmInLat;
-        const endLat = Math.ceil(northEast.lat / kmInLat) * kmInLat;
-        const startLng = Math.floor(southWest.lng / kmInLng) * kmInLng;
-        const endLng = Math.ceil(northEast.lng / kmInLng) * kmInLng;
+        // Resetear inputs
+        document.getElementById('input-nombre-ruta').value = '';
+        document.getElementById('input-nombre-ruta').disabled = true;
+        document.getElementById('input-color-ruta').disabled = true;
 
-        // Dibujar rectángulos para cada celda
-        for (let lat = startLat; lat <= endLat; lat += kmInLat) {
-            for (let lng = startLng; lng <= endLng; lng += kmInLng) {
-                const boundsCelda = [
-                    [lat, lng],
-                    [lat + kmInLat, lng + kmInLng]
-                ];
-                // Usar L.rectangle en lugar de L.polygon para cuadrados perfectos
-                // const celda = L.rectangle(boundsCelda, {
-                //     color: "#95a5a6", // Gris claro
-                //     weight: 1,
-                //     fillOpacity: 0.05, // Muy baja opacidad
-                //     interactive: false // No hacerla clickable
-                // }).addTo(cuadriculaLayerGroup);
+        // Botones
+        document.getElementById('btn-crear-ruta').style.display = 'block';
+        document.getElementById('btn-crear-ruta').textContent = 'Create New Route';
+        document.getElementById('btn-cancelar-accion').style.display = 'none';
+        document.getElementById('btn-guardar-ruta').style.display = 'none';
+
+        // Ocultar sección zonas seleccionadas
+        document.getElementById('seccion-zonas-seleccionadas').style.display = 'none';
+
+        // Limpiar formulario movible si existe
+        destruirFormularioMovible();
+
+        // Resetear visual de zonas
+        capaZonas.eachLayer(layer => {
+            layer.setStyle({
+                color: '#3388ff',
+                weight: 1,
+                fillOpacity: 0.1,
+                fillColor: '#3388ff'
+            });
+            layer.off('click');
+            layer.on('click', () => {
+                // En neutro, mostrar popup informativo
+                layer.openPopup();
+            });
+        });
+
+        // Limpiar capas de direcciones
+        map.removeLayer(capaDireccionesRuta);
+        map.removeLayer(capaDireccionesLibres);
+        capaDireccionesRuta.clearLayers();
+        capaDireccionesLibres.clearLayers();
+    }
+
+    function configurarUI_Addresses() {
+        // Cargar todas las direcciones con contrato
+        cargarTodasDireccionesAddresses();
+
+        // Botón Addresses activo
+        const btn = document.getElementById('leaflet-btn-addresses');
+        if (btn) btn.style.backgroundColor = '#a3d2a3';
+
+        // Zonas en modo decorativo (no coloreadas, clickeables para popup)
+        capaZonas.eachLayer(layer => {
+            layer.setStyle({
+                color: '#3388ff',
+                weight: 1,
+                fillOpacity: 0.05,
+                fillColor: '#3388ff'
+            });
+        });
+    }
+
+    function configurarUI_RutaVer() {
+        if (!rutaActual) return;
+
+        // Inputs con datos de ruta (deshabilitados)
+        document.getElementById('input-nombre-ruta').value = rutaActual.nombre_ruta;
+        document.getElementById('input-nombre-ruta').disabled = true;
+        document.getElementById('input-color-ruta').value = rutaActual.color_ruta;
+        document.getElementById('input-color-ruta').disabled = true;
+
+        // Botones: Update y Delete visibles, Save oculto
+        document.getElementById('btn-crear-ruta').style.display = 'none';
+        document.getElementById('btn-cancelar-accion').style.display = 'none';
+        document.getElementById('btn-guardar-ruta').style.display = 'block';
+        document.getElementById('btn-guardar-ruta').textContent = 'Update This Route';
+        document.getElementById('btn-guardar-ruta').style.backgroundColor = '#f39c12';
+        document.getElementById('btn-guardar-ruta').onclick = entrarModoEdicion;
+
+        // Ocultar sección zonas seleccionadas (no aplica en modo ver)
+        document.getElementById('seccion-zonas-seleccionadas').style.display = 'none';
+
+        // Cargar visual de ruta
+        mostrarRutaEnMapa(rutaActual, 'tenue');
+
+        // Crear formulario movible
+        crearFormularioMovible(rutaActual);
+    }
+
+    function configurarUI_RutaEditar() {
+        if (!rutaActual) return;
+
+        // Habilitar inputs
+        document.getElementById('input-nombre-ruta').disabled = false;
+        document.getElementById('input-color-ruta').disabled = false;
+
+        // Botones: Save y Cancel visibles
+        document.getElementById('btn-crear-ruta').style.display = 'none';
+        document.getElementById('btn-cancelar-accion').style.display = 'block';
+        document.getElementById('btn-guardar-ruta').style.display = 'block';
+        document.getElementById('btn-guardar-ruta').textContent = '💾 Save Changes';
+        document.getElementById('btn-guardar-ruta').style.backgroundColor = '#27ae60';
+        document.getElementById('btn-guardar-ruta').onclick = guardarCambiosRuta;
+
+        // Mostrar sección de zonas para edición
+        document.getElementById('seccion-zonas-seleccionadas').style.display = 'block';
+        actualizarListaZonasSeleccionadas();
+
+        // Cargar direcciones libres además de las de la ruta
+        cargarDireccionesLibres();
+
+        // Habilitar interacción con zonas
+        capaZonas.eachLayer(layer => {
+            const enRuta = rutaActual.zonas.some(z => z.id_zona === layer.zonaId);
+
+            if (enRuta) {
+                // Zona en ruta: click para editar direcciones
+                layer.setStyle({
+                    color: rutaActual.color_ruta,
+                    weight: 3,
+                    fillOpacity: 0.4
+                });
+                layer.off('click');
+                layer.on('click', () => abrirModalZonaEdicion(layer));
+            } else {
+                // Zona fuera de ruta: click para agregar
+                layer.setStyle({
+                    color: '#3388ff',
+                    weight: 2,
+                    fillOpacity: 0.2
+                });
+                layer.off('click');
+                layer.on('click', () => abrirModalZonaNueva(layer));
             }
+        });
+    }
+
+    // ============================================
+    // ACCIONES PRINCIPALES
+    // ============================================
+
+    function toggleModoAddresses() {
+        if (estadoActual === ESTADOS.ADDRESSES) {
+            cambiarEstado(ESTADOS.NEUTRO);
+        } else {
+            // Si hay ruta cargada, limpiarla primero
+            if (estadoActual === ESTADOS.RUTA_VER || estadoActual === ESTADOS.RUTA_EDITAR) {
+                cambiarEstado(ESTADOS.NEUTRO);
+            }
+            cambiarEstado(ESTADOS.ADDRESSES);
         }
     }
 
-    // Función para cargar zonas desde el backend y dibujarlas
-    async function cargarZonas() {
-        try {
-            suiteLoading('show');
-            const response = await fetch(ruta_rutas_mapa_ajax, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ modulo_rutas: 'listar_todas_zonas' })
+    function iniciarCreacionRuta() {
+        if (estadoActual === ESTADOS.ADDRESSES) {
+            cambiarEstado(ESTADOS.NEUTRO);
+        }
+
+        // Habilitar inputs
+        document.getElementById('input-nombre-ruta').disabled = false;
+        document.getElementById('input-color-ruta').disabled = false;
+        document.getElementById('input-nombre-ruta').focus();
+
+        // Mostrar controles de creación
+        document.getElementById('btn-crear-ruta').textContent = 'Save New Route';
+        document.getElementById('btn-crear-ruta').onclick = guardarNuevaRuta;
+        document.getElementById('btn-cancelar-accion').style.display = 'block';
+        document.getElementById('seccion-zonas-seleccionadas').style.display = 'block';
+
+        // Habilitar selección de zonas
+        capaZonas.eachLayer(layer => {
+            layer.setStyle({
+                color: '#3388ff',
+                weight: 2,
+                fillOpacity: 0.2
             });
+            layer.off('click');
+            layer.on('click', () => seleccionarZonaParaNuevaRuta(layer));
+        });
 
-            if (!response.ok) throw new Error('HTTP ' + response.status);
+        // Cargar direcciones libres para mostrar en rojo
+        cargarDireccionesLibres();
 
+        actualizarIndicadorEstado('Creating Route - Select zones');
+    }
+
+    function entrarModoEdicion() {
+        cambiarEstado(ESTADOS.RUTA_EDITAR);
+    }
+
+    function cancelarAccion() {
+        if (estadoActual === ESTADOS.RUTA_EDITAR && rutaActual) {
+            // Volver a modo ver de la misma ruta
+            cambiarEstado(ESTADOS.RUTA_VER, {
+                ruta: rutaActual
+            });
+        } else {
+            // Volver a neutro
+            cambiarEstado(ESTADOS.NEUTRO);
+        }
+    }
+
+    // ============================================
+    // CARGA DE DATOS (AJAX)
+    // ============================================
+
+    async function cargarRutasExistentes() {
+        try {
+            const response = await fetch(RUTA_AJAX, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    modulo_rutas: 'listar_rutas'
+                })
+            });
             const data = await response.json();
+
+            const container = document.getElementById('rutas-lista');
+            if (data.success && data.data.length > 0) {
+                container.innerHTML = '';
+                data.data.forEach(ruta => {
+                    const div = document.createElement('div');
+                    div.className = 'ruta-item';
+                    div.style.cssText = 'padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center;';
+                    div.innerHTML = `<span style="display: inline-block; width: 12px; height: 12px; background: ${ruta.color_ruta}; margin-right: 8px; border-radius: 2px;"></span>
+                                <div>
+                                    <div style="font-weight: bold;">${ruta.nombre_ruta}</div>
+                                    <div style="font-size: 0.85em; color: #666;">${ruta.total_direcciones} addresses</div>
+                                </div>`;
+                    div.onclick = () => seleccionarRutaExistente(ruta.id_ruta);
+                    container.appendChild(div);
+                });
+            } else {
+                container.innerHTML = '<p style="color: #7f8c8d; font-style: italic;">No routes found</p>';
+            }
+        } catch (err) {
+            console.error('Error cargando rutas:', err);
+        }
+    }
+
+    async function cargarTodasZonas() {
+        try {
+            const response = await fetch(RUTA_AJAX, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    modulo_rutas: 'listar_todas_zonas'
+                })
+            });
+            const data = await response.json();
+
             if (data.success) {
-                zonasLayerGroup.clearLayers();
+                capaZonas.clearLayers();
+                zonasData.clear();
 
                 data.data.forEach(zona => {
                     const bounds = [
@@ -1492,630 +498,607 @@ console.log('Condicion al precionar el boton: ',modoEdicionRuta );
                         [zona.lat_ne, zona.lng_ne]
                     ];
                     const rect = L.rectangle(bounds, {
-                        color: "#ffffffff",
+                        color: '#3388ff',
                         weight: 1,
-                        fillOpacity: 0.1
-                    }).addTo(zonasLayerGroup);
+                        fillOpacity: 0.1,
+                        fillColor: '#3388ff'
+                    }).addTo(capaZonas);
 
                     rect.zonaId = zona.id_zona;
                     rect.zonaNombre = zona.nombre_zona;
+                    rect.bindPopup(`<b>${zona.nombre_zona}</b><br>ID: ${zona.id_zona}`);
 
-                    // Solo mostrar popup en modo neutro (fuera de edición)
-                    if (modoEdicionRuta === null) {
-                        rect.bindPopup(`<b>Zona:</b> ${zona.nombre_zona}<br>ID: ${zona.id_zona}<br>Coords: (${zona.lat_sw}, ${zona.lng_sw}) to (${zona.lat_ne}, ${zona.lng_ne})`);
-                    }
-
-                    // En cargarZonas(), al crear cada rectángulo:
-                    rect.on('click', function (e) {
-                        // En modo neutro: mostrar formulario con direcciones ya asignadas
-                        if (modoEdicionRuta === 'crear' || modoEdicionRuta === 'editar') {
-                            // En modo edición: abrir modal para asignar direcciones
-                            seleccionarZonaConModal(rect);
-                        } else {
-                            zonaActivaId = rect.zonaId;
-                            cargarDireccionesDeZona(rect.zonaId, rect.zonaNombre);
-                        }
-                    });
+                    zonasData.set(zona.id_zona, zona);
                 });
-            } else {
-                throw new Error(data.error || 'Something ain’t right with the zones.');
             }
         } catch (err) {
-            console.error("Error loading zones:", err);
-            suiteAlertError('Uh oh!', 'Could not load zones: ' + err.message);
-        } finally {
-            suiteLoading('hide');
+            console.error('Error cargando zonas:', err);
         }
     }
 
-    // Función para cargar direcciones existentes y dibujarlas como marcadores
-    async function cargarDirecciones() {
+    async function cargarTodasDireccionesAddresses() {
         try {
-            suiteLoading('show');
-            // Limpiar capa antes de cargar nuevas direcciones
-            direccionesLibresLayerGroup.clearLayers();
+            mostrarLoading(true);
 
-            const response = await fetch(ruta_direcciones_ajax, {
+            const response = await fetch(RUTA_AJAX, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ modulo_direcciones: 'listar_direcciones_con_coordenadas' }) // Ajusta según tu endpoint
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    modulo_rutas: 'listar_todas_direcciones_contrato'
+                })
             });
-
-            if (!response.ok) throw new Error('HTTP ' + response.status);
-
             const data = await response.json();
+
+            capaTodasDirecciones.clearLayers();
+
             if (data.success) {
-                // data.data debe contener [{ id_direccion, direccion, lat, lng, cliente_nombre }, ...]
                 data.data.forEach(dir => {
-                    if (dir.lat && dir.lng) { // Asegurar que tenga coordenadas
-                        // Crear un círculo en lugar de un marcador estándar
-                        const circle = L.circle([dir.lat, dir.lng], {
-                            radius: 75, // Radio en metros
-                            color: "#ccff9fff", // Color del borde
-                            fillColor: "#de1111ff", // Color de relleno
-                            fillOpacity: 0.7,
-                            weight: 1
-                        }).addTo(direccionesLibresLayerGroup);
+                    if (!dir.lat || !dir.lng) return;
 
-                        if (!map.hasLayer(direccionesLibresLayerGroup)) {
-                            map.addLayer(direccionesLibresLayerGroup);
-                        }
+                    const esLibre = dir.es_libre;
+                    const color = esLibre ? '#de1111' : (dir.color_ruta || '#999');
+                    const borde = esLibre ? '#ffff00' : color;
 
-                        // Asociar datos de la dirección al círculo para futuras referencias
-                        circle.direccionId = dir.id_direccion;
-                        circle.direccionNombre = dir.cliente_nombre || 'Anonymous Customer';
-                        circle.direccionTexto = dir.direccion;
+                    const circle = L.circle([dir.lat, dir.lng], {
+                        radius: 75,
+                        color: borde,
+                        fillColor: color,
+                        fillOpacity: 0.7,
+                        weight: esLibre ? 3 : 2
+                    }).addTo(capaTodasDirecciones);
 
-                        // Popup con información
-                        circle.bindPopup(`<b>Client:</b> ${circle.direccionNombre}<br><b>Address:</b> ${circle.direccionTexto}<br>ID: ${circle.direccionId}`);
-                    }
+                    const popupContent = esLibre ?
+                        `<b>${dir.cliente_nombre}</b><br>${dir.direccion}<br><em style="color: #e74c3c;">⚠️ Free - No route</em>` :
+                        `<b>${dir.cliente_nombre}</b><br>${dir.direccion}<br><em style="color: ${dir.color_ruta};">● ${dir.nombre_ruta || 'Assigned'}</em>`;
+
+                    circle.bindPopup(popupContent);
                 });
-                console.log("Direcciones cargadas y dibujadas.");
-            } else {
-                throw new Error(data.error || 'Couldn’t pull the addresses, partner.');
+
+                if (!map.hasLayer(capaTodasDirecciones)) {
+                    map.addLayer(capaTodasDirecciones);
+                }
             }
         } catch (err) {
-            console.error("Error loading addresses:", err);
-            suiteAlertError('Uh oh!', 'Could not load addresses: ' + err.message);
-            throw err; // 👈 Propagar error para el .catch()
+            console.error('Error cargando direcciones:', err);
+            alerta('Error', 'Could not load addresses');
         } finally {
-            suiteLoading('hide');
+            mostrarLoading(false);
         }
-        // ✅ Devolver explícitamente (aunque es async, ya devuelve Promise)
-        return true;
     }
 
-    // Función para cargar rutas existentes
-    async function cargarRutas() {
+    async function cargarDireccionesLibres() {
         try {
-            suiteLoading('show');
-            const response = await fetch(ruta_rutas_mapa_ajax, {
+            const idRutaExcluir = rutaActual ? rutaActual.id_ruta : null;
+
+            const response = await fetch(RUTA_AJAX, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json' 
+                headers: {
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(
-                    { 
-                        modulo_rutas: 'listar_rutas' 
-                    }
-                )
+                body: JSON.stringify({
+                    modulo_rutas: 'listar_direcciones_libres',
+                    id_ruta_actual: idRutaExcluir
+                })
             });
-
-            if (!response.ok) throw new Error('HTTP ' + response.status);
-
             const data = await response.json();
+
+            capaDireccionesLibres.clearLayers();
+
             if (data.success) {
-                rutasLayerGroup.clearLayers();
+                data.data.forEach(dir => {
+                    if (!dir.lat || !dir.lng) return;
 
-                const listaRutas = document.getElementById('rutas-lista');
-                listaRutas.innerHTML = '';
+                    const circle = L.circle([dir.lat, dir.lng], {
+                        radius: 75,
+                        color: '#ffff00', // Borde amarillo
+                        fillColor: '#de1111', // Rojo
+                        fillOpacity: 0.7,
+                        weight: 2
+                    }).addTo(capaDireccionesLibres);
 
-                data.data.forEach(ruta => {
-                    const rutaDiv = document.createElement('div');
-                    rutaDiv.className = 'ruta-item';
-                    rutaDiv.innerHTML = `<span style="color: ${ruta.color_ruta}">■</span> ${ruta.nombre_ruta} (${ruta.total_direcciones} assoc. addrs.)`;
-                    rutaDiv.onclick = () => cargarZonasRuta(ruta.id_ruta);
-                    listaRutas.appendChild(rutaDiv);
+                    circle.direccionId = dir.id_direccion;
+                    circle.bindPopup(`
+                    <b>${dir.cliente_nombre}</b><br>
+                    ${dir.direccion}<br>
+                    <em style="color: #e74c3c;">⚠️ Free - Ready to add</em>
+                `);
                 });
-            } else {
-                throw new Error(data.error || 'No routes found out here.');
+
+                if (!map.hasLayer(capaDireccionesLibres)) {
+                    map.addLayer(capaDireccionesLibres);
+                }
             }
         } catch (err) {
-            console.error("Error loading routes:", err);
-            suiteAlertError('Dang it!', 'Could not load routes: ' + err.message);
-        } finally {
-            suiteLoading('hide');
+            console.error('Error cargando direcciones libres:', err);
         }
     }
 
-    // Función para cargar las zonas de una ruta específica
-    async function cargarZonasRuta(id_ruta) {
-        // Limpiar el registro global de marcadores
-        window.direccionesMarkers = window.direccionesMarkers || {};
-        try {
-            suiteLoading('show');
-            console.log("🔍 [cargarZonasRuta] Iniciando carga de ruta ID:", id_ruta);
-            // ocultarFormularioZona();
+    async function seleccionarRutaExistente(idRuta) {
+        if (estadoActual === ESTADOS.ADDRESSES) {
+            limpiarModoAddresses();
+        }
 
-            const response = await fetch(ruta_rutas_mapa_ajax, {
+        try {
+            mostrarLoading(true);
+
+            const response = await fetch(RUTA_AJAX, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json' 
+                headers: {
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(
-                    { 
-                        modulo_rutas: 'obtener_ruta', 
-                        id_ruta: id_ruta 
-                    }
-                )
+                body: JSON.stringify({
+                    modulo_rutas: 'obtener_ruta',
+                    id_ruta: idRuta
+                })
             });
-            if (!response.ok) throw new Error('HTTP ' + response.status);
             const data = await response.json();
 
             if (data.success) {
-                const ruta = data.data;
-                console.log("✅ [cargarZonasRuta] Ruta recibida:", ruta);
-
-                const nombre_ruta = ruta.nombre_ruta;
-                const color_ruta = ruta.color_ruta;
-                const id_ruta = ruta.id_ruta;
-
-                // 1. Limpiar capas de direcciones
-                if (map.hasLayer(direccionesRutaLayerGroup)) {
-                    map.removeLayer(direccionesRutaLayerGroup);
-                }
-
-                direccionesLayerGroup.clearLayers();  // 👈 Limpia la capa correcta
-                //direccionesAsignadasLayerGroup.clearLayers();
-
-                // 2. Colorear zonas
-                zonasLayerGroup.eachLayer(layer => {
-                    const enRuta = ruta.zonas.some(z => z.id_zona === layer.zonaId);
-                    layer.setStyle({
-                        color: enRuta ? ruta.color_ruta : "#97ff17ff",
-                        weight: enRuta ? 2 : 1,
-                        fillOpacity: enRuta ? 0.4 : 0.1
-                    });
-                    if (enRuta) layer.bringToFront();
+                cambiarEstado(ESTADOS.RUTA_VER, {
+                    ruta: data.data
                 });
-
-                // 3. Dibujar SOLO las direcciones asignadas a esta ruta
-                let contadorDirecciones = 0;
-                ruta.zonas.forEach(zona => {
-                    if (zona.direcciones && Array.isArray(zona.direcciones)) {
-                        zona.direcciones.forEach(dir => {
-                            if (dir.lat && dir.lng) {
-                                const circle = L.circle([dir.lat, dir.lng], {
-                                    radius: 75,
-                                    color: "#ccff9fff",
-                                    fillColor: ruta.color_ruta || "#de1111ff",
-                                    fillOpacity: 0.7,
-                                    weight: 2
-                                }).addTo(direccionesLayerGroup);
-
-                                // 👇 Registrar el marcador globalmente
-                                window.direccionesMarkers[dir.id_direccion] = circle;
-
-                                circle.direccionId = dir.id_direccion;
-                                circle.direccionNombre = dir.cliente_nombre || '—';
-                                circle.direccionTexto = dir.direccion;
-                                circle.bindPopup(`<b>${dir.cliente_nombre}</b><br>${dir.direccion}<br><em>Zone: ${zona.nombre_zona}</em>`);
-                                contadorDirecciones++;
-                            }
-                        });
-                    }
-                });
-
-                console.log(`📍 [cargarZonasRuta] Direcciones dibujadas en capa: ${contadorDirecciones}`);
-
-
-                // ✅ 4. CARGAR Y DIBUJAR DIRECCIONES LIBRES (no asignadas)
-                try {
-                    const responseLibres = await fetch(ruta_direcciones_ajax, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ modulo_direcciones: 'listar_direcciones_con_coordenadas' })
-                    });
-                    const dataLibres = await responseLibres.json();
-                    if (dataLibres.success && dataLibres.data) {
-                        dataLibres.data.forEach(dir => {
-                            if (dir.lat && dir.lng) {
-                                // ✅ Dibujar en ROJO (libres)
-                                const circle = L.circle([dir.lat, dir.lng], {
-                                    radius: 75,
-                                    color: "#ccff9fff",
-                                    fillColor: "#de1111ff", // Rojo: no asignada
-                                    fillOpacity: 0.7,
-                                    weight: 1
-                                }).addTo(direccionesLayerGroup);
-                                circle.direccionId = dir.id_direccion;
-                                circle.direccionNombre = dir.cliente_nombre || '—';
-                                circle.direccionTexto = dir.direccion;
-                                circle.bindPopup(`<b>${dir.cliente_nombre}</b><br>${dir.direccion}<br><em>Not assigned to any route</em>`);
-                            }
-                        });
-                    }
-                } catch (err) {
-                    console.warn("No se cargaron direcciones libres:", err);
-                }
-
-                // 4. Asegurar que la capa esté en el mapa
-                if (!map.hasLayer(direccionesLayerGroup)) {
-                    map.addLayer(direccionesLayerGroup);
-                    console.log("✅ [cargarZonasRuta] Capa de direcciones AÑADIDA al mapa.");
-                } else {
-                    map.removeLayer(direccionesLayerGroup);
-                    console.log("ℹ️ [cargarZonasRuta] Capa de direcciones YA estaba en el mapa.");
-                    map.addLayer(direccionesLayerGroup);
-                    console.log("✅ [cargarZonasRuta] Capa de direcciones AÑADIDA al mapa.");
-                }
-
-
-                // 5. Actualizar UI
-                document.getElementById('input-nombre-ruta').value = ruta.nombre_ruta;
-                document.getElementById('input-color-ruta').value = ruta.color_ruta;
-                document.getElementById('btn-crear-ruta').style.display = 'none';
-                document.getElementById('btn-actualizar-ruta').style.display = 'block';
-                document.getElementById('btn-eliminar-ruta').style.display = 'block';
-                zonasSeleccionadas.clear();
-                ruta.zonas.forEach(z => zonasSeleccionadas.add(z.id_zona));
-                actualizarListaZonasSeleccionadas();
-                modoEdicionRuta = 'editar';
-                rutaActual = ruta;
-
-                const nuevo_color = hexToRgba(color_ruta);
-                crearFormularioFlotante(nombre_ruta, nuevo_color);
-                cargarDireccionesDeZonaenRutas(id_ruta);
-
-                // Limpiar popups de todas las zonas al entrar en modo edición
-                zonasLayerGroup.eachLayer(layer => {
-                    if (layer.getPopup()) {
-                        layer.unbindPopup();
-                    }
-                });
-
-                modoEdicionRuta = 'editar';
-                rutaActual = ruta;
-                actualizarEstadoInterfaz();
-                actualizarTotalTiempo();
             } else {
-                throw new Error(data.error || 'Route not found.');
+                alerta('Error', data.error || 'Could not load route');
             }
         } catch (err) {
-            console.error("Error loading route:", err);
-            suiteAlertError('Uh oh!', 'Could not load route: ' + err.message);
+            console.error('Error cargando ruta:', err);
+            alerta('Error', 'Failed to load route');
         } finally {
-            suiteLoading('hide');
+            mostrarLoading(false);
         }
     }
 
-    // Función para iniciar el modo de creación de ruta
-    function iniciarCreacionRuta() {
-        modoEdicionRuta = 'crear';
-        ocultarFormularioZona();
-        document.getElementById('input-nombre-ruta').value = '';
-        document.getElementById('input-color-ruta').value = '#3498db';
-        actualizarEstadoInterfaz();
-        if (btnToggleDirecciones) {
-            btnToggleDirecciones.style.backgroundColor = '#fff';
-        }
-        suiteAlertInfo('New Route', 'Click on zones to build your route. Don’t forget to connect back to HQ!');
-    }
+    // ============================================
+    // VISUALIZACIÓN DE RUTA
+    // ============================================
 
-    // Función para iniciar el modo de actualización de ruta
-    function iniciarActualizacionRuta() {
-        if (!rutaActual) {
-            suiteAlertWarning('Hold up!', 'You ain’t selected no route to update.');
-            return;
-        }
+    function mostrarRutaEnMapa(ruta, modo = 'tenue') {
+        // Limpiar capas previas
+        capaDireccionesRuta.clearLayers();
 
-        // Limpiar popups de todas las zonas al entrar en modo edición
-        zonasLayerGroup.eachLayer(layer => {
-            if (layer.getPopup()) {
-                layer.unbindPopup();
+        // Pintar zonas de la ruta
+        const idsZonasRuta = ruta.zonas.map(z => z.id_zona);
+
+        capaZonas.eachLayer(layer => {
+            const enRuta = idsZonasRuta.includes(layer.zonaId);
+
+            if (enRuta) {
+                const opacity = modo === 'tenue' ? 0.15 : 0.35;
+                const weight = modo === 'tenue' ? 2 : 3;
+
+                layer.setStyle({
+                    color: ruta.color_ruta,
+                    weight: weight,
+                    fillOpacity: opacity,
+                    fillColor: ruta.color_ruta
+                });
+            } else {
+                // Otras zonas: muy tenues
+                layer.setStyle({
+                    color: '#aaaaaa',
+                    weight: 1,
+                    fillOpacity: 0.03,
+                    fillColor: '#aaaaaa'
+                });
             }
         });
 
-        modoEdicionRuta = 'editar';
-        suiteAlertInfo('Edit Mode', 'Click zones to add or remove ’em from this route.');
+        // Mostrar direcciones de la ruta
+        const todasLasDirecciones = ruta.zonas.flatMap(z =>
+            z.direcciones.map(d => ({
+                ...d,
+                id_zona: z.id_zona
+            }))
+        );
 
-        actualizarEstadoInterfaz();
+        todasLasDirecciones.forEach(dir => {
+            if (!dir.lat || !dir.lng) return;
 
-        // Opcional: asegurar que las zonas de la ruta estén seleccionadas visualmente
-        zonasSeleccionadas.clear();
-        rutaActual.zonas.forEach(z => zonasSeleccionadas.add(z.id_zona));
-        actualizarListaZonasSeleccionadas();
-        zonasLayerGroup.eachLayer(layer => {
-            const enRuta = rutaActual.zonas.some(z => z.id_zona === layer.zonaId);
+            const circle = L.circle([dir.lat, dir.lng], {
+                radius: 75,
+                color: '#ccff9f', // Borde claro
+                fillColor: ruta.color_ruta, // Color de ruta
+                fillOpacity: 0.7,
+                weight: 2
+            }).addTo(capaDireccionesRuta);
+
+            circle.direccionId = dir.id_direccion;
+            circle.bindPopup(`
+            <b>${dir.cliente_nombre}</b><br>
+            ${dir.direccion}<br>
+            <em>Zone: ${ruta.zonas.find(z => z.id_zona === dir.id_zona)?.nombre_zona || 'Unknown'}</em>
+        `);
+        });
+
+        if (!map.hasLayer(capaDireccionesRuta)) {
+            map.addLayer(capaDireccionesRuta);
+        }
+
+        // Ajustar vista a los bounds de la ruta
+        if (todasLasDirecciones.length > 0) {
+            const lats = todasLasDirecciones.map(d => d.lat);
+            const lngs = todasLasDirecciones.map(d => d.lng);
+            const bounds = [
+                [Math.min(...lats), Math.min(...lngs)],
+                [Math.max(...lats), Math.max(...lngs)]
+            ];
+            map.fitBounds(bounds, {
+                padding: [50, 50]
+            });
+        }
+    }
+
+    // ============================================
+    // FORMULARIO MOVIBLE
+    // ============================================
+
+    function crearFormularioMovible(ruta) {
+        // Destruir si existe
+        destruirFormularioMovible();
+
+        // Crear contenedor
+        const form = document.createElement('div');
+        form.id = 'formulario-movible';
+        form.style.cssText = `
+        position: fixed;
+        top: 120px;
+        right: 20px;
+        width: 320px;
+        max-height: 70vh;
+        background: ${hexToRgba(ruta.color_ruta, 0.1)};
+        border: 2px solid ${ruta.color_ruta};
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        z-index: 10000;
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+    `;
+
+        // Header draggable
+        const header = document.createElement('div');
+        header.style.cssText = `
+        background: white;
+        padding: 12px;
+        border-bottom: 1px solid #eee;
+        border-radius: 6px 6px 0 0;
+        cursor: move;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    `;
+
+        // Calcular tiempo total
+        const todasDirs = ruta.zonas.flatMap(z => z.direcciones);
+        const tiempoTotal = todasDirs.reduce((sum, d) => sum + (parseInt(d.tiempo_servicio) || 0), 0);
+        const tiempoFormateado = minutosAHorasMinutos(tiempoTotal);
+
+        header.innerHTML = `
+        <div>
+            <h4 style="margin: 0; color: #2c3e50; font-size: 1.1em;">${ruta.nombre_ruta}</h4>
+            <span style="font-size: 0.85em; color: #e74c3c;">⏱️ Total: ${tiempoFormateado}</span>
+        </div>
+        <button id="btn-reordenar" style="padding: 6px 12px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">↕️ Reorder</button>
+    `;
+
+        // Lista de direcciones
+        const lista = document.createElement('div');
+        lista.id = 'lista-direcciones-formulario';
+        lista.style.cssText = `
+        padding: 10px;
+        max-height: calc(70vh - 80px);
+        overflow-y: auto;
+        background: ${hexToRgba(ruta.color_ruta, 0.05)};
+    `;
+
+        // Renderizar direcciones
+        let html = '';
+        todasDirs.forEach((dir, index) => {
+            const tiempo = dir.tiempo_servicio ? `${dir.tiempo_servicio} min` : '';
+            html += `
+            <div class="direccion-item" data-id="${dir.id_direccion}" style="
+                padding: 8px;
+                margin-bottom: 6px;
+                background: white;
+                border-radius: 4px;
+                border-left: 3px solid ${ruta.color_ruta};
+                cursor: pointer;
+                transition: background 0.2s;
+            " onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div style="flex: 1;">
+                        <strong style="font-size: 0.95em;">${index + 1}. ${dir.cliente_nombre}</strong><br>
+                        <small style="color: #666;">${dir.direccion}</small>
+                        ${tiempo ? `<br><small style="color: #27ae60;">⏱️ ${tiempo}</small>` : ''}
+                    </div>
+                    ${estadoActual === ESTADOS.RUTA_EDITAR ? `
+                        <button class="btn-eliminar-dir" data-id="${dir.id_direccion}" style="
+                            background: #e74c3c;
+                            color: white;
+                            border: none;
+                            border-radius: 3px;
+                            padding: 2px 6px;
+                            font-size: 0.75em;
+                            cursor: pointer;
+                            margin-left: 5px;
+                        ">×</button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        });
+
+        lista.innerHTML = html || '<p style="color: #7f8c8d; text-align: center;">No addresses</p>';
+
+        form.appendChild(header);
+        form.appendChild(lista);
+        document.body.appendChild(form);
+
+        // Eventos
+        configurarDragFormulario(form, header);
+
+        // Click en dirección para zoom
+        lista.querySelectorAll('.direccion-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-eliminar-dir')) return;
+                const idDir = parseInt(item.dataset.id);
+                zoomADireccion(idDir);
+            });
+        });
+
+        // Botón reordenar
+        const btnReorder = document.getElementById('btn-reordenar');
+        if (btnReorder) {
+            btnReorder.addEventListener('click', abrirModalReordenamiento);
+        }
+
+        // Botones eliminar (solo en edición)
+        if (estadoActual === ESTADOS.RUTA_EDITAR) {
+            lista.querySelectorAll('.btn-eliminar-dir').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idDir = parseInt(btn.dataset.id);
+                    confirmarEliminarDireccion(idDir);
+                });
+            });
+        }
+    }
+
+    function destruirFormularioMovible() {
+        const existente = document.getElementById('formulario-movible');
+        if (existente) existente.remove();
+    }
+
+    function configurarDragFormulario(form, header) {
+        let isDragging = false;
+        let startX, startY, startRight, startTop;
+
+        header.addEventListener('mousedown', (e) => {
+            if (e.target.tagName === 'BUTTON') return;
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = form.getBoundingClientRect();
+            startRight = window.innerWidth - rect.right;
+            startTop = rect.top;
+            header.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            form.style.right = `${startRight - dx}px`;
+            form.style.top = `${startTop + dy}px`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            header.style.cursor = 'move';
+        });
+    }
+
+    // ============================================
+    // MODALES DE INTERACCIÓN
+    // ============================================
+
+    async function seleccionarZonaParaNuevaRuta(layer) {
+        const idZona = layer.zonaId;
+        const nombreZona = layer.zonaNombre;
+
+        // Verificar si ya está seleccionada
+        if (rutaEnConstruccion.zonas.has(idZona)) {
+            // Deseleccionar
+            rutaEnConstruccion.zonas.delete(idZona);
             layer.setStyle({
-                color: enRuta ? "#e74c3c" : "#3388ff",
-                weight: enRuta ? 2 : 1,
-                fillOpacity: enRuta ? 0.3 : 0.1
+                color: '#3388ff',
+                weight: 2,
+                fillOpacity: 0.2
             });
-        });
-    }
-
-    // Función para iniciar el modo de eliminación de ruta
-    function iniciarEliminacionRuta() {
-        if (!rutaActual) {
-            suiteAlertWarning('Whoa there!', 'You gotta pick a route first.');
+            actualizarListaZonasSeleccionadas();
             return;
         }
-        modoEdicionRuta = 'eliminar';
-        suiteConfirm('Delete Route?', `You sure you wanna delete "${rutaActual.nombre_ruta}"? You can’t undo this.`)
-            .then(result => {
-                if (result) {
-                    eliminarRuta(rutaActual.id_ruta);
-                } else {
-                    modoEdicionRuta = 'editar';
-                }
+
+        // Cargar direcciones de la zona
+        try {
+            mostrarLoading(true);
+            const response = await fetch(RUTA_AJAX, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    modulo_rutas: 'obtener_direcciones_zona',
+                    id_zona: idZona
+                })
             });
-    }
+            const data = await response.json();
+            mostrarLoading(false);
 
-    // Función para actualizar la lista de zonas seleccionadas en el sidebar
-    function actualizarListaZonasSeleccionadas() {
-        const lista = document.getElementById('zonas-seleccionadas-lista');
-        lista.innerHTML = '';
-        document.getElementById('contador-zonas').textContent = zonasSeleccionadas.size;
-
-        zonasSeleccionadas.forEach(id => {
-            let nombreZona = 'Zone ' + id;
-            zonasLayerGroup.eachLayer(function (layer) {
-                if (layer.zonaId === id) {
-                    nombreZona = layer.zonaNombre;
-                }
-            });
-
-            const item = document.createElement('div');
-            item.className = 'zona-item';
-            item.textContent = nombreZona;
-            item.onclick = () => {
-                zonasSeleccionadas.delete(id);
-                actualizarListaZonasSeleccionadas();
-                zonasLayerGroup.eachLayer(function (layer) {
-                    if (layer.zonaId === id) {
-                        layer.setStyle({ color: "#3388ff", weight: 1, fillOpacity: 0.1 });
-                    }
-                });
+            const direcciones = data.success ? data.data : {
+                libres: [],
+                en_otra_ruta: [],
+                en_ruta_actual: []
             };
-            lista.appendChild(item);
-        });
-    }
 
-    // Función para crear una nueva ruta
-    async function crearRuta() {
-        const nombre = document.getElementById('input-nombre-ruta').value.trim();
-        const color = document.getElementById('input-color-ruta').value;
-        const zonas_ids = Array.from(zonasSeleccionadas);
+            // Si no hay direcciones libres ni en otra ruta, agregar zona vacía
+            const totalDisponibles = direcciones.libres.length + direcciones.en_otra_ruta.length;
 
-        if (!nombre) {
-            suiteAlertWarning('Hold up!', 'Gimme a name for this route, partner.');
-            return;
-        }
-        if (zonas_ids.length === 0) {
-            suiteAlertWarning('Wait a minute!', 'You gotta pick at least one zone before you save.');
-            return;
-        }
-
-        try {
-            suiteLoading('show');
-            const response = await fetch(ruta_rutas_mapa_ajax, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_rutas: 'crear_ruta',
-                    nombre_ruta: nombre,
-                    color_ruta: color,
-                    direcciones_ids: direcciones_ids
-                })
-            });
-
-            if (!response.ok) throw new Error('HTTP ' + response.status);
-
-            const data = await response.json();
-            if (data.success) {
-                suiteAlertSuccess('Sweet!', data.message);
-                iniciarCreacionRuta();
-                cargarRutas();
-                cargarZonas();
-            } else {
-                throw new Error(data.error || 'Something went sideways with the save.');
+            if (totalDisponibles === 0) {
+                // Zona vacía (solo para navegación)
+                rutaEnConstruccion.zonas.set(idZona, {
+                    direcciones: new Set()
+                });
+                layer.setStyle({
+                    color: '#e74c3c',
+                    weight: 3,
+                    fillOpacity: 0.3
+                });
+                actualizarListaZonasSeleccionadas();
+                return;
             }
-        } catch (err) {
-            console.error("Error creating route:", err);
-            suiteAlertError('Dang it!', 'Could not create route: ' + err.message);
-        } finally {
-            suiteLoading('hide');
-        }
-    }
 
-    // Función para actualizar una ruta existente
-    async function actualizarRuta() {
-        if (!rutaActual) {
-            suiteAlertWarning('Hold up!', 'You ain’t selected no route to update.');
-            return;
-        }
+            // Mostrar modal de selección
+            const seleccionadas = await abrirModalSeleccionDirecciones(direcciones, nombreZona, 'crear');
 
-        const id_ruta = rutaActual.id_ruta;
-        const nombre = document.getElementById('input-nombre-ruta').value.trim();
-        const color = document.getElementById('input-color-ruta').value;
-        const direccionesArray = Array.from(zonasSeleccionadas);
-
-        if (!nombre) {
-            suiteAlertWarning('Hold up!', 'Gimme a name for this route, partner.');
-            return;
-        }
-        if (direccionesArray.length === 0) {
-            suiteAlertWarning('Wait a minute!', 'You gotta pick at least one zone before you save.');
-            return;
-        }
-
-        try {
-            suiteLoading('show');
-
-            const response = await fetch(ruta_rutas_mapa_ajax, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_rutas: 'actualizar_ruta',
-                    id_ruta: id_ruta,
-                    nombre_ruta: nombre,
-                    color_ruta: color,
-                    direcciones_ids: direccionesArray
-                })
-            });
-
-            if (!response.ok) throw new Error('HTTP ' + response.status);
-
-            const data = await response.json();
-            if (data.success) {
-                suiteAlertSuccess('Sweet!', data.message);
-                await cargarZonasRuta(id_ruta);
-                // ✅ Recargar SOLO la lista de rutas (el panel lateral)
-                await cargarRutas(); // ← Esto actualiza el listado con nombre y color nuevos
-                // ✅ Volver a cargar las zonas (por si cambiaron)
-                await cargarZonas();
-            } else {
-                throw new Error(data.error || 'Something went sideways with the save.');
+            if (seleccionadas !== null) {
+                // Agregar zona con direcciones seleccionadas
+                rutaEnConstruccion.zonas.set(idZona, {
+                    direcciones: new Set(seleccionadas)
+                });
+                layer.setStyle({
+                    color: '#e74c3c',
+                    weight: 3,
+                    fillOpacity: 0.3
+                });
+                actualizarListaZonasSeleccionadas();
             }
+
         } catch (err) {
-            console.error("Error updating route:", err);
-            suiteAlertError('Dang it!', 'Could not update route: ' + err.message);
-        } finally {
-            suiteLoading('hide');
+            mostrarLoading(false);
+            console.error('Error:', err);
+            alerta('Error', 'Could not load zone addresses');
         }
     }
 
-    // Función para eliminar una ruta existente
-    async function eliminarRuta(id_ruta) {
-        try {
-            suiteLoading('show');
-            const response = await fetch(ruta_rutas_mapa_ajax, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_rutas: 'eliminar_ruta',
-                    id_ruta: id_ruta
-                })
-            });
-
-            if (!response.ok) throw new Error('HTTP ' + response.status);
-
-            const data = await response.json();
-            if (data.success) {
-                suiteAlertSuccess('Done!', data.message);
-                iniciarCreacionRuta();
-                cargarRutas();
-                cargarZonas();
-            } else {
-                throw new Error(data.error || 'Could not delete that route.');
-            }
-        } catch (err) {
-            console.error("Error deleting route:", err);
-            suiteAlertError('Dang it!', 'Could not delete route: ' + err.message);
-        } finally {
-            suiteLoading('hide');
-        }
+    async function abrirModalZonaNueva(layer) {
+        // Similar a seleccionarZonaParaNuevaRuta pero para agregar a ruta existente en edición
+        // TODO: Implementar cuando se trabaje en edición de ruta
     }
 
-    function abrirModalSeleccionDirecciones(direcciones, nombreZona, zonaId) {
+    async function abrirModalZonaEdicion(layer) {
+        // Para editar direcciones de zona ya en ruta
+        // TODO: Implementar
+    }
+
+    function abrirModalSeleccionDirecciones(direcciones, nombreZona, modo) {
         return new Promise((resolve) => {
             const overlay = document.createElement('div');
-            overlay.style = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 19999;
-            `;
+            overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 20000;
+            display: flex; justify-content: center; align-items: center;
+        `;
 
             const modal = document.createElement('div');
-            modal.style = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: white;
-                padding: 20px;
-                border-radius: 8px;
-                max-width: 500px;
-                max-height: 70vh;
-                overflow-y: auto;
-                z-index: 20000;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                font-family: Arial, sans-serif;
-            `;
+            modal.style.cssText = `
+            background: white; border-radius: 8px; width: 90%; max-width: 500px;
+            max-height: 80vh; display: flex; flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        `;
 
-            // Contenedor del título y botón de selección
-            const titleBar = document.createElement('div');
-            titleBar.style = `display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;`;
+            // Header
+            const header = document.createElement('div');
+            header.style.cssText = 'padding: 16px; border-bottom: 2px solid #3498db; background: #f8f9fa;';
+            header.innerHTML = `
+            <h3 style="margin: 0; color: #2c3e50;">${nombreZona}</h3>
+            <p style="margin: 5px 0 0 0; font-size: 0.85em; color: #7f8c8d;">
+                Select addresses to include in the route
+            </p>
+        `;
 
-            const title = document.createElement('h3');
-            title.innerHTML = `Select addresses for:<br><em style="color:#2980b9;">${nombreZona}</em>`;
-            title.style.margin = '0';
+            // Controles
+            const controls = document.createElement('div');
+            controls.style.cssText = 'padding: 10px 16px; border-bottom: 1px solid #eee;';
+            controls.innerHTML = `
+            <button id="btn-select-all" style="margin-right: 8px; padding: 4px 10px; background: #3498db; color: white; border: none; border-radius: 3px; cursor: pointer;">Select All</button>
+            <button id="btn-deselect-all" style="padding: 4px 10px; background: #95a5a6; color: white; border: none; border-radius: 3px; cursor: pointer;">Deselect All</button>
+        `;
 
-            const btnDeselectAll = document.createElement('button');
-            btnDeselectAll.textContent = 'Deselect All';
-            btnDeselectAll.style = `
-                background: #e74c3c;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 8px;
-                font-size: 0.8em;
-                cursor: pointer;
-            `;
-            btnDeselectAll.onclick = () => {
-                const checkboxes = modal.querySelectorAll('input[type="checkbox"]');
-                checkboxes.forEach(cb => cb.checked = false);
-            };
-
-            titleBar.appendChild(title);
-            titleBar.appendChild(btnDeselectAll);
-
+            // Lista
             const lista = document.createElement('div');
-            lista.id = 'lista-direcciones-modal';
-            lista.style = "margin: 10px 0; max-height: 300px; overflow-y: auto;";
+            lista.style.cssText = 'padding: 10px 16px; max-height: 50vh; overflow-y: auto;';
 
-            direcciones.forEach(dir => {
-                const item = document.createElement('div');
-                item.style = "padding: 10px; border-bottom: 1px solid #eee; display: flex; align-items: start;";
-                item.innerHTML = `
-                    <input type="checkbox" id="dir-${dir.id_direccion}" value="${dir.id_direccion}" checked style="margin-top: 4px;">
-                    <label for="dir-${dir.id_direccion}" style="margin-left: 10px; font-size: 0.95em; flex: 1;">
-                        <strong>${dir.cliente_nombre || '—'}</strong><br>
-                        <span style="color: #555; font-size: 0.9em;">${dir.direccion}</span>
-                    </label>
-                `;
-                lista.appendChild(item);
-            });
+            let html = '';
 
-            const actions = document.createElement('div');
-            actions.style = "text-align: right; margin-top: 15px;";
-            actions.innerHTML = `
-                <button id="btn-cancelar-direcciones" style="margin-right: 10px; padding: 6px 12px; background: #95a5a6; color: white; border: none; border-radius: 4px;">Cancel</button>
-                <button id="btn-confirmar-direcciones" style="padding: 6px 12px; background: #27ae60; color: white; border: none; border-radius: 4px;">Confirm</button>
-            `;
+            // Direcciones libres (seleccionables)
+            if (direcciones.libres.length > 0) {
+                html += `<div style="margin-bottom: 15px;"><h4 style="margin: 0 0 8px 0; color: #27ae60; font-size: 0.95em;">✓ Available Addresses (${direcciones.libres.length})</h4>`;
+                direcciones.libres.forEach(dir => {
+                    html += crearItemDireccionModal(dir, true, false);
+                });
+                html += '</div>';
+            }
 
-            modal.appendChild(titleBar);
+            // Direcciones en otra ruta (disabled, informativo)
+            if (direcciones.en_otra_ruta.length > 0) {
+                html += `<div style="margin-bottom: 15px; opacity: 0.7;"><h4 style="margin: 0 0 8px 0; color: #95a5a6; font-size: 0.95em;">🚫 In Other Routes (${direcciones.en_otra_ruta.length})</h4>`;
+                direcciones.en_otra_ruta.slice(0, 3).forEach(dir => {
+                    html += crearItemDireccionModal(dir, false, true);
+                });
+                if (direcciones.en_otra_ruta.length > 3) {
+                    html += `<div style="text-align: center; color: #7f8c8d; font-size: 0.85em;">... and ${direcciones.en_otra_ruta.length - 3} more</div>`;
+                }
+                html += '</div>';
+            }
+
+            // Direcciones ya en esta ruta (si aplica, disabled)
+            if (direcciones.en_ruta_actual && direcciones.en_ruta_actual.length > 0) {
+                html += `<div style="margin-bottom: 15px;"><h4 style="margin: 0 0 8px 0; color: #f39c12; font-size: 0.95em;">⭐ Already in This Route (${direcciones.en_ruta_actual.length})</h4>`;
+                direcciones.en_ruta_actual.forEach(dir => {
+                    html += crearItemDireccionModal(dir, true, true, true);
+                });
+                html += '</div>';
+            }
+
+            lista.innerHTML = html || '<p style="color: #7f8c8d; text-align: center;">No addresses available in this zone</p>';
+
+            // Footer
+            const footer = document.createElement('div');
+            footer.style.cssText = 'padding: 16px; border-top: 1px solid #eee; text-align: right;';
+            footer.innerHTML = `
+            <button id="btn-cancelar-modal" style="margin-right: 10px; padding: 8px 16px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+            <button id="btn-confirmar-modal" style="padding: 8px 16px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Confirm</button>
+        `;
+
+            modal.appendChild(header);
+            modal.appendChild(controls);
             modal.appendChild(lista);
-            modal.appendChild(actions);
+            modal.appendChild(footer);
             overlay.appendChild(modal);
             document.body.appendChild(overlay);
 
-            // Event listeners
-            document.getElementById('btn-cancelar-direcciones').onclick = () => {
+            // Eventos
+            document.getElementById('btn-select-all').onclick = () => {
+                lista.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = true);
+            };
+
+            document.getElementById('btn-deselect-all').onclick = () => {
+                lista.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = false);
+            };
+
+            document.getElementById('btn-cancelar-modal').onclick = () => {
                 document.body.removeChild(overlay);
                 resolve(null);
             };
 
-            document.getElementById('btn-confirmar-direcciones').onclick = () => {
-                const checkboxes = modal.querySelectorAll('input[type="checkbox"]:checked');
-                const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            document.getElementById('btn-confirmar-modal').onclick = () => {
+                const seleccionadas = Array.from(lista.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)'))
+                    .map(cb => parseInt(cb.value));
                 document.body.removeChild(overlay);
-                resolve(ids);
+                resolve(seleccionadas);
             };
 
             overlay.onclick = (e) => {
@@ -2127,129 +1110,257 @@ console.log('Condicion al precionar el boton: ',modoEdicionRuta );
         });
     }
 
-    // === SELECCIÓN DE ZONA CON MODAL DE DIRECCIONES ===
-    async function seleccionarZonaConModal(zone) {
-        const bounds = zone.getBounds();
-        const sw = bounds.getSouthWest();
-        const ne = bounds.getNorthEast();
+    function crearItemDireccionModal(dir, checked, disabled, yaEnRuta = false) {
+        const bgColor = yaEnRuta ? '#fef9e7' : (disabled ? '#ecf0f1' : '#d5f5d5');
+        const borderColor = yaEnRuta ? '#f39c12' : (disabled ? '#95a5a6' : '#27ae60');
+        const badge = yaEnRuta ? '<span style="color:#f39c12; font-size:0.8em;">[IN ROUTE]</span>' :
+            (disabled ? `<span style="color:#95a5a6; font-size:0.8em;">[${dir.nombre_ruta || 'Other route'}]</span>` : '');
 
-        // Verificar si ya está seleccionada → permitir deselección inmediata
-        if (zonasSeleccionadas.has(zone.zonaId)) {
-            zonasSeleccionadas.delete(zone.zonaId);
-            zone.setStyle({ color: "#3388ff", weight: 1, fillOpacity: 0.1 });
+        return `
+        <div style="padding: 10px; margin-bottom: 6px; background: ${bgColor}; border-radius: 4px; border-left: 3px solid ${borderColor}; ${disabled ? 'opacity: 0.7;' : ''}">
+            <label style="display: flex; align-items: start; cursor: ${disabled ? 'not-allowed' : 'pointer'};">
+                <input type="checkbox" value="${dir.id_direccion}" 
+                    ${checked ? 'checked' : ''} 
+                    ${disabled ? 'disabled' : ''} 
+                    style="margin-right: 10px; margin-top: 3px;">
+                <div style="flex: 1;">
+                    <strong>${dir.cliente_nombre}</strong> ${badge}<br>
+                    <small style="color: #555;">${dir.direccion}</small>
+                </div>
+            </label>
+        </div>
+    `;
+    }
 
-            // Eliminar direcciones asociadas a esta zona
-            const response = await fetch(ruta_direcciones_ajax, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_direcciones: 'listar_direcciones_en_area',
-                    lat_sw: sw.lat,
-                    lng_sw: sw.lng,
-                    lat_ne: ne.lat,
-                    lng_ne: ne.lng
-                })
-            });
-            const data = await response.json();
-            if (data.success) {
-                data.data.forEach(dir => {
-                    direccionesSeleccionadas.delete(dir.id_direccion);
-                });
-            }
+    // ============================================
+    // ACCIONES DE GUARDADO
+    // ============================================
 
-            actualizarListaZonasSeleccionadas();
+    async function guardarNuevaRuta() {
+        const nombre = document.getElementById('input-nombre-ruta').value.trim();
+        const color = document.getElementById('input-color-ruta').value;
+
+        if (!nombre) {
+            alerta('Required', 'Please enter a route name');
             return;
         }
 
-        try {
-            suiteLoading('show');
-
-            // Consultar direcciones en el área
-            const response = await fetch("<?php echo RUTA_APP; ?>/app/ajax/direccionesAjax.php", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_direcciones: 'listar_direcciones_en_area',
-                    lat_sw: sw.lat,
-                    lng_sw: sw.lng,
-                    lat_ne: ne.lat,
-                    lng_ne: ne.lng
-                })
-            });
-
-            const data = await response.json();
-            // Cierra suiteLoading
-            suiteLoading('hide');
-
-            if (!data.success) throw new Error(data.error || 'Failed to load addresses in zone');
-
-            const direcciones = data.data || [];
-
-            // Si no hay direcciones, seleccionar directamente
-            if (direcciones.length === 0) {
-                zonasSeleccionadas.add(zone.zonaId);
-                zone.setStyle({ color: "#e74c3c", weight: 2, fillOpacity: 0.3 });
-                actualizarListaZonasSeleccionadas();
-                return;
-            }
-
-            // Abrir modal para seleccionar direcciones
-            const idsSeleccionados = await abrirModalSeleccionDirecciones(direcciones, zone.zonaNombre, zone.zonaId);
-
-            if (idsSeleccionados === null) {
-                // Cancelado
-                return;
-            }
-
-            // Si no se seleccionan direcciones, la zona se añade sin asociaciones
-            if (idsSeleccionados.length === 0) {
-                suiteAlertInfo('Noted!', `Zone "${zone.zonaNombre}" added without addresses.`);
-                zonasSeleccionadas.add(zone.zonaId);
-                zone.setStyle({ color: "#e74c3c", weight: 2, fillOpacity: 0.3 });
-                actualizarListaZonasSeleccionadas();
-                return;
-            }
-
-            // Guardar asociación en backend
-            suiteLoading('show');
-            const saveResponse = await fetch("<?php echo RUTA_APP; ?>/app/ajax/zonasAjax.php", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    modulo_zonas: 'crear_zona',
-                    lat_sw: sw.lat,
-                    lng_sw: sw.lng,
-                    lat_ne: ne.lat,
-                    lng_ne: ne.lng,
-                    ids_direcciones: idsSeleccionados,
-                    nombre_zona: zone.zonaNombre,
-                    id_ruta: modoEdicionRuta === 'editar' ? rutaActual.id_ruta : null
-                })
-            });
-
-            const saveData = await saveResponse.json();
-            suiteLoading('hide');
-
-            if (!saveData.success) throw new Error(saveData.error || 'Failed to link addresses');
-
-            // Ahora sí, seleccionar la zona
-            zonasSeleccionadas.add(zone.zonaId);
-            zone.setStyle({ color: "#e74c3c", weight: 2, fillOpacity: 0.3 });
-            actualizarListaZonasSeleccionadas();
-
-            // Mostrar formulario flotante con las direcciones de la zona
-            // console.log("Antes de crearFormularioFlotante");            
-            //     crearFormularioFlotante();
-            // console.log("Despues de crearFormularioFlotante");            
-            zonaActivaId = zone.zonaId;
-            cargarDireccionesDeZona(zone.zonaId, zone.zonaNombre);
-
-            suiteAlertSuccess('Yeehaw!', `Zone "${zone.zonaNombre}" linked with ${idsSeleccionados.length} address(es).`);
-
-        } catch (err) {
-            suiteLoading('hide');
-            console.error('Error en selección de zona:', err);
-            suiteAlertError('Dang it!', 'Could not process zone: ' + err.message);
+        if (rutaEnConstruccion.zonas.size === 0) {
+            alerta('Required', 'Please select at least one zone');
+            return;
         }
+
+        // Construir payload
+        const zonasPayload = [];
+        rutaEnConstruccion.zonas.forEach((data, idZona) => {
+            zonasPayload.push({
+                id_zona: idZona,
+                direcciones_ids: Array.from(data.direcciones)
+            });
+        });
+
+        try {
+            mostrarLoading(true);
+            const response = await fetch(RUTA_AJAX, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    modulo_rutas: 'crear_ruta',
+                    nombre_ruta: nombre,
+                    color_ruta: color,
+                    zonas: zonasPayload
+                })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alerta('Success', 'Route created successfully!', 'success');
+                cambiarEstado(ESTADOS.NEUTRO);
+                cargarRutasExistentes();
+            } else {
+                throw new Error(data.error || 'Failed to create route');
+            }
+        } catch (err) {
+            alerta('Error', err.message);
+        } finally {
+            mostrarLoading(false);
+        }
+    }
+
+    async function guardarCambiosRuta() {
+        // TODO: Implementar guardado de edición con cambios batch
+        alerta('Info', 'Save changes functionality - TODO');
+    }
+
+    // ============================================
+    // UTILIDADES Y HELPERS
+    // ============================================
+
+    function actualizarListaZonasSeleccionadas() {
+        const lista = document.getElementById('zonas-seleccionadas-lista');
+        const contador = document.getElementById('contador-zonas');
+
+        lista.innerHTML = '';
+        contador.textContent = rutaEnConstruccion.zonas.size;
+
+        rutaEnConstruccion.zonas.forEach((data, idZona) => {
+            const zonaInfo = zonasData.get(idZona);
+            const nombre = zonaInfo ? zonaInfo.nombre_zona : `Zone ${idZona}`;
+            const numDirs = data.direcciones.size;
+
+            const item = document.createElement('div');
+            item.style.cssText = 'padding: 6px; margin-bottom: 4px; background: white; border-radius: 3px; font-size: 0.9em; display: flex; justify-content: space-between; align-items: center;';
+            item.innerHTML = `
+            <span>${nombre} ${numDirs > 0 ? `(${numDirs} addr)` : '(nav only)'}</span>
+            <button style="background: #e74c3c; color: white; border: none; border-radius: 3px; padding: 2px 6px; cursor: pointer; font-size: 0.8em;">×</button>
+        `;
+
+            item.querySelector('button').onclick = () => {
+                rutaEnConstruccion.zonas.delete(idZona);
+                // Resetear visual de la zona en el mapa
+                capaZonas.eachLayer(layer => {
+                    if (layer.zonaId === idZona) {
+                        layer.setStyle({
+                            color: '#3388ff',
+                            weight: 2,
+                            fillOpacity: 0.2
+                        });
+                    }
+                });
+                actualizarListaZonasSeleccionadas();
+            };
+
+            lista.appendChild(item);
+        });
+    }
+
+    function actualizarIndicadorEstado(texto = null) {
+        const indicador = document.getElementById('estado-indicador');
+        const textos = {
+            [ESTADOS.NEUTRO]: {
+                text: 'Ready',
+                bg: '#95a5a6'
+            },
+            [ESTADOS.ADDRESSES]: {
+                text: 'Viewing All Addresses',
+                bg: '#9b59b6'
+            },
+            [ESTADOS.RUTA_VER]: {
+                text: `Viewing: ${rutaActual?.nombre_ruta || 'Route'}`,
+                bg: '#3498db'
+            },
+            [ESTADOS.RUTA_EDITAR]: {
+                text: `Editing: ${rutaActual?.nombre_ruta || 'Route'}`,
+                bg: '#f39c12'
+            }
+        };
+
+        const config = textos[estadoActual] || {
+            text: texto || 'Ready',
+            bg: '#95a5a6'
+        };
+        indicador.textContent = config.text;
+        indicador.style.backgroundColor = config.bg;
+    }
+
+    function limpiarModoAddresses() {
+        map.removeLayer(capaTodasDirecciones);
+        capaTodasDirecciones.clearLayers();
+        const btn = document.getElementById('leaflet-btn-addresses');
+        if (btn) btn.style.backgroundColor = 'white';
+    }
+
+    function limpiarRutaActual() {
+        rutaActual = null;
+        capaDireccionesRuta.clearLayers();
+        map.removeLayer(capaDireccionesRuta);
+        map.removeLayer(capaDireccionesLibres);
+        capaDireccionesLibres.clearLayers();
+        destruirFormularioMovible();
+    }
+
+    function zoomADireccion(idDireccion) {
+        // Buscar en capa de ruta
+        let encontrada = null;
+        capaDireccionesRuta.eachLayer(layer => {
+            if (layer.direccionId === idDireccion) {
+                encontrada = layer;
+            }
+        });
+
+        if (encontrada) {
+            map.setView(encontrada.getLatLng(), 17);
+            encontrada.openPopup();
+
+            // Highlight temporal
+            const originalFill = encontrada.options.fillColor;
+            encontrada.setStyle({
+                fillColor: '#ffff00',
+                fillOpacity: 1,
+                radius: 100
+            });
+            setTimeout(() => {
+                encontrada.setStyle({
+                    fillColor: originalFill,
+                    fillOpacity: 0.7,
+                    radius: 75
+                });
+            }, 1500);
+        }
+    }
+
+    function configurarEventListeners() {
+        document.getElementById('btn-volver').onclick = () => {
+            window.location.href = '<?= RUTA_REAL ?>/dashboard';
+        };
+
+        document.getElementById('btn-crear-ruta').onclick = iniciarCreacionRuta;
+        document.getElementById('btn-cancelar-accion').onclick = cancelarAccion;
+    }
+
+    function hexToRgba(hex, alpha) {
+        hex = hex.replace('#', '');
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        const r = parseInt(hex.substr(0, 2), 16);
+        const g = parseInt(hex.substr(2, 2), 16);
+        const b = parseInt(hex.substr(4, 2), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function minutosAHorasMinutos(totalMinutos) {
+        if (!totalMinutos || totalMinutos <= 0) return '00:00';
+        const horas = Math.floor(totalMinutos / 60);
+        const minutos = totalMinutos % 60;
+        return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
+    }
+
+    function mostrarLoading(mostrar) {
+        // Implementar o usar suiteLoading si existe
+        if (mostrar) {
+            console.log('⏳ Loading...');
+        } else {
+            console.log('✅ Ready');
+        }
+    }
+
+    function alerta(titulo, mensaje, tipo = 'info') {
+        // Implementar o usar suiteAlert si existe
+        alert(`${titulo}: ${mensaje}`);
+    }
+
+    // ============================================
+    // TODO: FUNCIONES PENDIENTES DE IMPLEMENTAR
+    // ============================================
+
+    async function abrirModalReordenamiento() {
+        // TODO: Modal con flechas para reordenar direcciones
+        console.log('TODO: Reordenamiento');
+    }
+
+    async function confirmarEliminarDireccion(idDireccion) {
+        // TODO: Confirmar y eliminar dirección de ruta
+        console.log('TODO: Eliminar dirección', idDireccion);
     }
 </script>

@@ -139,6 +139,25 @@
                     🔐 <span class="menu-text">General Maintenance</span>
                 </a>
                 <ul class="ul_1 submenu" role="menu" aria-label="Sub Processes">
+                    <li class="li_1 has-submenu" aria-haspopup="true" aria-expanded="false">
+                        <a href="#" class="menu-item submenu-toggle" tabindex="0">
+                            🕶️ <span class="menu-text">Critical Systems</span>
+                        </a>
+                        <ul class="ul_1 submenu" role="menu" aria-label="Sub Processes">
+                            <!-- Datos Generales --> 
+                            <li class="li_1" role="menuitem">
+                                <a href="<?php echo RUTA_APP."/parametros/"; ?>" class="menu-item">
+                                    🌐 General Parameters
+                                </a>
+                            </li>
+                            <li class="li_1" role="menuitem">
+                                <a href="<?php echo RUTA_APP."/usuarios/"; ?>" class="menu-item">
+                                    🛂 User maintenance
+                                </a>
+                            </li>
+
+                        </ul>
+                    </li>
                     <!-- En la sección de "Mantenimiento" o "Administración" --> 
                     <li class="li_1" role="menuitem">
                         <a href="<?php echo RUTA_APP."/salas/"; ?>" class="menu-item">

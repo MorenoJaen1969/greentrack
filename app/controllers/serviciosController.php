@@ -6,6 +6,8 @@ require_once APP_R_PROY . 'app/models/mainModel.php';
 require_once APP_R_PROY . 'app/models/datosGenerales.php';
 require_once APP_R_PROY . 'app/controllers/usuariosController.php';
 
+require_once APP_R_PROY . 'app/lib/tcpdf/tcpdf.php';
+
 use app\models\mainModel;
 use app\models\datosGenerales;
 use app\controllers\usuariosController;
@@ -25,6 +27,8 @@ class serviciosController extends mainModel
 	private $id_status_historico;
 	private $id_status_finalizado;
 	private $id_status_replanificado;
+
+	private $ruta_reporte;
 
 	public function __construct()
 	{
@@ -50,6 +54,11 @@ class serviciosController extends mainModel
 		$this->id_status_historico = 39;
 		$this->id_status_activo = 37;
 		$this->id_status_replanificado = 40;
+
+		$this->ruta_reporte = APP_R_PROY . '/public/reports/';
+		if (!file_exists($this->ruta_reporte)) {
+			mkdir($this->ruta_reporte, 0755, true);
+		}
 	}
 
 
@@ -167,7 +176,14 @@ class serviciosController extends mainModel
 				s.finalizado,
 				s.estado_servicio,			
 				s.estado_visita,
-				c.nombre as cliente, 
+				COALESCE(
+					CASE 
+						WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+						WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+						ELSE NULLIF(c.nombre, '')
+					END,
+					'[SIN NOMBRE]'
+				) AS cliente,
 				d.direccion, 
 				d.id_geofence, 
 				d.lat, 
@@ -187,7 +203,7 @@ class serviciosController extends mainModel
 			GROUP BY s.id_servicio
 			ORDER BY 
 				FIELD(t.id_truck, 1,2,3,4,5,6,11,15), 
-				c.nombre";
+				cliente";
 
 			// queda pendiente colocar contrato: ct.day_work AS dia_servicio y LEFT JOIN contratos AS ct ON s.id_cliente = ct.id_cliente
 
@@ -307,7 +323,16 @@ class serviciosController extends mainModel
 			}
 
 			$query = "SELECT 
-						s.id_servicio, s.id_cliente, c.nombre as cliente, s.id_direccion, s.id_truck, s.id_crew_1, s.id_crew_2,
+						s.id_servicio, s.id_cliente, c.id_tipo_persona, 
+						COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+								ELSE NULLIF(c.nombre, '')
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente,
+						s.id_direccion, s.id_truck, s.id_crew_1, s.id_crew_2,
 						s.id_crew_3, s.id_crew_4, s.id_status, t.color AS crew_color_principal, s.dia_servicio, s.finalizado,
 						s.estado_servicio, s.estado_visita, s.hora_aviso_usuario, s.hora_finalizado, s.tipo_dia, s.hora_inicio_gps,
 						s.hora_fin_gps, d.direccion, d.id_geofence, d.lat, d.lng, t.nombre as truck,
@@ -338,8 +363,9 @@ class serviciosController extends mainModel
 								'Not yet attended'
 						END AS status_m2
 					FROM servicios AS s
-					LEFT JOIN clientes AS c ON s.id_cliente = c.id_cliente
-					LEFT JOIN direcciones AS d ON s.id_direccion = d.id_direccion
+					LEFT JOIN contratos AS ct ON s.id_contrato = ct.id_contrato
+					LEFT JOIN clientes AS c ON ct.id_cliente = c.id_cliente
+					LEFT JOIN direcciones AS d ON ct.id_direccion = d.id_direccion
 					LEFT JOIN truck AS t ON s.id_truck = t.id_truck
 					WHERE s.id_status != $this->id_status_historico
 						AND s.id_servicio IN (
@@ -348,11 +374,11 @@ class serviciosController extends mainModel
 							WHERE id_status != $this->id_status_historico
 								AND DATE(fecha_programada) = '$fecha_programada2'
 						)
-					GROUP BY s.id_servicio, s.id_cliente, s.id_direccion, s.id_truck, s.id_crew_1, 
+					GROUP BY s.id_servicio, s.id_cliente, c.nombre, c.apellido, c.nombre_comercial, c.id_tipo_persona, s.id_direccion, s.id_truck, s.id_crew_1, 
 						s.id_crew_2, s.id_crew_3, s.id_crew_4, s.id_status, t.color, 
 						s.dia_servicio, s.finalizado, s.estado_servicio, s.estado_visita, 
 						s.hora_aviso_usuario, s.hora_finalizado, s.tipo_dia, s.hora_inicio_gps, 
-						s.hora_fin_gps, c.nombre, d.direccion, d.id_geofence, d.lat, d.lng, 
+						s.hora_fin_gps, d.direccion, d.id_geofence, d.lat, d.lng, 
 						t.nombre";
 
 			$params = [];
@@ -371,7 +397,7 @@ class serviciosController extends mainModel
 				$query .= " AND s.id_truck = :v_id_truck";
 				$params[':v_id_truck'] = $truck;
 			}
-			$query .= " ORDER BY FIELD(t.id_truck, 1,2,3,4,5,6,7,8,9,10,11,12), c.nombre";
+			$query .= " ORDER BY FIELD(t.id_truck, 1,2,3,4,5,6,7,8,9,10,11,12), cliente";
 
 			$this->log("Consulta de listarServiciosConEstado(): " . $query);
 			$this->log("Parametros: " . json_encode($params));
@@ -405,6 +431,22 @@ class serviciosController extends mainModel
 					}
 				}
 
+				if (!is_null($s['id_ruta']))	{
+					$sql_ruta = "SELECT r.id_ruta, r.nombre_ruta, r.color_ruta
+						FROM rutas AS r
+						WHERE r.id_ruta = :v_id_ruta";
+					$param = [
+						':v_id_ruta' => $s['id_ruta']
+					];
+					$result = $this->ejecutarConsulta($query_crew, '', $params_crew);
+				} else {
+					$result = [
+						'id_ruta' => 0,
+						'nombre_ruta' => 'Without route',
+						'color_ruta' => '#fff'
+					];
+				}
+
 				$registro = [
 					'id_servicio' => $s['id_servicio'],
 					'id_status' => $s['id_status'],
@@ -430,10 +472,11 @@ class serviciosController extends mainModel
 					'status_m2' => $s['status_m2'],
 					'hora_inicio_gps' => $s['hora_inicio_gps'],
 					'hora_fin_gps' => $s['hora_fin_gps'],
+					'id_ruta' => $result['id_ruta'], 
+					'nombre_ruta' => $result['nombre_ruta'], 
+					'color_ruta' => $result['color_ruta'], 
 					'evidencias' => []
 				];
-
-
 
 				// Solo aplica la validación de día si es tipo "semanal"
 				//				if ($s['tipo_dia'] === 'semanal' && $s['dia_servicio']) { 
@@ -450,10 +493,13 @@ class serviciosController extends mainModel
 				$resultado[] = $registro;
 			}
 
+			// usort($resultado, function ($a, $b) {
+			// 	$numA = (int) preg_replace('/[^0-9]/', '', $a['truck']);
+			// 	$numB = (int) preg_replace('/[^0-9]/', '', $b['truck']);
+			// 	return $numA <=> $numB;
+			// });
 			usort($resultado, function ($a, $b) {
-				$numA = (int) preg_replace('/[^0-9]/', '', $a['truck']);
-				$numB = (int) preg_replace('/[^0-9]/', '', $b['truck']);
-				return $numA <=> $numB;
+				return $a['id_ruta'] <=> $b['id_ruta'];
 			});
 
 			// === PASO 1: Obtener IDs de trucks que SÍ tienen servicio HOY ===
@@ -557,7 +603,14 @@ class serviciosController extends mainModel
 						s.tipo_dia,
 						s.hora_inicio_gps,
 						s.hora_fin_gps,
-						c.nombre as cliente, 
+						COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+								ELSE NULLIF(c.nombre, '')
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente,
 						d.direccion, 
 						d.id_geofence, 
 						d.lat, 
@@ -581,7 +634,7 @@ class serviciosController extends mainModel
 
 			$resultado = [];
 			foreach ($servicios as $s) {
-				// === Obtener integrantes del crew ===
+				// === Obtener integrantes del crew === 
 				$crew_integrantes = [];
 
 				$ids_crew = [
@@ -680,10 +733,17 @@ class serviciosController extends mainModel
 						s.finalizado,
 						s.estado_servicio,	
 						s.estado_visita,
-			            s.hora_aviso_usuario,
+						s.hora_aviso_usuario,
 						s.hora_finalizado,
 						s.tipo_dia,
-						c.nombre as cliente, 
+						COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+								ELSE NULLIF(c.nombre, '')
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente,
 						d.direccion, 
 						d.id_geofence, 
 						d.lat, 
@@ -1203,7 +1263,15 @@ class serviciosController extends mainModel
 					// Determinar día en inglés con helper existente
 					$dayWord = $this->obtenerDiaSemana($fecha_programada_srv);
 
-					$sinRutaSQL = "SELECT DISTINCT ct.id_contrato, ct.id_cliente, c.nombre AS cliente, ct.id_direccion, d.direccion, di.dia_ingles AS day_work,
+					$sinRutaSQL = "SELECT DISTINCT ct.id_contrato, ct.id_cliente, 
+						COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+								ELSE NULLIF(c.nombre, '')
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente, ct.id_direccion, d.direccion, di.dia_ingles AS day_work,
 						se.fecha_programada AS ultimo_servicio, COALESCE(DATEDIFF(:v_fecha01, se.fecha_programada), -1) AS dias, fs.concepto
 						FROM contratos ct
 						LEFT JOIN clientes c ON ct.id_cliente = c.id_cliente
@@ -1351,7 +1419,14 @@ class serviciosController extends mainModel
 			$query = "SELECT 
 						s.id_servicio,
 						s.id_cliente,
-						c.nombre as cliente,
+						COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+								ELSE NULLIF(c.nombre, '')
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente,
 						s.id_truck,
 						t.nombre as truck,
 						s.estado_servicio,
@@ -1678,7 +1753,14 @@ class serviciosController extends mainModel
 			$query = "
 				SELECT 
 					s.*,
-					c.nombre AS cliente,
+					COALESCE(
+						CASE 
+							WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+							WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+							ELSE NULLIF(c.nombre, '')
+						END,
+						'[SIN NOMBRE]'
+					) AS cliente,
 					cr1.nombre AS crew_1_nombre, cr1.color AS crew_1_color,
 					cr2.nombre AS crew_2_nombre, cr2.color AS crew_2_color,
 					cr3.nombre AS crew_3_nombre, cr3.color AS crew_3_color,
@@ -1692,8 +1774,8 @@ class serviciosController extends mainModel
 				LEFT JOIN crew cr4 ON s.id_crew_4 = cr4.id_crew
 
 				WHERE
-				    DATE(s.fecha_programada) = CURDATE() 				 
-				 	AND s.id_status != $this->id_status_historico
+					DATE(s.fecha_programada) = CURDATE() 				 
+					AND s.id_status != $this->id_status_historico
 					AND (
 						s.fecha_actualizacion > :v_ultimo_tiempo1
 						OR s.hora_aviso_usuario > :v_ultimo_tiempo2
@@ -2625,14 +2707,18 @@ class serviciosController extends mainModel
 				s.dia_servicio,
 				s.tipo_dia,
 				s.finalizado,
-				
 				s.id_crew_1,
 				s.id_crew_2,
 				s.id_crew_3,
 				s.id_crew_4,
-				 
-				c.nombre AS cliente,
-				
+				COALESCE(
+					CASE 
+						WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+						WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+						ELSE NULLIF(c.nombre, '')
+					END,
+					'[SIN NOMBRE]'
+				) AS cliente,
 				d.lat,
 				d.lng,
 				d.direccion,
@@ -2769,7 +2855,15 @@ class serviciosController extends mainModel
 
 	public function cargar_clientes_y_direccion()
 	{
-		$sql = "SELECT c.nombre as cliente, d.direccion, d.lat, d.lng
+		$sql = "SELECT COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+								ELSE NULLIF(c.nombre, '')
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente,
+				d.direccion, d.lat, d.lng
 			FROM clientes c
 			LEFT JOIN direcciones d ON c.id_cliente = d.id_cliente
 			ORDER BY d.lat DESC, d.lng DESC";
@@ -2993,7 +3087,16 @@ class serviciosController extends mainModel
 
 		$query = "
 				SELECT
-					s.id_servicio, s.id_cliente, c.nombre as cliente, s.id_direccion, s.fecha_programada, s.id_truck, s.id_crew_1, 
+					s.id_servicio, s.id_cliente, 
+					COALESCE(
+						CASE 
+							WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+							WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+							ELSE NULLIF(c.nombre, '')
+						END,
+						'[SIN NOMBRE]'
+					) AS cliente,
+					s.id_direccion, s.fecha_programada, s.id_truck, s.id_crew_1, 
 					s.id_crew_2, s.id_crew_3, s.id_crew_4, s.id_status, t.color AS crew_color_principal, s.dia_servicio, 
 					s.finalizado, s.estado_servicio, s.estado_visita, s.hora_aviso_usuario, s.hora_finalizado, s.tipo_dia, 
 					s.hora_inicio_gps, s.hora_fin_gps, d.direccion, d.id_geofence, d.lat, d.lng, t.nombre as truck, ac.id_address_clas, 
@@ -3032,10 +3135,10 @@ class serviciosController extends mainModel
 					s.id_crew_2, s.id_crew_3, s.id_crew_4, s.id_status, t.color, 
 					s.dia_servicio, s.finalizado, s.estado_servicio, s.estado_visita, 
 					s.hora_aviso_usuario, s.hora_finalizado, s.tipo_dia, s.hora_inicio_gps, 
-					s.hora_fin_gps, c.nombre, d.direccion, d.id_geofence, d.lat, d.lng, 
+					s.hora_fin_gps, c.id_tipo_persona, c.nombre, d.direccion, d.id_geofence, d.lat, d.lng, 
 					t.nombre";
 
-		$query .= " ORDER BY id_servicio DESC, FIELD(t.id_truck, 1,2,3,4,5,6,7,8,9,10,11,12), c.nombre";
+		$query .= " ORDER BY id_servicio DESC, FIELD(t.id_truck, 1,2,3,4,5,6,7,8,9,10,11,12), cliente";
 
 		$servicios = $this->ejecutarConsulta($query, '', [], 'fetchAll');
 
@@ -3156,7 +3259,16 @@ class serviciosController extends mainModel
 					$fecha_programada2 = date('Y-m-d');
 				}
 
-				$query = "SELECT s.id_servicio, s.id_cliente, c.nombre AS cliente, s.id_direccion, d.direccion, ct.id_dia_semana, di.dia_ingles AS day_work,
+				$query = "SELECT s.id_servicio, s.id_cliente, 
+							COALESCE(
+								CASE 
+									WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+									WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+									ELSE NULLIF(c.nombre, '')
+								END,
+								'[SIN NOMBRE]'
+							) AS cliente,
+							s.id_direccion, d.direccion, ct.id_dia_semana, di.dia_ingles AS day_work,
 							s.fecha_programada AS ultimo_servicio, fs.concepto, s.hora_aviso_usuario, s.hora_finalizado, s.hora_inicio_gps, 
 							s.hora_fin_gps, ct.mensual_calendario, ct.id_ruta, ru.nombre_ruta
 						FROM servicios s
@@ -3182,7 +3294,16 @@ class serviciosController extends mainModel
 
 				$this->log("Resultado de la consulta: " . print_r($asignados, true));
 
-				$query = "SELECT ct.id_contrato, ct.id_cliente, c.nombre AS cliente, ct.id_direccion, d.direccion, ct.id_dia_semana,
+				$query = "SELECT ct.id_contrato, ct.id_cliente, 
+						COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+								ELSE NULLIF(c.nombre, '')
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente,
+						ct.id_direccion, d.direccion, ct.id_dia_semana,
 						di.dia_ingles AS day_work, :v_fecha01 AS fecha_consultada, fs.concepto, ct.mensual_calendario, s.fecha_programada AS ultimo_servicio
 					FROM contratos ct
 					INNER JOIN clientes c ON c.id_cliente = ct.id_cliente
@@ -3204,7 +3325,7 @@ class serviciosController extends mainModel
 							FROM servicios s
 							WHERE s.fecha_programada = :v_fecha02
 						)
-					ORDER BY di.dia_ingles, c.nombre";
+					ORDER BY di.dia_ingles, cliente";
 
 				$params = [
 					':v_fecha01' => $fecha_programada2,
@@ -3280,8 +3401,17 @@ class serviciosController extends mainModel
 					if ($rutas) {
 						foreach ($rutas as $ruta) {
 							$id_ruta = $ruta['id_ruta'];
-							$clientesSQL = "SELECT ct.id_contrato, ct.id_cliente, ct.id_direccion, c.nombre AS cliente, d.direccion, ct.retraso_invierno,
-									d.lat, d.lng, di.dia_ingles AS dia_servicio, fs.concepto, ct.id_ruta, rd.orden_en_ruta,	rd.tiempo_servicio
+							$clientesSQL = "SELECT ct.id_contrato, ct.id_cliente, ct.id_direccion, 
+									COALESCE(
+										CASE 
+											WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+											WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+											ELSE NULLIF(c.nombre, '')
+										END,
+										'[SIN NOMBRE]'
+									) AS cliente,
+									d.direccion, ct.retraso_invierno,
+									d.lat, d.lng, di.dia_ingles AS dia_servicio, fs.concepto, ct.id_contrato, ct.id_ruta, rd.orden_en_ruta,	rd.tiempo_servicio
 								FROM rutas_direcciones rd
 								JOIN direcciones d ON rd.id_direccion = d.id_direccion
 								JOIN contratos ct ON ct.id_direccion = d.id_direccion
@@ -3305,6 +3435,7 @@ class serviciosController extends mainModel
 
 									$datos = [
 										['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $cl['id_cliente']],
+										['campo_nombre' => 'id_contrato', 'campo_marcador' => ':id_contrato', 'campo_valor' => $cl['id_contrato']],
 										['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $cl['id_direccion']],
 										['campo_nombre' => 'fecha_programada', 'campo_marcador' => ':fecha_programada', 'campo_valor' => $fecha_programada2],
 										['campo_nombre' => 'dia_servicio', 'campo_marcador' => ':dia_servicio', 'campo_valor' => $cl['dia_servicio'] ?? $dayWord],
@@ -3330,8 +3461,9 @@ class serviciosController extends mainModel
 					}
 
 					// 5) Incluir servicios reprogramados (id_status = replanificado) que ya apunten a la fecha
-					$reprogSQL = "SELECT s.id_servicio, s.id_cliente, s.id_direccion, s.fecha_programada, s.id_status, s.id_truck, 
-							s.id_crew_1, s.id_crew_2, s.id_crew_3, s.id_crew_4, c.tiempo_servicio, 99 as orden_en_ruta, c.retraso_invierno
+					$reprogSQL = "SELECT s.id_servicio, s.id_cliente, s.id_direccion, s.fecha_programada, s.id_status, 
+							s.id_truck, s.id_crew_1, s.id_crew_2, s.id_crew_3, s.id_crew_4, c.tiempo_servicio, 
+							99 as orden_en_ruta, c.retraso_invierno, c.id_contrato
 						FROM servicios s
 						LEFT JOIN contratos c ON c.id_cliente = s.id_cliente AND c.id_direccion = s.id_direccion
 						WHERE s.id_status = :v_replanificado 
@@ -3346,6 +3478,7 @@ class serviciosController extends mainModel
 							$meta = ['origin' => 'reprogrammed', 'source_servicio' => $r['id_servicio']];
 							$datos = [
 								['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $r['id_cliente']],
+								['campo_nombre' => 'id_contrato', 'campo_marcador' => ':id_contrato', 'campo_valor' => $r['id_contrato']],
 								['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $r['id_direccion']],
 								['campo_nombre' => 'fecha_programada', 'campo_marcador' => ':fecha_programada', 'campo_valor' => $fecha_programada2],
 								['campo_nombre' => 'dia_servicio', 'campo_marcador' => ':dia_servicio', 'campo_valor' => $dayWord],
@@ -3365,9 +3498,26 @@ class serviciosController extends mainModel
 					}
 				}
 
+				//----------------------------------------------------------------------------------------------------------------
 				// 6) Ahora leer todos los preservicios creados para la fecha y renderizarlos como no-asignados (editable)
-				$fetchPresSQL = "SELECT p.*, c.nombre AS cliente, d.direccion, d.id_geofence, d.lat, d.lng, 
-						p.id_ruta, p.id_ruta_new, ru.nombre_ruta, ru_n.nombre_ruta AS nombre_ruta_new
+				$fetchPresSQL = "SELECT p.id_preservicio, p.id_cliente, p.id_direccion, p.fecha_programada,
+						p.dia_servicio, p.estado_servicio, p.notas, p.created_by, p.fecha_creacion, 
+						p.transferred, p.transferred_at, p.servicio_id, p.created_meta, p.retraso_invierno, 
+						p.id_ruta, p.id_ruta_new, p.orden_en_ruta, p.tiempo_servicio, 
+						COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+								ELSE NULLIF(c.nombre, '')
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente,
+						d.direccion, 
+						d.id_geofence, d.lat, d.lng, ru.nombre_ruta, ru_n.nombre_ruta AS nombre_ruta_new,
+						'          ' AS ultimo_servicio, 000 AS dias, '                       ' AS hora_aviso_usuario,
+						'                       ' AS hora_finalizado, '                       ' AS hora_inicio_gps,
+						'                       ' AS hora_fin_gps, 00 AS id_frecuencia_servicio,
+						'                    ' AS concepto, 00 AS id_status, ru.color_ruta
 					FROM preservicios p
 					LEFT JOIN clientes c ON p.id_cliente = c.id_cliente
 					LEFT JOIN direcciones d ON p.id_direccion = d.id_direccion
@@ -3375,7 +3525,10 @@ class serviciosController extends mainModel
 					LEFT JOIN rutas ru_n ON p.id_ruta_new = ru_n.id_ruta
 					WHERE DATE(p.fecha_programada) = :v_fecha_programada 
 						AND p.transferred = 0
-					ORDER BY p.id_ruta, p.orden_en_ruta";
+					ORDER BY 
+						COALESCE(p.id_ruta_new, p.id_ruta) ASC,
+						CASE WHEN p.id_ruta_new IS NOT NULL THEN 1 ELSE 0 END ASC,
+						p.orden_en_ruta ASC";
 
 				$params = [
 					':v_fecha_programada' => $fecha_programada2
@@ -3402,22 +3555,26 @@ class serviciosController extends mainModel
 									$campo .= ", '" . $item['nombre_ruta_new'] . "' AS nombre_ruta_new";
 								}
 							}
+
+							// Consulta para servicios anteriores
 							$lastSQL = "SELECT se.id_servicio, se.fecha_programada AS ultimo_servicio, 
 									COALESCE(DATEDIFF(:v_fecha_cons, se.fecha_programada), -1) AS dias,
 									se.hora_aviso_usuario, se.hora_finalizado, se.hora_inicio_gps, se.hora_fin_gps,
 									se.id_status, fs.id_frecuencia_servicio, fs.concepto, 
-									ct.id_ruta, ru.nombre_ruta, ru.color_ruta, ct.retraso_invierno
+									ct.id_ruta, ru.nombre_ruta, ru.color_ruta, ct.retraso_invierno,
 									" . $campo . "
 								FROM servicios se
 								LEFT JOIN contratos ct ON se.id_cliente = ct.id_cliente AND se.id_direccion = ct.id_direccion
 								LEFT JOIN frecuencia_servicio fs ON ct.id_frecuencia_servicio = fs.id_frecuencia_servicio
 								LEFT JOIN rutas ru ON ct.id_ruta = ru.id_ruta
-								WHERE se.id_cliente = :v_id_cliente
+								WHERE se.id_cliente = :v_id_cliente AND se.id_direccion = :v_id_direccion
+									AND (se.id_status != 37 AND se.id_status != 39)
 								ORDER BY se.fecha_programada DESC, se.id_servicio DESC
 								LIMIT 1";
 
 							$paramsLast = [
 								':v_id_cliente' => $item['id_cliente'],
+								':v_id_direccion' => $item['id_direccion'],
 								':v_fecha_cons' => $fecha_programada2
 							];
 							$se = $this->ejecutarConsulta($lastSQL, '', $paramsLast);
@@ -3442,6 +3599,7 @@ class serviciosController extends mainModel
 									}
 								}
 								$item['color_ruta'] = $se['color_ruta'] ?? null;
+
 							} else {
 								// No hay servicio previo: marcar como nuevo
 								$item['ultimo_servicio'] = null;
@@ -3453,8 +3611,17 @@ class serviciosController extends mainModel
 								$item['id_frecuencia_servicio'] = $item['id_frecuencia_servicio'] ?? null;
 								$item['concepto'] = $item['concepto'] ?? null;
 								$item['id_status'] = null;
-								$item['nombre_ruta'] = null;
-								$item['color_ruta'] = null;
+								// $item['nombre_ruta'] = null;
+								// if ($item['id_ruta'] == null && $item['id_ruta_new'] != null) {
+								// 	$item['nombre_ruta'] = $item['nombre_ruta_new'] ?? null;
+								// } else {
+								// 	if ($item['id_ruta'] != null && $item['id_ruta_new'] != null) {
+								// 		$item['nombre_ruta'] = $item['nombre_ruta_new'] ?? null;
+								// 	} else {
+								// 		$item['nombre_ruta'] = $item['nombre_ruta'] ?? null;
+								// 	}
+								// }
+								// $item['color_ruta'] = $item['color_ruta'] ?? "rgb(52, 95, 189)";
 							}
 						} catch (Exception $e) {
 							$this->logWithBacktrace("Error obteniendo ultimo servicio para cliente {$item['id_cliente']}: " . $e->getMessage(), true);
@@ -3513,10 +3680,20 @@ class serviciosController extends mainModel
 				// Nuevo comportamiento solicitado: tomar TODOS los contratos activos (ct.id_status = 18)
 				// que NO estén en preservicios para la fecha, sin aplicar análisis de frecuencia/días/servicios.
 				try {
-					$noAsignadosSQL = "SELECT DISTINCT ct.id_contrato, ct.id_cliente, c.nombre AS cliente, ct.id_direccion, d.direccion, 
+					$noAsignadosSQL = "SELECT DISTINCT ct.id_contrato, ct.id_cliente, 
+							COALESCE(
+								CASE 
+									WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+									WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+									ELSE NULLIF(c.nombre, '')
+								END,
+								'[SIN NOMBRE]'
+							) AS cliente,
+							ct.id_direccion, d.direccion, 
 							di.dia_ingles AS day_work, se.id_servicio, se.fecha_programada AS ultimo_servicio, se.hora_aviso_usuario, 
 							se.hora_finalizado, se.hora_inicio_gps, se.hora_fin_gps, fs.id_frecuencia_servicio, fs.concepto, ct.id_ruta, ru.nombre_ruta, ru.color_ruta,
-							COALESCE(FLOOR(TIME_TO_SEC(ct.tiempo_servicio) / 60), 0) AS tiempo_servicio
+							COALESCE(FLOOR(TIME_TO_SEC(ct.tiempo_servicio) / 60), 0) AS tiempo_servicio,
+							COALESCE(DATEDIFF(:v_fecha_cons, se.fecha_programada), -1) AS dias, ct.id_status
 						FROM contratos ct
 						LEFT JOIN clientes c ON ct.id_cliente = c.id_cliente
 						LEFT JOIN direcciones d ON ct.id_direccion = d.id_direccion
@@ -3535,14 +3712,14 @@ class serviciosController extends mainModel
 							WHERE DATE(p.fecha_programada) = :v_fecha_pres 
 								AND p.transferred = 0
 						)
-						ORDER BY di.dia_ingles, c.nombre";
+						ORDER BY di.dia_ingles, cliente";
 
 					$paramsNoAsig = [
-						':v_fecha_pres' => $fecha_programada2
+						':v_fecha_pres' => $fecha_programada2,
+						':v_fecha_cons' => $fecha_programada2
 					];
 
 					$noAsignados = $this->ejecutarConsulta($noAsignadosSQL, '', $paramsNoAsig, 'fetchAll');
-
 					if ($noAsignados) {
 						foreach ($noAsignados as $item) {
 							$htmlNoAsignados .= $this->renderItemDespacho($item, 'no-asignado', false, false);
@@ -3557,7 +3734,16 @@ class serviciosController extends mainModel
 
 				// 7) Construir lista de contratos que deberían ser hoy pero NO pertenecen a ninguna ruta asignada
 				try {
-					$sinRutaSQL = "SELECT DISTINCT ct.id_contrato, ct.id_cliente, c.nombre AS cliente, ct.id_direccion, d.direccion, di.dia_ingles AS day_work,
+					$sinRutaSQL = "SELECT DISTINCT ct.id_contrato, ct.id_cliente, 
+						COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+								ELSE NULLIF(c.nombre, '')
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente,
+						ct.id_direccion, d.direccion, di.dia_ingles AS day_work,
 						se.fecha_programada AS ultimo_servicio, COALESCE(DATEDIFF(:v_fecha01, se.fecha_programada), -1) AS dias, fs.concepto
 						FROM contratos ct
 						LEFT JOIN clientes c ON ct.id_cliente = c.id_cliente
@@ -3594,7 +3780,7 @@ class serviciosController extends mainModel
 								AND p.transferred = 0
 							)
 							AND rda.id_ruta IS NULL
-						ORDER BY di.dia_ingles, c.nombre";
+						ORDER BY di.dia_ingles, cliente";
 
 					$paramsSinRuta = [
 						':v_fecha01' => $fecha_programada2,
@@ -3647,7 +3833,7 @@ class serviciosController extends mainModel
 		}
 	}
 
-	// === Convertir minutos a HH:mm:ss ===
+	// === Convertir minutos a HH:mm:ss === 
 	public function minutosAHora($minutos) {
 		$horas = floor($minutos / 60);
 		$min = $minutos % 60;
@@ -3683,7 +3869,8 @@ class serviciosController extends mainModel
 		$direccion = htmlspecialchars($item['direccion'] ?? '—');
 		$zona = !empty($item['zona']) ? '<div class="formatoDireccion colorA">Zona: ' . htmlspecialchars($item['zona']) . '</div>' : '';
 
-		$colorRuta = !empty(trim($item['color_ruta'] ?? '')) ? htmlspecialchars($item['color_ruta']) : '#ffffffff';
+		$colorRuta = !empty(trim($item['color_ruta'] ?? '')) ? trim($item['color_ruta']) : '#ffffffff';
+
 		$nombre_ruta = !empty(trim($item['nombre_ruta'] ?? '')) ? htmlspecialchars($item['nombre_ruta']) : '—';
 
 		$dayWork = !empty(trim($item['day_work'] ?? '')) ? htmlspecialchars($item['day_work']) : '—';
@@ -3848,7 +4035,16 @@ class serviciosController extends mainModel
 		$where = "s.id_servicio = " . $id_servicio;
 		$query = "
 				SELECT
-					s.id_servicio, s.id_cliente, c.nombre as cliente, s.id_direccion, s.fecha_programada, s.id_truck, s.id_crew_1, 
+					s.id_servicio, s.id_cliente, 
+					COALESCE(
+						CASE 
+							WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+							WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+							ELSE NULLIF(c.nombre, '')
+						END,
+						'[SIN NOMBRE]'
+					) AS cliente,
+					s.id_direccion, s.fecha_programada, s.id_truck, s.id_crew_1, 
 					s.id_crew_2, s.id_crew_3, s.id_crew_4, s.id_status, t.color AS crew_color_principal, s.dia_servicio, 
 					s.finalizado, s.estado_servicio, s.estado_visita, s.hora_aviso_usuario, s.hora_finalizado, s.tipo_dia, 
 					s.hora_inicio_gps, s.hora_fin_gps, d.direccion, d.id_geofence, d.lat, d.lng, t.nombre as truck, ac.id_address_clas, 
@@ -3889,7 +4085,7 @@ class serviciosController extends mainModel
 					s.hora_fin_gps, c.nombre, d.direccion, d.id_geofence, d.lat, d.lng, 
 					t.nombre";
 
-		$query .= " ORDER BY id_servicio DESC, FIELD(t.id_truck, 1,2,3,4,5,6,7,8,9,10,11,12), c.nombre";
+		$query .= " ORDER BY id_servicio DESC, FIELD(t.id_truck, 1,2,3,4,5,6,7,8,9,10,11,12), cliente";
 
 		$servicios = $this->ejecutarConsulta($query, '', []);
 
@@ -3984,6 +4180,7 @@ class serviciosController extends mainModel
 				try {
 					$res = $this->ejecutarConsulta($q, '', [':id_cliente' => $id_cliente]);
 
+					$id_contrato = $res['id_contrato'] ?? null;
 					$id_direccion = $res['id_direccion'] ?? null;
 					$dia_servicio = $res['dia_servicio'] ?? $this->obtenerDiaSemana($fecha);
 					$meta = ['origin' => 'manual_from_ui', 'created_by' => $this->usuario_id ?? null];
@@ -3991,6 +4188,7 @@ class serviciosController extends mainModel
 
 					$datos = [
 						['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $id_cliente],
+						['campo_nombre' => 'id_contrato', 'campo_marcador' => ':id_contrato', 'campo_valor' => $id_contrato],
 						['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $id_direccion],
 						['campo_nombre' => 'fecha_programada', 'campo_marcador' => ':fecha_programada', 'campo_valor' => $fecha],
 						['campo_nombre' => 'dia_servicio', 'campo_marcador' => ':dia_servicio', 'campo_valor' => $dia_servicio],
@@ -4368,6 +4566,751 @@ class serviciosController extends mainModel
 				'cliente' => $cliente_format
 			]);
 			exit;
+		}
+	}
+	public function generarReporte($fecha_servicio){
+		$resultado = $this->serviciopdf($fecha_servicio);
+		
+		// Si serviciopdf devuelve URLs, las retornamos al frontend
+		if (is_array($resultado) && isset($resultado['pdfs'])) {
+			http_response_code(200);
+			echo json_encode([
+				'success' => true, 
+				'pdfs' => $resultado['pdfs'], // Array de URLs
+				'message' => 'Reportes generados'
+			]);
+		} else {
+			http_response_code(500);
+			echo json_encode([
+				'success' => false, 
+				'message' => 'Error al generar reportes'
+			]);
+		}
+		exit;
+	}
+
+	private function serviciopdf($fecha_servicio){
+		/**
+		* REPORTE PDF DE RUTAS - PRE-SERVICIOS
+		*/
+
+		// Fecha del reporte
+		$fecha_reporte = $fecha_servicio;
+		$fecha_formateada = date('l, F jS', strtotime($fecha_reporte));
+
+		$sql = "SELECT p.fecha_programada, ds.dia_ingles AS dia_servicio,
+				COALESCE(p.id_ruta_new, p.id_ruta) AS id_ruta,
+				r.nombre_ruta, r.color_ruta
+			FROM preservicios p
+			INNER JOIN rutas r ON r.id_ruta = COALESCE(p.id_ruta_new, p.id_ruta)
+			INNER JOIN dias_semana ds ON ds.id_dia_semana = DAYOFWEEK(p.fecha_programada)
+			WHERE p.fecha_programada = :v_fecha_programada
+			GROUP BY 
+				p.fecha_programada, 
+				ds.dia_ingles,
+				COALESCE(p.id_ruta_new, p.id_ruta),
+				r.nombre_ruta,
+				r.color_ruta
+			ORDER BY 
+				id_ruta ASC";
+
+		$params = [
+			":v_fecha_programada" => $fecha_servicio
+		];
+		$rutas = $this->ejecutarConsulta($sql, "", $params, 'fetchAll');
+		$this->log("Rutas de Control: " . json_encode($rutas));
+		
+		// Ruta del icono del cliente (ajústala según tu sistema)
+		$ruta_icono_cliente = APP_R_PROY . 'app/views/img/logo.jpg'; // <-- AJUSTA ESTA RUTA
+		// Verificar si existe el archivo
+		if (!file_exists($ruta_icono_cliente)) {
+			// Probar con PNG si JPG no existe
+			$ruta_icono_cliente = APP_R_PROY . '/app/views/img/logo.png';
+			
+			if (!file_exists($ruta_icono_cliente)) {
+				$this->log("ERROR: Logo no encontrado en: " . $ruta_icono_cliente);
+				$ruta_icono_cliente = ''; // Sin logo
+			} else {
+				$this->log("Logo PNG encontrado: " . $ruta_icono_cliente);
+			}
+		} else {
+			$this->log("Logo JPG encontrado: " . $ruta_icono_cliente);
+		}
+
+		$pdfs_generados = [];
+			
+		foreach ($rutas as $row) {
+			$id_ruta = $row['id_ruta'];
+			$nombre_ruta = $row['nombre_ruta'];
+			$color_ruta = $row['color_ruta'];
+
+			$sql1 = "SELECT ps.*,  r.nombre_ruta, r.color_ruta, COALESCE(
+					CASE 
+						WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+						WHEN c.id_tipo_persona = 2 THEN NULLIF(c.nombre_comercial, '')
+						ELSE NULLIF(c.nombre, '')
+					END,
+					'[SIN NOMBRE]') AS customer, ps.dia_servicio,
+					d.direccion as address, r.nombre_ruta as route_name, e.nombre AS estado, ci.nombre as ciudad
+				FROM preservicios ps 
+				LEFT JOIN contratos ct ON ct.id_contrato = ps.id_contrato
+				LEFT JOIN clientes c ON c.id_cliente = ct.id_cliente
+				LEFT JOIN direcciones d ON d.id_direccion = ct.id_direccion AND d.id_cliente = ct.id_cliente
+				LEFT JOIN ciudades ci ON ci.id_ciudad = d.id_ciudad
+				LEFT JOIN estados e ON e.id_estado = d.id_estado				
+				LEFT JOIN rutas r ON ct.id_ruta = r.id_ruta
+				WHERE ps.fecha_programada = :v_fecha_programada
+					AND COALESCE(ps.id_ruta_new, ps.id_ruta) = :v_id_ruta
+				ORDER BY 
+					COALESCE(ps.id_ruta_new, ps.id_ruta) ASC,
+					CASE WHEN ps.id_ruta_new IS NOT NULL THEN 1 ELSE 0 END ASC,
+					ps.orden_en_ruta ASC";
+
+				$params = [
+					":v_fecha_programada" => $fecha_servicio,
+					':v_id_ruta' => $id_ruta
+				];
+				$result = $this->ejecutarConsulta($sql1, "", $params, 'fetchAll');
+
+			$lineas_por_pagina = count((array)$result);
+			$this->log("Reporte de la ruta: " . json_encode($result));
+			$pdf_info = $this->generarReporteRuta($nombre_ruta, $result, $fecha_formateada, $fecha_reporte, $ruta_icono_cliente, $color_ruta, $lineas_por_pagina);
+			$pdfs_generados[] = $pdf_info;
+			$this->log("Reporte generado: " . json_encode($pdf_info));
+		}
+		$this->log("Reportes generados: " . json_encode($pdfs_generados));
+		
+		return ['pdfs' => $pdfs_generados]; // ← Devuelve URLs, no PDFs binarios
+	}
+
+	/**
+	 * Genera el PDF de una ruta específica
+	 */
+	private function generarReporteRuta($nombre_ruta, $clientes, $fecha_formateada, $fecha_reporte, $ruta_icono, $color_ruta, $lineas_por_pagina = 18) {
+		// Obtener color de la ruta
+		$color_hex = isset($color_ruta) ? $color_ruta : '#4fbbdb';
+		$color_rgb = $this->hexToRgb($color_hex);
+    
+		$total_clientes = $lineas_por_pagina;
+		if ($lineas_por_pagina < 18) {
+			$lineas_por_pagina = 18;
+		}
+
+		// Crear color tenue
+		$color_tenue_rgb = [
+			'r' => min(255, $color_rgb['r'] + 140),
+			'g' => min(255, $color_rgb['g'] + 140),
+			'b' => min(255, $color_rgb['b'] + 140)
+		];
+
+		$nombre_base = 'Route_' . preg_replace('/[^A-Za-z0-9]/', '_', $nombre_ruta) . '_' . $fecha_reporte;
+		$extension = '.pdf';
+		$nombre_archivo = $nombre_base . $extension;
+		$ruta_completa = $this->ruta_reporte . $nombre_archivo;
+
+		$contador = 1;
+		// Mientras el archivo exista, agregamos un sufijo numérico
+		while (file_exists($ruta_completa)) {
+			$nombre_archivo = $nombre_base . '-' . $contador . $extension;
+			$ruta_completa = $this->ruta_reporte . $nombre_archivo;
+			$contador++;
+		}
+
+		$this->log("Ruta: " . $ruta_completa);
+
+		try {
+			if (!defined('K_TCPDF_THROW_EXCEPTION_ERROR')) {
+				define('K_TCPDF_THROW_EXCEPTION_ERROR', true);
+			}
+
+			$pdf = new \TCPDF('L', 'mm', 'LETTER', true, 'UTF-8', false);
+			
+			$pdf->SetCreator('GreenTrack');
+			$pdf->SetAuthor('GreenTrack System');
+			$pdf->SetTitle('Route Report - ' . $nombre_ruta);
+			$pdf->setPrintHeader(false);
+			$pdf->setPrintFooter(false);
+			
+			// Márgenes simétricos izquierdo/derecho
+			$margen_superior = 10;
+			$margen_inferior = 10;
+			$margen_lateral = 10;
+			$pdf->SetMargins($margen_lateral, $margen_superior, $margen_lateral);
+			$pdf->SetAutoPageBreak(false); // Control manual
+			
+			// === CÁLCULO DE ALTURAS (Carta Landscape: 216mm alto) ===
+			$altura_encabezado_pagina = 45; // Fecha + driver + ruta + separador (aprox)
+			$altura_encabezado_tabla = 10;
+			$altura_fila = 9; // Reducido ligeramente para asegurar que quepan 18 + footer
+			$altura_footer = 8;
+			
+			// Altura disponible para líneas de datos
+			$altura_disponible = 216 - $margen_superior - $margen_inferior - $altura_encabezado_pagina - $altura_encabezado_tabla - $altura_footer;
+			// = 216 - 10 - 10 - 45 - 10 - 8 = 133mm aprox
+			
+			// Verificar cuántas líneas caben realmente
+			$lineas_reales = floor($altura_disponible / $altura_fila);
+			$this->log("Altura disponible: {$altura_disponible}mm, Lineas que caben: {$lineas_reales}");
+			
+			// Usar el mínimo entre lo solicitado y lo que cabe físicamente
+			$lineas_por_pagina = min($lineas_por_pagina, $lineas_reales);
+			
+			// Calcular páginas necesarias
+			$lineas_extra = 2; // Líneas en blanco adicionales en página 2+
+			
+			$lineas_primera_pagina = $lineas_por_pagina;
+			
+			// Si hay más de 18 clientes, calcular segunda página
+			if ($total_clientes > $lineas_primera_pagina) {
+				$clientes_restantes = $total_clientes - $lineas_primera_pagina;
+				$lineas_segunda_pagina = $clientes_restantes + $lineas_extra;
+			} else {
+				$lineas_segunda_pagina = 0;
+			}
+
+			$this->log("Lineas primera página: {$lineas_primera_pagina}, segunda: {$lineas_segunda_pagina}");
+			
+			// === PRIMERA PÁGINA ===
+			$pdf->AddPage();
+			
+			// Calcular Y exacto donde debe terminar el contenido para que quepa el footer
+			$y_inicio_contenido = $pdf->GetY();
+			
+			$this->dibujarEncabezadoPagina($pdf, $fecha_formateada, $nombre_ruta, $color_rgb, $margen_lateral, $ruta_icono);
+			$anchos = $this->dibujarEncabezadosTabla($pdf, $color_rgb);
+			extract($anchos);
+			
+			// Dibujar líneas
+			$linea_actual = 0;
+			for ($i = 1; $i <= $lineas_primera_pagina; $i++) {
+				$cliente = isset($clientes[$i - 1]) ? $clientes[$i - 1] : null;
+				$this->dibujarLineaTabla($pdf, $i, $cliente, $anchos, $color_tenue_rgb, $ruta_icono, $altura_fila);
+				$linea_actual++;
+			}
+			
+			// FOOTER PRIMERA PÁGINA - Posición exacta, no relativa
+			$this->dibujarFooterExacto($pdf, $nombre_ruta, $margen_inferior);
+			
+			// === SEGUNDA PÁGINA (si hay más datos) ===
+			if ($lineas_segunda_pagina > 0) {
+				$pdf->AddPage();
+				
+				$this->dibujarEncabezadoPagina($pdf, $fecha_formateada, $nombre_ruta, $color_rgb, $margen_lateral, $ruta_icono);
+				$this->dibujarEncabezadosTabla($pdf, $color_rgb);
+
+				$linea_numero = $lineas_primera_pagina + 1;
+				$cliente_idx = $lineas_primera_pagina; // Empezar desde el cliente 19
+				
+				// Dibujar líneas de la segunda página (restantes + 2 en blanco)
+				for ($i = 1; $i <= $lineas_segunda_pagina; $i++) {
+					$cliente = isset($clientes[$cliente_idx]) ? $clientes[$cliente_idx] : null;
+					$this->dibujarLineaTabla($pdf, $linea_numero, $cliente, $anchos, $color_tenue_rgb, $ruta_icono, $altura_fila);
+					$cliente_idx++;
+					$linea_numero++;
+				}
+				
+				// Footer segunda página
+				$this->dibujarFooterExacto($pdf, $nombre_ruta, $margen_inferior);
+			}
+			
+			// Guardar
+			$pdf->Output($ruta_completa, 'F');
+
+			if (!file_exists($ruta_completa)) {
+				$this->logWithBacktrace("El archivo PDF no se pudo generar en: " . $ruta_completa);
+				return false;
+			}
+
+			return [
+				'url' => 'public/reports/' . $nombre_archivo,
+				'nombre' => $nombre_archivo
+			];        
+
+		} catch (Exception $e) {
+			$this->logWithBacktrace("error al generar PDF: " . $e->getMessage(), true);
+			return false;
+		}
+	}
+
+	/**
+	 * Redibuja solo los encabezados de la tabla (columnas) - para nueva página
+	 */
+	private function redibujarEncabezados($pdf, $w_num, $w_customer, $w_address, $w_worksite, 
+		$w_start, $w_end, $w_lawn, $w_fert, $w_spray, $w_comments, $h_header) {
+		
+		$pdf->SetFillColor(200, 200, 200);
+		$pdf->SetTextColor(0, 0, 0);
+		$pdf->SetFont('helvetica', 'B', 7);
+		
+		$pdf->Cell($w_num, $h_header, '#', 1, 0, 'C', true);
+		$pdf->Cell($w_customer, $h_header, 'CUSTOMER', 1, 0, 'C', true);
+		$pdf->Cell($w_address, $h_header, 'ADDRESS', 1, 0, 'C', true);
+		$pdf->Cell($w_worksite, $h_header, 'Work Site', 1, 0, 'C', true);
+		$pdf->Cell($w_start, $h_header, 'Start', 1, 0, 'C', true);
+		$pdf->Cell($w_end, $h_header, 'End', 1, 0, 'C', true);
+		
+		$x_lawn = $pdf->GetX();
+		$y_lawn = $pdf->GetY();
+		$pdf->Cell($w_lawn, 5, 'LAWN CARE', 1, 0, 'C', true);
+		$pdf->SetXY($x_lawn, $y_lawn + 5);
+		$pdf->Cell(7, 5, 'M', 1, 0, 'C', true);
+		$pdf->Cell(7, 5, 'E', 1, 0, 'C', true);
+		$pdf->Cell(7, 5, 'B', 1, 0, 'C', true);
+		$pdf->Cell(7, 5, 'W', 1, 0, 'C', true);
+		$pdf->Cell(7, 5, 'T', 1, 0, 'C', true);
+		$pdf->SetXY($x_lawn + $w_lawn, $y_lawn);
+		
+		$x_fert = $pdf->GetX();
+		$y_fert = $pdf->GetY();
+		$pdf->Cell($w_fert, 5, 'FERT', 1, 0, 'C', true);
+		$pdf->SetXY($x_fert, $y_fert + 5);
+		$pdf->Cell(7, 5, 'G', 1, 0, 'C', true);
+		$pdf->Cell(7, 5, 'P', 1, 0, 'C', true);
+		$pdf->SetXY($x_fert + $w_fert, $y_fert);
+		
+		$pdf->Cell($w_spray, $h_header, 'SPRAY', 1, 0, 'C', true);
+		$pdf->Cell($w_comments, $h_header, 'COMMENTS', 1, 1, 'C', true);
+		
+		$pdf->SetFont('helvetica', '', 7);
+	}
+
+	/**
+	 * Dibuja footer en posición exacta calculada, no relativa
+	 */
+	private function dibujarFooterExacto($pdf, $nombre_ruta, $margen_inferior) {
+		// Posición Y exacta: altura página (216) - margen inferior (10) - altura footer (8) = 198mm
+		// Pero como SetY es desde el margen superior, usamos:
+		// 216 - 10 (margen inferior) = 206, menos altura del texto (6) = 200 aprox
+		// O más simple: 216 - margen_inferior - 6 = 200mm
+		
+		$y_footer = 216 - $margen_inferior - 6;
+		
+		$pdf->SetY($y_footer);
+		$pdf->SetFont('helvetica', 'I', 7);
+		$pdf->SetTextColor(100, 100, 100);
+		$pdf->Cell(0, 6, 'Generated: ' . date('Y-m-d H:i') . ' | GreenTrack System | Route: ' . $nombre_ruta, 0, 0, 'C');
+	}
+
+	private function color_especial($color_ruta)
+	{
+		// Obtener color de la ruta
+		$color_hex = isset($color_ruta) ? $color_ruta : '#4fbbdb';
+		$color_rgb = $this->hexToRgb($color_hex);
+    
+		// Crear color tenue
+		$color_tenue_rgb = [
+			'r' => min(255, $color_rgb['r'] + 140),
+			'g' => min(255, $color_rgb['g'] + 140),
+			'b' => min(255, $color_rgb['b'] + 140)
+		];
+		return $color_tenue_rgb;
+	}
+
+
+	/**
+	 * Dibuja una línea de la tabla con altura específica
+	 */
+	private function dibujarLineaTabla($pdf, $numero, $cliente, $anchos, $color_tenue_rgb, $ruta_icono, $altura_fila) {
+		extract($anchos);
+		
+		// Color alternado
+		if (!is_null($cliente['id_ruta_new'])) {
+			$color_tenue_rgb = $this->color_especial($cliente['color_ruta']);
+			$pdf->SetFillColor($color_tenue_rgb['r'], $color_tenue_rgb['g'], $color_tenue_rgb['b']);
+		}else{
+			if ($numero % 2 == 0) {
+				$pdf->SetFillColor(255, 255, 255);
+			} else {
+				$pdf->SetFillColor($color_tenue_rgb['r'], $color_tenue_rgb['g'], $color_tenue_rgb['b']);
+			}
+		}
+		
+		// Preparar textos
+		$customer = $cliente ? strtoupper($cliente['customer']) : '';
+		$address = '';
+		if ($cliente) {
+			$address = strtoupper($cliente['address']);
+			if ($cliente['ciudad']) $address .= ', ' . strtoupper($cliente['ciudad']);
+			if ($cliente['estado']) $address .= ', ' . strtoupper($cliente['estado']);
+		}
+		
+		$y_inicial = $pdf->GetY();
+		$x_inicial = $pdf->GetX();
+		
+		// Verificar que no nos pasemos del límite (seguridad)
+		if ($y_inicial + $altura_fila > 205) { // 205 es límite seguro antes de footer
+			$this->log("ADVERTENCIA: Línea {$numero} se sale de página, Y={$y_inicial}");
+		}
+		
+		$ancho_total = $w_num + $w_customer + $w_address + $w_worksite + $w_start + $w_end + $w_lawn + $w_fert + $w_spray + $w_comments;
+		
+		// Fondo
+		$pdf->Rect($x_inicial, $y_inicial, $ancho_total, $altura_fila, 'F');
+		
+		// Contenido
+		$pdf->SetXY($x_inicial, $y_inicial);
+		$pdf->Cell($w_num, $altura_fila, $numero, 0, 0, 'C', false);
+		
+		$pdf->SetXY($x_inicial + $w_num, $y_inicial);
+		$pdf->MultiCell($w_customer, 4.5, $customer, 0, 'L', false, 0, '', '', true, 0, false, true, $altura_fila, 'M');
+		
+		$pdf->SetXY($x_inicial + $w_num + $w_customer, $y_inicial);
+		$pdf->MultiCell($w_address, 4.5, $address, 0, 'L', false, 0, '', '', true, 0, false, true, $altura_fila, 'M');
+		
+		$x_actual = $x_inicial + $w_num + $w_customer + $w_address;
+		
+		$pdf->SetXY($x_actual, $y_inicial);
+		$worksite = $cliente ? $cliente['dia_servicio'] : '';
+		$pdf->Cell($w_worksite, $altura_fila, $worksite, 0, 0, 'C', false);
+		$x_actual += $w_worksite;
+		
+		$pdf->SetXY($x_actual, $y_inicial);
+		$pdf->Cell($w_start, $altura_fila, '', 0, 0, 'C', false);
+		$x_actual += $w_start;
+		
+		$pdf->SetXY($x_actual, $y_inicial);
+		$pdf->Cell($w_end, $altura_fila, '', 0, 0, 'C', false);
+		$x_actual += $w_end;
+		
+		// Checkboxes
+		for ($j = 0; $j < 5; $j++) {
+			$checkbox_x = $x_actual + ($j * 7) + 2;
+			$checkbox_y = $y_inicial + ($altura_fila - 3) / 2;
+			$pdf->Rect($checkbox_x, $checkbox_y, 3, 3, 'D');
+		}
+		$x_actual += $w_lawn;
+		
+		for ($j = 0; $j < 2; $j++) {
+			$checkbox_x = $x_actual + ($j * 7) + 2;
+			$checkbox_y = $y_inicial + ($altura_fila - 3) / 2;
+			$pdf->Rect($checkbox_x, $checkbox_y, 3, 3, 'D');
+		}
+		$x_actual += $w_fert;
+		
+		$pdf->SetXY($x_actual, $y_inicial);
+		$pdf->Cell($w_spray, $altura_fila, '', 0, 0, 'C', false);
+		$x_actual += $w_spray;
+		
+		$pdf->SetXY($x_actual, $y_inicial);
+		$pdf->Cell($w_comments, $altura_fila, '', 0, 1, 'L', false);
+		
+		// Bordes
+		$pdf->Rect($x_inicial, $y_inicial, $ancho_total, $altura_fila, 'D');
+		
+		$x_linea = $x_inicial + $w_num;
+		$pdf->Line($x_linea, $y_inicial, $x_linea, $y_inicial + $altura_fila);
+		$x_linea += $w_customer;
+		$pdf->Line($x_linea, $y_inicial, $x_linea, $y_inicial + $altura_fila);
+		$x_linea += $w_address;
+		$pdf->Line($x_linea, $y_inicial, $x_linea, $y_inicial + $altura_fila);
+		$x_linea += $w_worksite;
+		$pdf->Line($x_linea, $y_inicial, $x_linea, $y_inicial + $altura_fila);
+		$x_linea += $w_start;
+		$pdf->Line($x_linea, $y_inicial, $x_linea, $y_inicial + $altura_fila);
+		$x_linea += $w_end;
+		$pdf->Line($x_linea, $y_inicial, $x_linea, $y_inicial + $altura_fila);
+		$x_linea += $w_lawn;
+		$pdf->Line($x_linea, $y_inicial, $x_linea, $y_inicial + $altura_fila);
+		$x_linea += $w_fert;
+		$pdf->Line($x_linea, $y_inicial, $x_linea, $y_inicial + $altura_fila);
+		$x_linea += $w_spray;
+		$pdf->Line($x_linea, $y_inicial, $x_linea, $y_inicial + $altura_fila);
+	}
+
+	/**
+	 * Trunca texto si excede el ancho disponible (aproximadamente)
+	 */
+	private function truncarTexto($pdf, $texto, $ancho_max, $max_chars) {
+		if (strlen($texto) > $max_chars) {
+			return substr($texto, 0, $max_chars - 3) . '...';
+		}
+		return $texto;
+	}
+
+	/**
+	 * Dibuja el encabezado completo de la página con logo
+	 */
+	private function dibujarEncabezadoPagina($pdf, $fecha_formateada, $nombre_ruta, $color_rgb, $margen_lateral, $ruta_logo) {
+		
+		// Corregir doble barra en ruta si existe
+		$ruta_logo = str_replace('//', '/', $ruta_logo);
+		
+		// === BARRA DE COLOR DE FONDO ===
+		$altura_barra = 18;
+		$pdf->SetFillColor($color_rgb['r'], $color_rgb['g'], $color_rgb['b']);
+		$pdf->Rect(0, 0, 280, $altura_barra, 'F');
+		
+		// === LOGO EN ESQUINA SUPERIOR IZQUIERDA ===
+		if (!empty($ruta_logo) && file_exists($ruta_logo)) {
+			
+			$info_imagen = @getimagesize($ruta_logo);
+			if ($info_imagen !== false) {
+				$ancho_orig_px = $info_imagen[0];
+				$alto_orig_px = $info_imagen[1];
+				
+				$alto_maximo_mm = 14;
+				$ancho_maximo_mm = 50;
+				
+				$alto_orig_mm = $alto_orig_px * 0.2645;
+				$ancho_orig_mm = $ancho_orig_px * 0.2645;
+				
+				$escala = $alto_maximo_mm / $alto_orig_mm;
+				$alto_logo = $alto_orig_mm * $escala;
+				$ancho_logo = $ancho_orig_mm * $escala;
+				
+				if ($ancho_logo > $ancho_maximo_mm) {
+					$escala = $ancho_maximo_mm / $ancho_orig_mm;
+					$ancho_logo = $ancho_orig_mm * $escala;
+					$alto_logo = $alto_orig_mm * $escala;
+				}
+				
+				$x_logo = $margen_lateral + 3;
+				$y_logo = ($altura_barra - $alto_logo) / 2;
+				
+				$pdf->Image(
+					$ruta_logo,
+					$x_logo,
+					$y_logo,
+					$ancho_logo,
+					$alto_logo,
+					'',
+					'',
+					'L',
+					false,
+					150,
+					'',
+					false,
+					false,
+					0,
+					false,
+					false,
+					false
+				);
+			}
+		}
+		
+		// === FECHA CENTRADA ===
+		$pdf->SetTextColor(255, 255, 255);
+		$pdf->SetFont('helvetica', 'B', 16);
+		$pdf->SetY(5);
+		$pdf->Cell(0, 10, strtoupper($fecha_formateada), 0, 1, 'C', false);
+		
+		// === DRIVER Y TRUCK # ===
+		// AJUSTE: Añadidos 5mm de espacio antes de las etiquetas
+		$pdf->Ln(6);  // Era 1, ahora 6 (1 + 5mm adicionales)
+		
+		$pdf->SetTextColor(0, 0, 0);
+		$pdf->SetFont('helvetica', '', 10);
+		$pdf->Cell(35, 6, 'Driver:', 0, 0, 'L');
+		$pdf->Cell(80, 6, '', 'B', 0, 'L');
+		$pdf->Cell(20, 6, '', 0, 0, 'L');
+		$pdf->Cell(35, 6, 'Truck #:', 0, 0, 'L');
+		$pdf->Cell(0, 6, '', 'B', 1, 'L');
+		
+		// === NOMBRE DE RUTA ===
+		$pdf->SetFont('helvetica', 'B', 12);
+		$pdf->SetTextColor($color_rgb['r'], $color_rgb['g'], $color_rgb['b']);
+		$pdf->Cell(0, 7, strtoupper($nombre_ruta), 0, 1, 'L');
+		
+		// === LÍNEA DIVISORIA ===
+		$pdf->SetLineWidth(0.5);
+		$pdf->Line($margen_lateral, $pdf->GetY(), 270 - $margen_lateral, $pdf->GetY());
+		$pdf->Ln(2);
+	}
+
+	/**
+	 * Dibuja los encabezados de la tabla (columnas) y devuelve los anchos
+	 */
+	private function dibujarEncabezadosTabla($pdf, $color_rgb) {
+		// Anchos de columnas
+		$w_num = 6;
+		$w_customer = 42;
+		$w_address = 70;
+		$w_worksite = 14;
+		$w_start = 12;
+		$w_end = 12;
+		$w_lawn = 35;
+		$w_fert = 14;
+		$w_spray = 12;
+		$w_comments = 42;
+		
+		$pdf->SetFillColor(200, 200, 200);
+		$pdf->SetTextColor(0, 0, 0);
+		$pdf->SetFont('helvetica', 'B', 7);
+		$pdf->SetLineWidth(0.2);
+		
+		$h_header = 10;
+		
+		$pdf->Cell($w_num, $h_header, '#', 1, 0, 'C', true);
+		$pdf->Cell($w_customer, $h_header, 'CUSTOMER', 1, 0, 'C', true);
+		$pdf->Cell($w_address, $h_header, 'ADDRESS', 1, 0, 'C', true);
+		$pdf->Cell($w_worksite, $h_header, 'Work Site', 1, 0, 'C', true);
+		$pdf->Cell($w_start, $h_header, 'Start', 1, 0, 'C', true);
+		$pdf->Cell($w_end, $h_header, 'End', 1, 0, 'C', true);
+		
+		// Sub-encabezado Lawn Care (M,E,B,W,T)
+		$x_lawn = $pdf->GetX();
+		$y_lawn = $pdf->GetY();
+		$pdf->Cell($w_lawn, 5, 'LAWN CARE', 1, 0, 'C', true);
+		$pdf->SetXY($x_lawn, $y_lawn + 5);
+		$pdf->Cell(7, 5, 'M', 1, 0, 'C', true);
+		$pdf->Cell(7, 5, 'E', 1, 0, 'C', true);
+		$pdf->Cell(7, 5, 'B', 1, 0, 'C', true);
+		$pdf->Cell(7, 5, 'W', 1, 0, 'C', true);
+		$pdf->Cell(7, 5, 'T', 1, 0, 'C', true);
+		$pdf->SetXY($x_lawn + $w_lawn, $y_lawn);
+		
+		// Sub-encabezado Fertilizer (G,P)
+		$x_fert = $pdf->GetX();
+		$y_fert = $pdf->GetY();
+		$pdf->Cell($w_fert, 5, 'FERT', 1, 0, 'C', true);
+		$pdf->SetXY($x_fert, $y_fert + 5);
+		$pdf->Cell(7, 5, 'G', 1, 0, 'C', true);
+		$pdf->Cell(7, 5, 'P', 1, 0, 'C', true);
+		$pdf->SetXY($x_fert + $w_fert, $y_fert);
+		
+		$pdf->Cell($w_spray, $h_header, 'SPRAY', 1, 0, 'C', true);
+		$pdf->Cell($w_comments, $h_header, 'COMMENTS', 1, 1, 'C', true);
+		
+		// Devolver anchos para usarlos en dibujarLineaTabla
+		return compact('w_num', 'w_customer', 'w_address', 'w_worksite', 'w_start', 'w_end', 'w_lawn', 'w_fert', 'w_spray', 'w_comments', 'h_header');
+	}
+
+	private function hexToRgb($hex) {
+		$hex = str_replace('#', '', $hex);
+		if (strlen($hex) == 3) {
+			$r = hexdec(str_repeat(substr($hex, 0, 1), 2));
+			$g = hexdec(str_repeat(substr($hex, 1, 1), 2));
+			$b = hexdec(str_repeat(substr($hex, 2, 1), 2));
+		} else {
+			$r = hexdec(substr($hex, 0, 2));
+			$g = hexdec(substr($hex, 2, 2));
+			$b = hexdec(substr($hex, 4, 2));
+		}
+		return ['r' => $r, 'g' => $g, 'b' => $b];
+	}
+
+	public function guardarServicios($fecha_servicio, $rutas)
+	{
+		$rutasValidas = [];
+		$asignaciones = [];
+
+		foreach ($rutas as $ruta) {
+			$id_ruta = $ruta['id'];
+			$id_driver = $ruta['driver'];
+			$id_truck = $ruta['truck'];
+			$crew = $ruta['crew'] ?? []; // Array de IDs de crew
+
+			if (!empty($id_driver) && !empty($id_truck)) {
+				$rutasValidas[] = $id_ruta;
+
+				$asignaciones[$id_ruta] = [
+					'id_ruta' => $id_ruta,
+					'driver' => $id_driver,
+					'truck' => $id_truck,
+					'crew' => is_array($crew) ? $crew : explode(',', $crew)
+				];
+			}
+		}
+
+		// Si no hay rutas válidas, detener
+		if (empty($rutasValidas)) {
+			echo json_encode(['success' => false, 'message' => 'No routes with driver and truck assigned']);
+			exit;
+		}
+
+		// ============================================
+		// 2. CONSULTA DE PRESERVICIOS (CON PREPARED STATEMENTS)
+		// ============================================
+		// Crear placeholders seguros para el IN clause
+		$placeholders = implode(',', $rutasValidas);
+
+		$sql = "SELECT p.id_preservicio, p.id_contrato, c.id_cliente, c.id_direccion, 
+				p.id_ruta, p.orden_en_ruta, p.fecha_programada, p.dia_servicio
+			FROM preservicios p
+			INNER JOIN contratos c ON c.id_contrato = p.id_contrato
+				AND c.id_ruta = p.id_ruta
+			INNER JOIN rutas r ON r.id_ruta = p.id_ruta
+			WHERE p.fecha_programada = :v_fecha_programada 
+				AND p.id_ruta IN ($placeholders)
+			ORDER BY p.id_ruta, p.orden_en_ruta";
+
+		$params = [
+			":v_fecha_programada" => $fecha_servicio
+		];
+		$preservicios = $this->ejecutarConsulta($sql, "", $params, 'fetchAll');
+
+		// ============================================
+		// 3. FUSIONAR DATOS (MODAL + DATABASE)
+		// ============================================
+		$cant_reg = 0;
+		$servicios = [];
+		foreach ($preservicios as $preservicio) {
+			$id_ruta = $preservicio['id_ruta'];
+			
+			// Verificar que tenemos asignaciones para esta ruta
+			if (!isset($asignaciones[$id_ruta])) {
+				continue;
+			}
+			
+			$asignacion = $asignaciones[$id_ruta];
+			
+			//Color del Driver
+			$sql_color_driver = "SELECT color FROM crew WHERE id_crew = :v_id_crew";
+			$params = [
+				':v_id_crew' => $asignacion['driver']
+			];
+			$crew_color_principal = $this->ejecutarConsulta($sql_color_driver, "", $params, 'fetchColumn');
+			
+			$crew = $asignacion['crew'];
+			
+			// Distribuir crew en columnas individuales (crew_2, crew_3, crew_4)
+			$crewData = [
+				'id_crew_2' => $crew[0] ?? null,
+				'id_crew_3' => $crew[1] ?? null,
+				'id_crew_4' => $crew[2] ?? null
+			];
+			
+			// Armar el registro completo para insertar
+			$servicios = [
+				['campo_nombre' => 'id_preservicio',		'campo_marcador' => ':id_preservicio',			'campo_valor' => $preservicio['id_preservicio']],
+				['campo_nombre' => 'id_contrato',			'campo_marcador' => ':id_contrato',				'campo_valor' => $preservicio['id_contrato']],
+				['campo_nombre' => 'id_cliente',			'campo_marcador' => ':id_cliente',				'campo_valor' => $preservicio['id_cliente']],
+				['campo_nombre' => 'id_direccion',			'campo_marcador' => ':id_direccion',			'campo_valor' => $preservicio['id_direccion']],
+				['campo_nombre' => 'id_ruta',				'campo_marcador' => ':id_ruta',					'campo_valor' => $id_ruta],
+				['campo_nombre' => 'id_crew_1',				'campo_marcador' => ':id_crew_1',				'campo_valor' => $asignacion['driver']],
+				['campo_nombre' => 'crew_color_principal', 	'campo_marcador' => ':crew_color_principal',	'campo_valor' => $crew_color_principal],
+				['campo_nombre' => 'id_truck',				'campo_marcador' => ':id_truck',				'campo_valor' => $asignacion['truck']],
+				['campo_nombre' => 'id_crew_2',				'campo_marcador' => ':id_crew_2',				'campo_valor' => $crewData['id_crew_2']],
+				['campo_nombre' => 'id_crew_3',				'campo_marcador' => ':id_crew_3',				'campo_valor' => $crewData['id_crew_3']],
+				['campo_nombre' => 'id_crew_4',				'campo_marcador' => ':id_crew_4',				'campo_valor' => $crewData['id_crew_4']],
+				['campo_nombre' => 'fecha_programada',		'campo_marcador' => ':fecha_programada',		'campo_valor' => $preservicio['fecha_programada']],
+				['campo_nombre' => 'dia_servicio',			'campo_marcador' => ':dia_servicio',			'campo_valor' => $preservicio['dia_servicio']],
+				['campo_nombre' => 'orden_en_ruta',			'campo_marcador' => ':orden_en_ruta',			'campo_valor' => $preservicio['orden_en_ruta']],
+				['campo_nombre' => 'id_crew_grupo',			'campo_marcador' => ':id_crew_grupo',			'campo_valor' => 1],
+				['campo_nombre' => 'needs_assignment',		'campo_marcador' => ':needs_assignment',		'campo_valor' => 0],
+				['campo_nombre' => 'ruta_mapa',				'campo_marcador' => ':ruta_mapa',				'campo_valor' => 0]
+			];
+			try {
+				$this->guardarDatos('servicios', $servicios);
+				$cant_reg ++;
+			} catch (Exception $e) {
+				$this->logWithBacktrace("❌ Error al guardar Servicio: " . $e->getMessage(), true);
+			}
+		}
+
+		if ($cant_reg == 0){
+			http_response_code(400);
+			echo json_encode([
+				'success' => false, 
+				'message' => 'No services were saved. There was an error loading the data.'
+			]);
+		} else {	
+			http_response_code(200);
+			echo json_encode([
+				'success' => true, 
+				'message' => $cant_reg . ' Saved Services'
+			]);
 		}
 	}
 }

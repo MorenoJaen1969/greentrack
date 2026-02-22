@@ -1,0 +1,301 @@
+/* ============================================
+   SISTEMA PLAT - CSS de Mapa de Cliente
+   Prefijo único: plat- (evita conflictos)
+   ============================================ */
+
+/* ------------------------------------------
+   CONTENEDOR PRINCIPAL DE DIRECCIONES
+   ------------------------------------------ */
+.plat-direcciones-container {
+    display: grid;
+    grid-template-columns: 40% 60%;
+    gap: 20px;
+    height: 500px;
+    max-height: 500px;
+    box-sizing: border-box;
+}
+
+/* ------------------------------------------
+   PANEL IZQUIERDO - LISTA DE DIRECCIONES
+   ------------------------------------------ */
+.plat-direcciones-listbox {
+    height: 100%;
+    overflow: hidden;
+}
+
+.plat-direcciones-panel {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.plat-direcciones-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.plat-direcciones-header strong {
+    color: #333;
+    font-size: 1.1em;
+}
+
+.plat-btn-add {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.plat-btn-add:hover {
+    background: #0056b3;
+}
+
+.plat-lista-scroll {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: white;
+}
+
+/* ------------------------------------------
+   ITEMS DE DIRECCIÓN
+   ------------------------------------------ */
+.plat-direccion-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.plat-direccion-item:hover {
+    background-color: #f8f9fa;
+}
+
+.plat-direccion-item.plat-active {
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+}
+
+.plat-direccion-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.plat-direccion-texto {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 5px;
+    font-size: 0.95rem;
+    word-wrap: break-word;
+    line-height: 1.3;
+}
+
+.plat-direccion-coords {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.plat-direccion-coords i {
+    color: #007bff;
+    margin-right: 5px;
+}
+
+.plat-direccion-status {
+    margin-left: 10px;
+    flex-shrink: 0;
+}
+
+.plat-status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.plat-status-active {
+    background-color: #28a745;
+}
+
+.plat-status-inactive {
+    background-color: #6c757d;
+}
+
+/* ------------------------------------------
+   SIN DIRECCIONES
+   ------------------------------------------ */
+.plat-sin-direcciones {
+    padding: 30px 15px;
+    text-align: center;
+    color: #999;
+}
+
+.plat-sin-direcciones i {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    display: block;
+}
+
+/* ------------------------------------------
+   PANEL DERECHO - MAPA
+   ------------------------------------------ */
+.plat-mapa-wrapper {
+    height: 100%;
+    overflow: hidden;
+}
+
+.plat-mapa-panel {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.plat-mapa-header {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.plat-mapa-header strong {
+    color: #333;
+    font-size: 1.1em;
+}
+
+.plat-mapa-container {
+    flex: 1;
+    min-height: 350px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: #e0e0e0;
+}
+
+/* ------------------------------------------
+   CONTENEDOR LEAFLET (CRÍTICO)
+   ------------------------------------------ */
+#plat-mapa-leaflet {
+    width: 100% !important;
+    height: 100% !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 1 !important;
+}
+
+/* Forzar que Leaflet cree el container correctamente */
+#plat-mapa-leaflet .leaflet-container {
+    width: 100% !important;
+    height: 100% !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    background: #d0d0d0 !important;
+}
+
+/* Pane del mapa */
+#plat-mapa-leaflet .leaflet-map-pane {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 2 !important;
+}
+
+/* Tiles del mapa */
+#plat-mapa-leaflet .leaflet-tile-pane {
+    z-index: 3 !important;
+}
+
+#plat-mapa-leaflet .leaflet-tile {
+    position: absolute !important;
+    width: 256px !important;
+    height: 256px !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: block !important;
+}
+
+/* Marcadores */
+#plat-mapa-leaflet .leaflet-marker-pane {
+    z-index: 5 !important;
+}
+
+#plat-mapa-leaflet .leaflet-marker-icon,
+#plat-mapa-leaflet .leaflet-marker-shadow {
+    display: block !important;
+    visibility: visible !important;
+}
+
+/* Controles */
+#plat-mapa-leaflet .leaflet-control-container {
+    z-index: 10 !important;
+}
+
+#plat-mapa-leaflet .leaflet-control {
+    display: block !important;
+}
+
+/* Atribución */
+#plat-mapa-leaflet .leaflet-control-attribution {
+    background: rgba(255, 255, 255, 0.8) !important;
+    padding: 2px 5px !important;
+    font-size: 11px !important;
+}
+
+/* ------------------------------------------
+   FOOTER DEL MAPA
+   ------------------------------------------ */
+.plat-mapa-footer {
+    margin-top: 10px;
+    padding: 10px;
+    background: #e9ecef;
+    border-radius: 4px;
+}
+
+.plat-texto-azul {
+    color: #007bff;
+    font-weight: 500;
+}
+
+/* ------------------------------------------
+   RESPONSIVE
+   ------------------------------------------ */
+@media (max-width: 768px) {
+    .plat-direcciones-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 400px;
+        height: auto;
+        max-height: none;
+    }
+    
+    .plat-direcciones-listbox,
+    .plat-mapa-wrapper {
+        height: auto;
+    }
+    
+    .plat-mapa-container {
+        min-height: 350px;
+    }
+}
