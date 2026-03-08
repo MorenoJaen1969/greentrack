@@ -14,7 +14,7 @@ if ($_SERVER['REMOTE_ADDR'] !== '127.0.0.1') {
 // Solo permitir POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    exit('Método no permitido');
+    exit('Method not permitted');
 }
 
 // Leer JSON
@@ -35,7 +35,9 @@ if (empty($token)) {
 
 // Cargar controlador y ejecutar
 require_once '../controllers/contactsController.php';
+
 use app\controllers\contactsController;
+
 $controller = new contactsController();
 $datos = $controller->validateToken($token);
 $result = [

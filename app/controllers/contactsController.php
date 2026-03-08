@@ -448,7 +448,7 @@ class contactsController extends mainModel
 
             if ($contactId === null) {
                 http_response_code(400);
-                echo json_encode(['error' => 'Falta el parámetro contact_id']);
+                echo json_encode(['error' => 'The parameter is missing. contact_id']);
                 return;
             }
 

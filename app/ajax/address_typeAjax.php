@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_address_type'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_address_type"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_address_type"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/address_typeController.php';
+
 use app\controllers\address_typeController;
 
 $controller = new address_typeController();
@@ -75,24 +76,24 @@ switch ($modulo) {
 
         $controller->cerrar_parada($id_parada, $vehicle_id);
         break;
-    
+
     case 'crear_select':
         $id_address_clas = $inputData['id_address_clas'];
         $id_address_type = $inputData['id_address_type'];
 
         $address_type = $controller->consultar_address_type($id_address_clas);
-        $cadena='';
+        $cadena = '';
 
         $cadena = '<option value="">Select a Address Type</option>';
 
-        foreach ($address_type as $curr){
-            $cadena = $cadena. '<option value="' . $curr['id_address_type'] . '" ';
-            if($id_address_type == $curr['id_address_type']){ 
-                $cadena = $cadena. 'selected> ';
-            }else{
-                $cadena = $cadena. '> ';
+        foreach ($address_type as $curr) {
+            $cadena = $cadena . '<option value="' . $curr['id_address_type'] . '" ';
+            if ($id_address_type == $curr['id_address_type']) {
+                $cadena = $cadena . 'selected> ';
+            } else {
+                $cadena = $cadena . '> ';
             }
-            $cadena = $cadena. $curr['address_type'] . '</option>';
+            $cadena = $cadena . $curr['address_type'] . '</option>';
         }
         echo $cadena;
         break;
@@ -104,4 +105,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

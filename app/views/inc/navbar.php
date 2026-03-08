@@ -31,13 +31,13 @@
 
                 <ul class="ul_1 submenu" role="menu" aria-label="Sub Processes">
                     <li class="li_1" role="menuitem">
-                        <a href="<?php echo RUTA_APP."/contratos/"; ?>" class="menu-item">
-                            📄 Contract
+                        <a href="<?php echo RUTA_APP."/clientes/"; ?>" class="menu-item">
+                            👥 Customers
                         </a>
                     </li>
                     <li class="li_1" role="menuitem">
-                        <a href="<?php echo RUTA_APP."/clientes/"; ?>" class="menu-item">
-                            👥 Customers
+                        <a href="<?php echo RUTA_APP."/contratos/"; ?>" class="menu-item">
+                            📄 Contract
                         </a>
                     </li>
                 </ul>

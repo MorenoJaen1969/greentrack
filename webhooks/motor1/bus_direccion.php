@@ -15,7 +15,7 @@ use app\controllers\serviciosController;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit;
 }
 
@@ -44,7 +44,8 @@ if ($total === 0) {
 // ================================
 // 4. FUNCIÓN: OBTENER COORDENADAS DE GOOGLE MAPS
 // ================================
-function direccionUrl($direccion) {
+function direccionUrl($direccion)
+{
     // 1. Insertar '+'' después de '.' si sigue una letra mayúscula
     $direccion = preg_replace('/\.([A-Z])/', '.+$1', $direccion);
 
@@ -55,7 +56,8 @@ function direccionUrl($direccion) {
     return preg_replace('/\++/', '+', $direccion);
 }
 
-function obtenerCoordenadasGoogle($direccion) {
+function obtenerCoordenadasGoogle($direccion)
+{
     $url = 'https://www.google.com/maps/place/' . direccionUrl($direccion);
 
     $ch = curl_init();
@@ -131,9 +133,9 @@ foreach ($resultado as $servicio) {
         $lat = $coordenadas['lat'];
         $lon = $coordenadas['lng'];
         $id_servicio = $servicio['id_servicio'];
-                
+
         $actualizado = $controller->act_lat_long_direcciones($id_servicio, $lat, $lon);
-        
+
         $total = count($actualizado);
 
         if ($total === 0) {

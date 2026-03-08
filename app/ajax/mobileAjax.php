@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,15 +51,16 @@ $modulo = $inputData['modulo_mobiles'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_mobiles"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_mobiles"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/mobilesController.php';
+
 use app\controllers\mobilesController;
 
-$controller = new mobilesController(); 
+$controller = new mobilesController();
 
 /* 
     $token = $inputData['token'] ?? '';
@@ -71,18 +72,18 @@ $controller = new mobilesController();
  */
 // === 9. Enrutar según el módulo ===
 switch ($modulo) {
-    case 'listar_para_geoferencia': 
-   		$fecha = $inputData['fecha'] ?? date('Y-m-d'); // Puede venir por POST o usar hoy
+    case 'listar_para_geoferencia':
+        $fecha = $inputData['fecha'] ?? date('Y-m-d'); // Puede venir por POST o usar hoy
 
-        $controller->listarmobilesConEstado($fecha); 
+        $controller->listarmobilesConEstado($fecha);
         break;
 
     case 'listar_vehiculos':
-        $controller->listarVehiculos(); 
+        $controller->listarVehiculos();
         break;
-    
+
     case 'listar_propiedades':
-        $controller->cargar_clientes_y_direccion(); 
+        $controller->cargar_clientes_y_direccion();
         break;
 
     default:
@@ -92,4 +93,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

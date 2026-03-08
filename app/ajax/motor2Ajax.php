@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_motor2'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_motor2"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_motor2"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/motor2Controller.php';
+
 use app\controllers\motor2Controller;
 
 $controller = new motor2Controller();
@@ -78,13 +79,13 @@ switch ($modulo) {
 
     case 'obtener_gps_verizon':
         $vehiculo_id = $inputData['vehicle_id'] ?? '';
-        
+
         if ($vehiculo_id === '') {
             http_response_code(400);
             echo json_encode(['error' => 'id_vehiculo es requeridos']);
             exit();
         }
-        
+
         $controller->obtenerGpsVerizon($vehiculo_id);
         break;
 
@@ -101,7 +102,7 @@ switch ($modulo) {
 
         $controller->obtenerHistoricoVerizon($vehicle_id, $from_time, $to_time);
         echo json_encode(['success' => true, 'message' => 'Histórico procesado']);
-        break;        
+        break;
 
     case 'obtener_historico_bd':
         $vehicle_id = $inputData['vehicle_id'] ?? '';
@@ -115,30 +116,30 @@ switch ($modulo) {
         }
 
         $controller->obtenerHistorialGPS_bd($vehicle_id, $from_time, $to_time);
-        break;        
+        break;
 
     case 'obtener_trucks_activos_hoy':
         $trucks = $controller->obtenerTrucksActivosHoy();
-        
+
         echo json_encode([
             'success' => true,
             'trucks' => $trucks,
             'count' => count($trucks)
         ]);
-        break;                
-            
+        break;
+
     case 'obtener_trucks_activos_hoy_excl':
         $trucks = $controller->obtenerTrucksActivosHoy_excl();
-        
+
         echo json_encode([
             'success' => true,
             'trucks' => $trucks,
             'count' => count($trucks)
         ]);
-        break;                
+        break;
 
     case 'obtener_trucks_activos_hoy_color':
-        $fecha_proc = $inputData['fecha_proc']; 
+        $fecha_proc = $inputData['fecha_proc'];
         $trucks = $controller->obtenerTrucksActivosHoy_Color($fecha_proc);
 
         echo json_encode([
@@ -146,11 +147,11 @@ switch ($modulo) {
             'trucks' => $trucks,
             'count' => count($trucks)
         ]);
-        break;                
+        break;
 
     case 'obtener_historial_gps':
         $vehicle_id = $inputData['vehicle_id'] ?? '';
-        
+
         if (!$vehicle_id) {
             http_response_code(400);
             echo json_encode(['error' => 'Falta vehicle_id']);
@@ -167,7 +168,7 @@ switch ($modulo) {
             break;
         }
         $controller->obtenerUP($vehicle_id);
-        break; 
+        break;
 
     case 'obtener_ultimo_historial':
         $vehicle_id = $_POST['vehicle_id'] ?? '';
@@ -183,15 +184,15 @@ switch ($modulo) {
 
     case 'obtener_ultimo_punto_truck':
         $truck = trim($inputData['truck'] ?? '');
-        
+
         if (empty($truck)) {
             echo json_encode(['error' => 'Truck ID required']);
             exit;
         }
 
-        $controller->ultima_pos_truck($truck);  
+        $controller->ultima_pos_truck($truck);
         break;
-    
+
     case 'info_vehiculo':
         $truck = trim($inputData['id_truck']);
 
@@ -208,7 +209,7 @@ switch ($modulo) {
 
     case 'obtener_ruta_hoy':
         $vehicle_id = $inputData['vehicle_id'] ?? '';
-        
+
         if (!$vehicle_id) {
             http_response_code(400);
             echo json_encode(['error' => 'Falta vehicle_id']);
@@ -217,7 +218,7 @@ switch ($modulo) {
 
         $controller->obtenerRutaHoy($vehicle_id);
         break;
-        
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);
@@ -225,4 +226,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

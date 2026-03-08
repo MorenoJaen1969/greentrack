@@ -1,4 +1,5 @@
 <?php
+
 namespace app\controllers;
 require_once APP_R_PROY . 'app/models/mainModel.php';
 
@@ -18,6 +19,7 @@ class dias_no_actividadController extends mainModel
 	private $id_status_replanificado;
 
 	private $o_f;
+	private $ruta_reporte;
 
 	public function __construct()
 	{
@@ -39,11 +41,7 @@ class dias_no_actividadController extends mainModel
 		$this->logFile = $this->log_path . $nom_controlador . '_' . date('Y-m-d') . '.log';
 		$this->errorLogFile = $this->log_path . $nom_controlador . '_error_' . date('Y-m-d') . '.log';
 
-		$this->initializeLogFile(file: $this->logFile);
-		$this->initializeLogFile($this->errorLogFile);
-
-		$this->verificarPermisos();
-
+        $this->verificarPermisos();
 		// rotación automatica de log (Elimina logs > XX dias)
 		$this->rotarLogs(15);
 
@@ -53,37 +51,19 @@ class dias_no_actividadController extends mainModel
 		$this->id_status_activo = 37;
 		$this->id_status_replanificado = 40;
 
-		// if (isset($_COOKIE['clang'])) {
-		// 	$this->idioma_act = $_COOKIE['clang'];
-		// } else {
-		//	$this->idioma_act = "en";
-		// }
-		// $this->o_f = new otras_fun();
-		// $this->idioma_ctrol = $this->o_f->cargar_idioma($this->idioma_act);
-	}
-
-	private function initializeLogFile($file)
-	{
-		if (!file_exists($file)) {
-			$initialContent = "[" . date('Y-m-d H:i:s') . "] Archivo de log iniciado" . PHP_EOL;
-			$created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
-			if ($created === false) {
-				error_log("No se pudo crear el archivo de log: " . $file);
-			} else {
-				chmod($file, 0644); // Asegurarse de que el archivo sea legible y escribible
-			}
-			if (!is_writable($file)) {
-				throw new \Exception("El archivo de log no es escribible: " . $file);
-			}
+        $this->ruta_reporte = APP_R_PROY . '/public/reports/';
+		if (!file_exists($this->ruta_reporte)) {
+			mkdir($this->ruta_reporte, 0755, true);
 		}
 	}
 
-	private function verificarPermisos()
+    private function verificarPermisos()
 	{
 		if (!is_writable($this->log_path)) {
 			error_log("No hay permiso de escritura en: " . $this->log_path);
 		}
 	}
+
 
 	private function rotarLogs($dias)
 	{
@@ -100,6 +80,10 @@ class dias_no_actividadController extends mainModel
 	private function log($message, $isError = false)
 	{
 		$file = $isError ? $this->errorLogFile : $this->logFile;
+		if (empty($file)) {
+			// Si no hay archivo de log configurado, evitar fallos en ambiente de pruebas 
+			return;
+		}
 		if (!file_exists($file)) {
 			$initialContent = "[" . date('Y-m-d H:i:s') . "] Archivo de log iniciado" . PHP_EOL;
 			$created = file_put_contents($file, $initialContent, FILE_APPEND | LOCK_EX);
@@ -115,6 +99,9 @@ class dias_no_actividadController extends mainModel
 
 	private function logWithBacktrace($message, $isError = true)
 	{
+		if (empty($this->errorLogFile)) {
+			return;
+		}
 		$backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
 		$caller = $backtrace[1] ?? $backtrace[0];
 		$logMessage = sprintf("[%s] %s - Called from %s::%s (Line %d)%s%s", date('Y-m-d H:i:s'), $message, $caller['class'] ?? '', $caller['function'], $caller['line'], PHP_EOL, "Stack trace:" . PHP_EOL . json_encode($backtrace, JSON_PRETTY_PRINT));
@@ -334,5 +321,177 @@ class dias_no_actividadController extends mainModel
         $data = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
 
         return $data;
+    }
+
+    /* ==========================================
+    API: Obtener Resumen de Fecha (MDS)
+    ========================================== */
+    public function cargar_fecha($fecha_consulta)
+    {
+        $this->log("Inicio de Consulta para la fecha: " . $fecha_consulta);
+        try {
+            // 1. Validar si es día laborable
+            $sql_validacion = "
+                SELECT 
+                    CASE 
+                        WHEN EXISTS (
+                            SELECT 1 FROM dias_no_actividad 
+                            WHERE DATE(FECHA) = DATE(:fecha1)
+                        ) THEN 0
+                        ELSE 1
+                    END AS es_laborable,
+                    (
+                        SELECT FECHA 
+                        FROM dias_no_actividad 
+                        WHERE DATE(FECHA) > DATE(:fecha2)
+                        ORDER BY DATE(FECHA) ASC
+                        LIMIT 1
+                    ) AS proximo_no_laborable
+                FROM DUAL";
+            
+            $params = [
+                ':fecha1' => $fecha_consulta,
+                ':fecha2' => $fecha_consulta
+            ];
+            
+            $validacion = $this->ejecutarConsulta(
+                $sql_validacion, 
+                "", 
+                $params
+            );
+            $this->log("Determinar si es laborable: " . json_encode($validacion));
+
+            $es_laborable = $validacion['es_laborable'] == 1;
+            
+            // 2. Obtener resumen de rutas y servicios
+            $sql_resumen = "SELECT 
+                COUNT(DISTINCT id_ruta) AS total_rutas,
+                COUNT(*) AS total_servicios,
+                SUM(
+                    CASE 
+                        WHEN hora_aviso_usuario IS NOT NULL 
+                        AND hora_inicio_gps IS NOT NULL 
+                        THEN 1 ELSE 0 
+                    END
+                ) AS fully_completed,
+                SUM(
+                    CASE 
+                        WHEN (hora_aviso_usuario IS NOT NULL AND hora_inicio_gps IS NULL)
+                        OR (hora_aviso_usuario IS NULL AND hora_inicio_gps IS NOT NULL)
+                        THEN 1 ELSE 0 
+                    END
+                ) AS partially_confirmed,
+                SUM(
+                    CASE 
+                        WHEN hora_aviso_usuario IS NULL 
+                        AND hora_inicio_gps IS NULL
+                        AND estado_servicio NOT IN ('cancelado', 'replanificado', 'no_servido')
+                        THEN 1 ELSE 0 
+                    END
+                ) AS not_confirmed,
+                SUM(
+                    CASE 
+                        WHEN estado_servicio = 'pendiente' 
+                        AND hora_aviso_usuario IS NULL 
+                        AND hora_inicio_gps IS NULL
+                        THEN 1 ELSE 0 
+                    END
+                ) AS pendientes,
+                SUM(
+                    CASE 
+                        WHEN estado_servicio IN ('cancelado', 'replanificado') 
+                        THEN 1 ELSE 0 
+                    END
+                ) AS no_completados
+                FROM servicios 
+                WHERE fecha_programada = :fecha
+                AND id_status != 39";
+
+            $params =[
+                ':fecha' => $fecha_consulta
+            ];
+
+            $resumen = $this->ejecutarConsulta(
+                $sql_resumen, 
+                "", 
+                $params
+            );
+            $this->log("Resumen del servicio: " . json_encode($resumen));
+            
+            // 3. Mensaje de alerta
+            $mensaje_alerta = '';
+            if (!$es_laborable) {
+                $mensaje_alerta = 'This is a non-working day. Next working day: ' . 
+                                date('M d, Y', strtotime($validacion['proximo_no_laborable']));
+            }
+
+			http_response_code(200);
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'fecha_consulta' => $fecha_consulta,
+                    'es_laborable' => $es_laborable,
+                    'mensaje_alerta' => $mensaje_alerta,
+                    'resumen' => [
+                        'total_rutas' => (int)($resumen['total_rutas'] ?? 0),
+                        'total_servicios' => (int)($resumen['total_servicios'] ?? 0),
+                        'finalizados' => (int)($resumen['finalizados'] ?? 0),
+                        'pendientes' => (int)($resumen['pendientes'] ?? 0),
+                        'no_completados' => (int)($resumen['no_completados'] ?? 0)
+                    ]
+                ]
+            ], JSON_PRETTY_PRINT);
+            
+        } catch (Exception $e) {
+			$this->logWithBacktrace("Error en cargar_fecha: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode([
+                'success' => false,
+                'message' => 'Error loading summary'
+            ]);
+        }
+    }
+
+    /* ==========================================
+    API: Validar Fecha Laborable
+    ========================================== */
+    public function validar_fecha_laborable($fecha) {
+        try {
+            $sql = "
+                SELECT 
+                    CASE 
+                        WHEN EXISTS (
+                            SELECT 1 FROM dias_no_actividad 
+                            WHERE DATE(FECHA) = DATE(:fecha)
+                        ) THEN 0
+                        ELSE 1
+                    END AS es_laborable
+                FROM DUAL
+            ";
+            
+            $result = $this->ejecutarConsulta(
+                $sql, 
+                "", 
+                [':fecha' => $fecha], 
+                "fetch"
+            );
+            
+			http_response_code(200);
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'es_laborable' => $result['es_laborable'] == 1,
+                    'fecha' => $fecha
+                ]
+            ], JSON_PRETTY_PRINT);
+            
+        } catch (Exception $e) {
+			$this->logWithBacktrace("Error en cargar_fecha: " . $e->getMessage(), true);
+			http_response_code(500);
+			echo json_encode([
+                'success' => false,
+                'data' => ['es_laborable' => true]
+            ]);
+        }
     }
 }

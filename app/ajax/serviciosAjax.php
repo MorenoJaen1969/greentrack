@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,7 +51,7 @@ $modulo = $inputData['modulo_servicios'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_servicios"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_servicios"']);
     exit();
 }
 
@@ -70,14 +70,13 @@ $controller = new serviciosController();
         exit;
     }
  */
-// === 9. Enrutar según el módulo ===
+// === 9. Enrutar según el módulo === 
 switch ($modulo) {
     case 'listar':
-        // Permitir filtrar por fecha y vehículo si se reciben   
+        // Permitir filtrar por fecha y vehículo si se reciben     
         $fecha = $inputData['fecha'] ?? null;
-        $truck = $inputData['truck'] ?? null;
-        if ($fecha || $truck) {
-            $controller->listarServiciosConEstado($fecha, $truck);
+        if ($fecha) {
+            $controller->listarServiciosConEstado($fecha);
         } else {
             $controller->listarServiciosConEstado();
         }
@@ -89,7 +88,7 @@ switch ($modulo) {
         break;
 
     case 'listar_individual';
-        // Permitir filtrar por fecha y vehículo si se reciben 
+        // Permitir filtrar por fecha y vehículo si se reciben  
         $fecha = $inputData['fecha'] ?? null;
         $truck = $inputData['truck'] ?? null;
         if ($fecha || $truck) {
@@ -315,6 +314,7 @@ switch ($modulo) {
     case 'preservicio_add':
         // Espera: 'clientes' => array de ids de cliente, 'fecha' => 'YYYY-MM-DD'
         $clientes = $inputData['clientes'] ?? [];
+        $contratos = $inputData['contratos'] ?? [];
         $fecha = $inputData['fecha'] ?? null;
         $id_ruta_new = $inputData['id_ruta_new'] ?? null;
         if (empty($clientes) || !$fecha) {
@@ -322,10 +322,36 @@ switch ($modulo) {
             echo json_encode(['error' => 'clientes y fecha son requeridos']);
             exit();
         }
-        $controller->addPreservicios($clientes, $fecha, $id_ruta_new);
+        $controller->addPreservicios($clientes, $contratos, $fecha, $id_ruta_new);
         break;
 
     case 'preservicio_remove':
+        // Espera: 'clientes' => array de ids de cliente, 'fecha' => 'YYYY-MM-DD'
+        $clientes = $inputData['clientes'] ?? [];
+        $contratos = $inputData['contratos'] ?? [];
+        $fecha = $inputData['fecha'] ?? null;
+        if (empty($clientes) || !$fecha) {
+            http_response_code(400);
+            echo json_encode(['error' => 'clientes y fecha son requeridos']);
+            exit();
+        }
+        $controller->removePreservicios($clientes, $contratos, $fecha);
+        break;
+
+
+    case 'movePreservicio_add':
+        // Espera: 'clientes' => array de ids de cliente, 'fecha' => 'YYYY-MM-DD'
+        $id_preservicio = $inputData['id_preservicio'] ?? [];
+        $id_ruta_new = $inputData['id_ruta_new'] ?? null;
+        if (empty($id_preservicio) || empty($id_ruta_new)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'id_precervicio e id_ruta_new son requeridos']);
+            exit();
+        }
+        $controller->movePreservicios($id_preservicio, $id_ruta_new);
+        break;
+
+    case 'movePreservicio_remove':
         // Espera: 'clientes' => array de ids de cliente, 'fecha' => 'YYYY-MM-DD'
         $clientes = $inputData['clientes'] ?? [];
         $fecha = $inputData['fecha'] ?? null;
@@ -334,10 +360,33 @@ switch ($modulo) {
             echo json_encode(['error' => 'clientes y fecha son requeridos']);
             exit();
         }
-        $controller->removePreservicios($clientes, $fecha);
+        //$controller->removePreservicios($clientes, $fecha);
+        break;
+
+    case 'borrarPredespacho':
+        $fecha = $inputData['fecha_despacho'] ?? null;
+        if (!$fecha) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Date is required']);
+            exit();
+        }
+        $controller->borrarPredespacho($fecha);
         break;
 
     case 'verificar_ruta':
+        $id_cliente = $inputData['id_cliente'] ?? [];
+        $id_contrato = $inputData['id_contrato'] ?? [];
+        $fecha = $inputData['fecha'] ?? null;
+        if (empty($id_cliente) || empty($id_contrato) || !$fecha) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Contract code and date are required.']);
+            exit();
+        }
+
+        $controller->verificar_ruta($id_cliente, $id_contrato, $fecha);
+        break;
+
+    case 'verificar_ruta2':
         $id_cliente = $inputData['id_cliente'] ?? [];
         $fecha = $inputData['fecha'] ?? null;
         if (empty($id_cliente) || !$fecha) {
@@ -345,17 +394,18 @@ switch ($modulo) {
             echo json_encode(['error' => 'Contract code and date are required.']);
             exit();
         }
-        $controller->verificar_ruta($id_cliente, $fecha);
+        $controller->verificar_ruta2($id_cliente, $fecha);
         break;
 
     case 'generar_reporte':
         $fecha_despacho = $inputData['fecha_despacho'] ?? null;
+        $tipo_de_reporte = $inputData['tipo_de_reporte'] ?? 0;
         if (!$fecha_despacho) {
             http_response_code(400);
             echo json_encode(['error' => 'Dispatch date is required']);
             exit();
         }
-        $controller->generarReporte($fecha_despacho);
+        $controller->generarReporte($fecha_despacho, $tipo_de_reporte);
         break;
 
     case 'guardar_servicios':
@@ -376,6 +426,55 @@ switch ($modulo) {
 
         $controller->guardarServicios($fecha, $rutas);
         break;
+
+    case 'crearListRutas':
+        $fecha = $inputData['fecha_despacho'] ?? [];
+
+        if (!$fecha) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Date is required']);
+            exit();
+        }
+        $resultado = $controller->listadoZonasReorder($fecha);
+        echo $resultado;
+        exit();
+
+    case 'obtener_clientes_ruta':
+        $id_ruta = $inputData['id_ruta'] ?? [];
+        $fecha = $inputData['fecha_despacho'] ?? [];
+
+        if (!$fecha) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Date is required']);
+            exit();
+        }
+
+        if (!$id_ruta) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Route is required']);
+            exit();
+        }
+        $controller->listadoClientesReorder($id_ruta, $fecha);
+        exit();
+
+    case 'guardar_orden_completo':
+        $id_ruta = $inputData['id_ruta'];
+        $fecha = $inputData['fecha'];
+        $ordenes = $inputData['ordenes'];
+
+        if (empty($ordenes)) {
+            echo json_encode(['success' => false, 'error' => 'No orders provided']);
+            return;
+        }
+
+        $controller->guardarOrdenCompleto($id_ruta, $fecha, $ordenes);
+        exit();
+
+    case 'MDS_datos':
+        $fecha_consulta = $inputData['fecha'];
+
+        $controller->obtener_resumen_fecha($fecha_consulta);
+        exit();
 
     default:
         http_response_code(400);

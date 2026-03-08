@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_vehiculos'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_vehiculos"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_vehiculos"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/vehiculosController.php';
+
 use app\controllers\vehiculosController;
 
 $controller = new vehiculosController();
@@ -68,7 +69,7 @@ switch ($modulo) {
 
         $controller->eliminar_vehiculo($id_vehiculo);
         break;
-    
+
     case 'listar_tabla':
         $pagina = $inputData['pagina'] ?? 1;
         $registros_por_pagina = $inputData['registros_por_pagina'] ?? 10;
@@ -89,7 +90,7 @@ switch ($modulo) {
         $tabla_html = $controller->listarvehiculosControlador($dato_ori);
         echo $tabla_html; // Solo el HTML de la tabla + paginación
         break;
-    
+
     case 'cambio_cant_reg':
         $datos = $inputData['datos'];
 
@@ -103,7 +104,7 @@ switch ($modulo) {
 
         $_SESSION['nav_vehiculos'] = [
             'pagina_vehiculos' => 1,
-            'registrosPorPagina' => $registrosPorPagina 
+            'registrosPorPagina' => $registrosPorPagina
         ];
 
         $dato_ori = [
@@ -136,4 +137,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

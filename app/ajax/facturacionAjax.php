@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_facturacion'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_facturacion"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_facturacion"']);
     exit();
 }
 
 // === 8. Cargar el controlador === 
 require_once  '../controllers/facturacionController.php';
+
 use app\controllers\facturacionController;
 
 $controller = new facturacionController();
@@ -88,4 +89,3 @@ switch ($modulo) {
         exit();
 }
 exit();
-?>

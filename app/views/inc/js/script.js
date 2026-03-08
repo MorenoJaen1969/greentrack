@@ -4,7 +4,7 @@
  * Fecha: Agosto 2025
  * 
  * Funcionalidades:
- * - Carrusel dinámico con reposicionamiento físico
+ * - Carrusel dinámico con reposicionamiento físico 
  * - Mapa Leaflet con marcadores fijos
  * - Seguimiento en tiempo real del CREW desde GPS real
  * - Modal clickeable con pausa del carrusel
@@ -22,6 +22,7 @@ window.mapMarkers = {};
 // === Estado de actividades en curso ===
 window.estadoActividades = {}; // truck → { tipo: 'servicio' | 'parada', id_registro: int, inicio: Date }
 
+// ... resto de tu código MDS (variables, funciones, etc.) ...
 // Función para encontrar el contenedor del mapa
 function encontrarContenedorMapa() {
     // Buscar por diferentes selectores comunes
@@ -415,7 +416,811 @@ function calcularOffset(lat, lng, bearing, distanceMeters) {
     };
 }
 
+async function cargarClientesDeRuta(idRuta, nombreRuta, colorRuta) {
+    const contenedor = document.getElementById('clientes-ruta-seleccionada');
+    const lista = document.getElementById('listado_clientes');
+    const fecha = document.getElementById('fecha-despacho').value;
+
+    contenedor.style.display = 'block';
+    contenedor.style.background = `${colorRuta}`;
+    contenedor.style.borderLeft = `4px solid ${colorRuta}`;
+
+    // Header con info de ruta y botón guardar (por si acaso)
+    let html = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h4 style="margin: 0; color: ${colorRuta};">
+                📋 ${nombreRuta} - Dispatch Order
+            </h4>
+            <div>
+                <span id="status-ruta-${idRuta}" style="font-size: 0.85em; color: #27ae60; opacity: 0;">
+                    ✓ Saved
+                </span>
+            </div>
+        </div>
+        <p style="margin: 0 0 10px 0; color: #666; font-size: 0.9em;">
+            Use arrows to reorder delivery sequence
+        </p>
+    `;
+
+    try {
+        const response = await fetch('/app/ajax/serviciosAjax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                modulo_servicios: 'obtener_clientes_ruta',
+                id_ruta: idRuta,
+                fecha_despacho: fecha
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success || !data.clientes.length) {
+            html += '<p style="color: #888;">No clients scheduled</p>';
+            lista.innerHTML = html;
+            return;
+        }
+
+        // Lista ordenable
+        html += '<div id="listado_clientes" style="height: 28vh; overflow: auto;">';
+        html += `<ul id="lista-orden-${idRuta}" style="list-style: none; padding: 0; margin: 0;">`;
+
+        data.clientes.forEach((cliente, index, array) => {
+            const esPrimero = index === 0;
+            const esUltimo = index === array.length - 1;
+            const total = array.length;
+
+            html += `
+                <li 
+                    id="item-${cliente.id_preservicio}"
+                    data-id-preservicio="${cliente.id_preservicio}"
+                    data-orden-actual="${cliente.orden_en_ruta || (index + 1)}"
+                    style="
+                        padding: 12px;
+                        margin-bottom: 8px;
+                        background: #f8f9fa;
+                        border: 1px solid #e9ecef;
+                        border-radius: 6px;
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                    "
+                >
+                    <!-- Número de orden -->
+                    <span 
+                        class="numero-orden"
+                        style="
+                            background: ${colorRuta}; 
+                            color: white; 
+                            width: 28px; 
+                            height: 28px; 
+                            border-radius: 50%; 
+                            display: flex; 
+                            align-items: center; 
+                            justify-content: center;
+                            font-weight: bold;
+                            font-size: 0.9em;
+                            flex-shrink: 0;
+                        "
+                    >
+                        ${index + 1}
+                    </span>
+                    
+                    <!-- Info del cliente -->
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 600; color: #2c3e50; margin-bottom: 2px;">
+                            ${cliente.nom_contrato}
+                        </div>
+                        <div style="font-size: 0.85em; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            📍 ${cliente.direccion}
+                        </div>
+                    </div>
+                    
+                    <!-- Controles de flechas -->
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <button 
+                            data-action="mover" data-direccion="-1"
+                            ${esPrimero ? 'disabled' : ''}
+                            style="
+                                padding: 4px 8px;
+                                border: none;
+                                background: ${esPrimero ? '#e9ecef' : '#3498db'};
+                                color: ${esPrimero ? '#adb5bd' : 'white'};
+                                border-radius: 4px;
+                                cursor: ${esPrimero ? 'not-allowed' : 'pointer'};
+                                font-size: 0.8em;
+                                line-height: 1;
+                            "
+                            title="Move up"
+                        >
+                            ▲
+                        </button>
+                        <button 
+                            data-action="mover" data-direccion="1"
+                            ${esUltimo ? 'disabled' : ''}
+                            style="
+                                padding: 4px 8px;
+                                border: none;
+                                background: ${esUltimo ? '#e9ecef' : '#3498db'};
+                                color: ${esUltimo ? '#adb5bd' : 'white'};
+                                border-radius: 4px;
+                                cursor: ${esUltimo ? 'not-allowed' : 'pointer'};
+                                font-size: 0.8em;
+                                line-height: 1;
+                            "
+                            title="Move down"
+                        >
+                            ▼
+                        </button>
+                    </div>
+                </li>
+            `;
+        });
+
+        html += '</ul></div>';
+
+        // Botón de guardar explícito (opcional, para batch)
+        html += `
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; text-align: right;">
+                <button 
+                    onclick="guardarOrdenCompleto(${idRuta}, '${fecha}')"
+                    style="
+                        padding: 8px 20px;
+                        background: ${colorRuta};
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-weight: 500;
+                    "
+                >
+                    💾 Save Route Order
+                </button>
+            </div>
+        `;
+
+        lista.innerHTML = html;
+
+        // Agregar event delegation para los botones
+        const listaNuevo = document.getElementById(`lista-orden-${idRuta}`);
+
+        listaNuevo.addEventListener('click', function (e) {
+            const btn = e.target.closest('button[data-action="mover"]');
+            if (!btn) return;
+
+            const li = btn.closest('li');
+            const idPreservicio = parseInt(li.dataset.idPreservicio);
+            const direccion = parseInt(btn.dataset.direccion);
+            const fecha = document.getElementById('fecha-despacho').value;
+
+            moverCliente(idPreservicio, idRuta, fecha, direccion, btn);
+        });
+
+    } catch (err) {
+        console.error('Error:', err);
+        lista.innerHTML = '<p style="color: #e74c3c;">Error loading Customers for reordering </p>';
+    }
+}
+
+// Función para mover cliente (inmediata o acumulada)
+let cambiosPendientes = {}; // Para modo batch
+
+async function moverCliente(idPreservicio, idRuta, fecha, direccion, btnElement) {
+    const lista = document.getElementById(`lista-orden-${idRuta}`);
+    const items = Array.from(lista.querySelectorAll('li'));
+    const indexActual = items.findIndex(item => item.dataset.idPreservicio == idPreservicio);
+
+    if (indexActual === -1) return;
+
+    const nuevoIndex = indexActual + direccion;
+    if (nuevoIndex < 0 || nuevoIndex >= items.length) return;
+
+    // Intercambiar visualmente
+    const itemMover = items[indexActual];
+    const itemObjetivo = items[nuevoIndex];
+
+    if (direccion === -1) {
+        lista.insertBefore(itemMover, itemObjetivo);
+    } else {
+        lista.insertBefore(itemMover, itemObjetivo.nextSibling);
+    }
+
+    // Actualizar números de orden visualmente
+    actualizarNumerosOrden(lista);
+
+    // ===== OPCIÓN 1: GUARDAR INMEDIATAMENTE =====
+    // await guardarCambioInmediato(idPreservicio, idRuta, fecha, nuevoIndex + 1);
+
+    // ===== OPCIÓN 2: ACUMULAR PARA BATCH (comentar Opción 1 si usas esta) =====
+
+    if (!cambiosPendientes[idRuta]) cambiosPendientes[idRuta] = [];
+    cambiosPendientes[idRuta].push({
+        id_preservicio: idPreservicio,
+        nuevo_orden: nuevoIndex + 1
+    });
+    //guardarOrdenCompleto(idRuta, fecha);
+
+    // Actualizar estado de botones (habilitar/deshabilitar)
+    actualizarEstadoBotones(lista);
+}
+
+// Guardado batch (si prefieres acumular cambios)
+async function guardarOrdenCompleto(idRuta, fecha) {
+    const lista = document.getElementById(`lista-orden-${idRuta}`);
+    const items = lista.querySelectorAll('li');
+
+    const ordenFinal = Array.from(items).map((item, index) => ({
+        id_preservicio: parseInt(item.dataset.idPreservicio),
+        nuevo_orden: index + 1
+    }));
+    try {
+        const response = await fetch('/app/ajax/serviciosAjax.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                modulo_servicios: 'guardar_orden_completo',
+                id_ruta: idRuta,
+                fecha: fecha,
+                ordenes: ordenFinal
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            suiteAlertSuccess('Success', 'Route order saved', 'success');
+        }
+
+    } catch (err) {
+        suiteAlertError('Error', 'Failed to save order');
+    }
+}
+
+function actualizarNumerosOrden(lista) {
+    const items = lista.querySelectorAll('li');
+    items.forEach((item, index) => {
+        const numero = item.querySelector('.numero-orden');
+        numero.textContent = index + 1;
+        item.dataset.ordenActual = index + 1;
+    });
+}
+
+function actualizarEstadoBotones(lista) {
+    const items = lista.querySelectorAll('li');
+    items.forEach((item, index) => {
+        const btnArriba = item.querySelector('button[title="Move up"]');
+        const btnAbajo = item.querySelector('button[title="Move down"]');
+
+        btnArriba.disabled = index === 0;
+        btnArriba.style.background = index === 0 ? '#e9ecef' : '#3498db';
+        btnArriba.style.color = index === 0 ? '#adb5bd' : 'white';
+        btnArriba.style.cursor = index === 0 ? 'not-allowed' : 'pointer';
+
+        btnAbajo.disabled = index === items.length - 1;
+        btnAbajo.style.background = index === items.length - 1 ? '#e9ecef' : '#3498db';
+        btnAbajo.style.color = index === items.length - 1 ? '#adb5bd' : 'white';
+        btnAbajo.style.cursor = index === items.length - 1 ? 'not-allowed' : 'pointer';
+    });
+}
+
+// ==========================================
+// EVENT LISTENERS
+// ==========================================
+function MDS_configurarEventListeners() {
+    // Botón cerrar (X)
+    MDS_btn_close?.addEventListener('click', MDS_cerrarModal);
+
+    // Botón Today
+    MDS_btn_hoy?.addEventListener('click', MDS_establecerFechaHoy);
+
+    // Botón Apply
+    MDS_btn_aplicar?.addEventListener('click', MDS_aplicarFecha);
+
+    // Botón Cancel
+    MDS_btn_cancelar?.addEventListener('click', MDS_cerrarModal);
+
+    // Cambio de fecha (con debounce)
+    MDS_input_fecha?.addEventListener('change', (e) => {
+        const nuevaFecha = e.target.value;
+        console.log('📅 MDS: Fecha cambiada en input:', nuevaFecha);
+        
+        // Actualizar variable global
+        MDS_fechaSeleccionada = nuevaFecha;
+
+        MDS_debounce(() => {
+            MDS_actualizarResumen(e.target.value);
+        }, 300);
+    });
+
+    // Click fuera del modal para cerrar
+    MDS_modal?.addEventListener('click', (e) => {
+        if (e.target === MDS_modal) {
+            MDS_cerrarModal();
+        }
+    });
+
+    // Tecla Escape para cerrar
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && MDS_modalAbierto) {
+            MDS_cerrarModal();
+        }
+    });
+}
+
+/**
+ * Obtiene la fecha actual en formato YYYY-MM-DD (compatible con input type="date")
+ * @returns {string} Fecha en formato ISO date-only
+ */
+function MDS_obtenerFechaHoy() {
+    return new Date().toISOString().split('T')[0];
+}
+
+//     // ==========================================
+// FUNCIONES PRINCIPALES
+// ==========================================
+
+// Establecer fecha por defecto (próximo día laborable si hoy no lo es)
+async function MDS_establecerFechaPorDefecto() {
+    const hoy = new Date();
+    MDS_fechaActual = MDS_formatearFecha(hoy);
+
+    // Verificar si hoy es laborable
+    const validacion = await MDS_validarFecha(MDS_fechaActual);
+
+    if (validacion.es_laborable) {
+        MDS_input_fecha.value = MDS_fechaActual;
+        MDS_fechaSeleccionada = MDS_fechaActual;
+    } else {
+        // Buscar próximo día laborable
+        const proximoLaborable = await MDS_buscarProximoDiaLaborable(hoy);
+        MDS_input_fecha.value = proximoLaborable;
+        MDS_fechaSeleccionada = proximoLaborable;
+    }
+
+    // Cargar resumen inicial
+    MDS_actualizarResumen(MDS_fechaSeleccionada);
+}
+
+// Establecer fecha a hoy
+function MDS_establecerFechaHoy() {
+    const hoy = MDS_formatearFecha(new Date());
+    MDS_input_fecha.value = hoy;
+    MDS_fechaSeleccionada = hoy;
+    MDS_actualizarResumen(hoy);
+}
+
+// Actualizar resumen (AJAX al backend)
+async function MDS_actualizarResumen(fecha) {
+    // ✅ CRÍTICO: Limpiar alert ANTES de intentar cargar
+    MDS_ocultarAlerta();
+
+    if (!fecha) return;
+
+    // Validación defensiva de fecha
+    if (!fecha || fecha.trim() === '') {
+        console.warn('⚠️ MDS: Fecha vacía, usando hoy');
+        fecha = new Date().toISOString().split('T')[0];
+    }
+
+    MDS_loading?.classList.remove('MDS_hidden');
+    MDS_ocultarResumen();
+
+    try {
+        console.log('📡 MDS: Fetch con fecha:', fecha); // Debug
+
+        const response = await fetch(ruta_servicios_ajax, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                modulo_servicios: 'MDS_datos',
+                fecha: fecha
+            })
+        });
+
+        console.log('📡 MDS: Response status:', response.status); // Debug
+
+        const result = await response.json();
+        console.log('📡 MDS: Result:', result); // Debug completo
+
+        if (result.success && result.data) {
+            MDS_actualizarUI(result.data);
+        } else {
+            console.warn('⚠️ MDS: Resultado sin success/data:', result);
+            MDS_mostrarAlerta('❌ Error loading summary. Please try again.', 'danger');
+        }
+    } catch (error) {
+        console.error('❌ MDS: Error al cargar resumen:', error);
+        console.error('   - error.name:', error.name);
+        console.error('   - error.message:', error.message);
+
+        // ✅ DETECCIÓN PRECISA: Solo errores de red verdaderos
+        const esErrorRed = (
+            error.name === 'TypeError' &&
+            (error.message.includes('Failed to fetch') ||
+                error.message.includes('NetworkError') ||
+                error.message.includes('fetch'))
+        ) ||
+            error.name === 'AbortError';  // Timeout de conexión
+
+        // ✅ Errores de programación (null, undefined, etc.)
+        const esErrorCodigo = (
+            error.name === 'TypeError' &&
+            error.message.includes('null') ||
+            error.message.includes('undefined') ||
+            error.message.includes('textContent') ||
+            error.name === 'ReferenceError'
+        );
+
+        let mensaje;
+        if (esErrorRed) {
+            mensaje = '📡 Connection unstable. Please check your internet and try again.';
+            console.warn(' Tipo: Error de RED');
+        } else if (esErrorCodigo) {
+            mensaje = '❌ Internal error. Please contact support.';
+            console.error('💻 Tipo: Error de CÓDIGO (revisar consola)');
+        } else {
+            mensaje = '❌ Error loading data. Please try again.';
+            console.warn('⚠️ Tipo: Error genérico');
+        }
+
+        MDS_mostrarAlerta(mensaje, esErrorRed ? 'warning' : 'danger');
+    } finally {
+        MDS_loading?.classList.add('MDS_hidden');
+    }
+}
+
+// Actualizar UI con datos del backend
+function MDS_actualizarUI(data) {
+    const { resumen, es_laborable, mensaje_alerta } = data;
+
+    // Actualizar contadores
+    MDS_total_rutas.textContent = resumen?.total_rutas || 0;
+    MDS_total_servicios.textContent = resumen?.total_servicios || 0;
+    MDS_finalizados.textContent = resumen?.finalizados || 0;
+    MDS_pendientes.textContent = resumen?.pendientes || 0;
+    MDS_otros.textContent = resumen?.no_completados || 0;
+    MDS_total_rutas.textContent = resumen?.total_rutas || 0;
+    MDS_total_servicios.textContent = resumen?.total_servicios || 0;
+
+    // ✅ Estados detallados
+    const fully = document.getElementById('MDS_fully_completed');
+    const partial = document.getElementById('MDS_partially_confirmed');
+    const notConf = document.getElementById('MDS_not_confirmed');
+
+    if (fully) fully.textContent = resumen?.fully_completed || 0;
+    if (partial) partial.textContent = resumen?.partially_confirmed || 0;
+    if (notConf) notConf.textContent = resumen?.not_confirmed || 0;
+
+    // Mantener compatibilidad con badges antiguos si existen
+    const oldCompleted = document.getElementById('MDS_finalizados');
+    if (oldCompleted) {
+        oldCompleted.textContent = (resumen?.fully_completed || 0) +
+            (resumen?.partially_confirmed || 0);
+    }
+
+    // Mostrar/ocultar alerta según si es laborable
+    if (!es_laborable) {
+        MDS_mostrarAlerta(`⚠️ ${mensaje_alerta || 'This is a non-working day'}`, 'warning');
+    } else {
+        MDS_ocultarAlerta();
+    }
+
+    // Mostrar resumen
+    MDS_mostrarResumen();
+}
+
+// Validar fecha contra dias_no_actividad
+async function MDS_validarFecha(fecha) {
+    console.log("verificando la ruta de partida ", ruta_diasNoActividad_ajax);
+    try {
+        const response = await fetch(ruta_diasNoActividad_ajax, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                modulo_dias_no_actividad: 'cargar_fechas',
+                fecha: fecha
+            })
+        });
+
+        const result = await response.json();
+        return result.data || { es_laborable: true };
+    } catch (error) {
+        console.error('❌ MDS: Error validando fecha:', error);
+        return { es_laborable: true }; // Por defecto asumir laborable
+    }
+}
+
+// Buscar próximo día laborable
+async function MDS_buscarProximoDiaLaborable(fechaInicio) {
+    let fecha = new Date(fechaInicio);
+    let intentos = 0;
+    const maxIntentos = 30; // Máximo 30 días hacia adelante
+
+    while (intentos < maxIntentos) {
+        fecha.setDate(fecha.getDate() + 1);
+        const fechaStr = MDS_formatearFecha(fecha);
+        const validacion = await MDS_validarFecha(fechaStr);
+
+        if (validacion.es_laborable) {
+            return fechaStr;
+        }
+
+        intentos++;
+    }
+
+    // Si no encuentra, retornar la fecha original
+    return MDS_formatearFecha(fechaInicio);
+}
+
+// Aplicar fecha y cerrar modal
+function MDS_aplicarFecha() {
+
+    // ✅ PRIORIDAD 1: Usar valor actual del input (lo que el usuario ve)
+    const fechaDelInput = MDS_input_fecha?.value;
+    
+    // ✅ PRIORIDAD 2: Usar variable global si el input está vacío
+    const fechaParaAplicar = (fechaDelInput && fechaDelInput.trim() !== '') 
+        ? fechaDelInput 
+        : MDS_fechaSeleccionada;
+    
+    // ✅ Validación final
+    if (!fechaParaAplicar || fechaParaAplicar.trim() === '') {
+        MDS_mostrarAlerta('⚠️ Please select a valid date', 'warning');
+        return;
+    }
+
+    console.log('✅ MDS: Fecha aplicada:', MDS_fechaSeleccionada);
+
+    // ✅ Resolver la Promise con la fecha seleccionada
+    if (typeof MDS_resolvePromise === 'function') {
+        MDS_resolvePromise({
+            success: true,
+            fecha: MDS_fechaSeleccionada
+        });
+        MDS_resolvePromise = null;
+    }
+
+    // Callback personalizado (para integrar con tu tabla principal)
+    if (typeof MDS_onFechaAplicada === 'function') {
+        MDS_onFechaAplicada(MDS_fechaSeleccionada);
+    }
+
+    MDS_cerrarModal();
+}
+
+// Abrir modal
+function MDS_abrirModal() {
+    return new Promise((resolve, reject) => {
+        if (!MDS_modal) {
+            console.error('❌ MDS: Modal no inicializado');
+            reject('Modal not initialized');
+            return;
+        }
+
+        // ✅ PASO CRÍTICO: Asegurar fecha válida ANTES de actualizar resumen
+        if (!MDS_input_fecha?.value || MDS_input_fecha.value.trim() === '') {
+            console.log('🔄 MDS: Input sin fecha, estableciendo hoy como default');
+            const hoy = new Date().toISOString().split('T')[0];
+            MDS_input_fecha.value = hoy;
+            MDS_fechaSeleccionada = hoy;
+        } else {
+            // Si ya tiene valor, sincronizar con la variable global
+            MDS_fechaSeleccionada = MDS_input_fecha.value;
+        }
+
+        // Guardar referencia para resolver después
+        MDS_resolvePromise = resolve;
+
+        // Mostrar modal
+        MDS_modal.classList.add('MDS_active');
+        MDS_modalAbierto = true;
+
+        // Focus en el input de fecha
+        setTimeout(() => {
+            MDS_input_fecha?.focus();
+        }, 100);
+
+        // Recargar resumen al abrir
+        // ✅ AHORA SÍ: Recargar resumen con fecha garantizada
+        console.log('📡 MDS: Actualizando resumen con fecha:', MDS_input_fecha.value);
+        MDS_actualizarResumen(MDS_input_fecha?.value);
+    });
+}
+
+// Cerrar modal
+function MDS_cerrarModal() {
+    if (!MDS_modal) return;
+
+    MDS_modal.classList.remove('MDS_active');
+    MDS_modalAbierto = false;
+
+    // ✅ Si se cierra sin aplicar, resolver con cancelado
+    if (typeof MDS_resolvePromise === 'function') {
+        MDS_resolvePromise({ success: false, fecha: null });
+        MDS_resolvePromise = null;
+    }
+}
+
+// ==========================================
+// UTILIDADES
+// ==========================================
+
+// Formatear fecha a YYYY-MM-DD
+function MDS_formatearFecha(fecha) {
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+    const day = String(fecha.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Debounce para evitar múltiples llamadas AJAX
+function MDS_debounce(func, delay) {
+    clearTimeout(MDS_debounceTimer);
+    MDS_debounceTimer = setTimeout(func, delay);
+}
+
+// Mostrar alerta
+function MDS_mostrarAlerta(mensaje, tipo = 'warning') {
+    if (!MDS_mensaje_alerta) return;
+
+    MDS_mensaje_alerta.textContent = mensaje;
+    MDS_mensaje_alerta.className = `MDS_alert MDS_alert-${tipo}`;
+    MDS_mensaje_alerta.classList.remove('MDS_hidden');
+}
+
+// Ocultar alerta
+function MDS_ocultarAlerta() {
+    MDS_mensaje_alerta?.classList.add('MDS_hidden');
+}
+
+// Mostrar resumen (ocultar loading)
+function MDS_mostrarResumen() {
+    MDS_total_rutas?.parentElement?.parentElement?.classList.remove('MDS_hidden');
+    MDS_total_servicios?.parentElement?.parentElement?.classList.remove('MDS_hidden');
+}
+
+// Ocultar resumen (mostrar loading)
+function MDS_ocultarResumen() {
+    // Los cards se ocultan automáticamente cuando el loading muestra spinner
+}
+
+// ==========================================
+// CALLBACK PERSONALIZADO (para integrar con tu tabla)
+// ==========================================
+function MDS_onFechaAplicada(fecha) {
+    // Esta función la personalizas para integrar con tu tabla principal
+    console.log('🔄 MDS: Recargando tabla con fecha:', fecha);
+
+    // Ejemplo: actualizar variable global y recargar tabla
+    // fechaConsultaGlobal = fecha;
+    // cargarTablaPrincipal();
+}
+
+// ==========================================
+// FUNCIÓN DE INICIALIZACIÓN SEGURA
+// ==========================================
+function MDS_iniciarCuandoListo() {
+
+    console.log('🔵 MDS: Verificando estado del documento...');
+    console.log('   - readyState:', document.readyState);
+
+    // Si el DOM ya está listo, ejecutar inmediatamente
+    if (document.readyState === 'loading') {
+        // Aún está cargando → esperar el evento
+        console.log('🟡 MDS: DOM aún cargando, esperando DOMContentLoaded...');
+        document.addEventListener('DOMContentLoaded', MDS_inicializarCompleto);
+    } else {
+        // Ya está interactive o complete → ejecutar YA
+        console.log('🟢 MDS: DOM ya listo, inicializando inmediatamente...');
+        MDS_inicializarCompleto();
+    }
+}
+
+// ==========================================
+// INICIALIZACIÓN
+// ==========================================
+function MDS_inicializar() {
+    // Obtener referencias al DOM
+    MDS_modal = document.getElementById('MDS_modal');
+    MDS_input_fecha = document.getElementById('MDS_input_fecha');
+    MDS_btn_close = document.getElementById('MDS_btn_close');
+    MDS_btn_hoy = document.getElementById('MDS_btn_hoy');
+    MDS_btn_aplicar = document.getElementById('MDS_btn_aplicar');
+    MDS_btn_cancelar = document.getElementById('MDS_btn_cancelar');
+    MDS_mensaje_alerta = document.getElementById('MDS_mensaje_alerta');
+    MDS_loading = document.getElementById('MDS_loading');
+
+    MDS_total_rutas = document.getElementById('MDS_total_rutas');
+    MDS_total_servicios = document.getElementById('MDS_total_servicios');
+    MDS_finalizados = document.getElementById('MDS_finalizados');
+    MDS_pendientes = document.getElementById('MDS_pendientes');
+    MDS_otros = document.getElementById('MDS_otros');
+
+    // Validar que todos los elementos existan
+    if (!MDS_modal || !MDS_input_fecha) {
+        console.error('❌ MDS: Elementos del modal no encontrados');
+        return false;
+    }
+
+    // Configurar event listeners
+    MDS_configurarEventListeners();
+
+    // Establecer fecha por defecto
+    MDS_establecerFechaPorDefecto();
+
+    console.log('✅ MDS: Modal inicializado correctamente');
+    return true;
+}
+
+
+// ==========================================
+// FUNCIÓN QUE CONTIENE TU LÓGICA ORIGINAL
+// ==========================================
+function MDS_inicializarCompleto() {
+
+    console.log('🚀 MDS: Ejecutando inicialización completa');
+
+    // 1️⃣ Inicializar MDS (variables, eventos, etc.)
+    const mdsOk = MDS_inicializar();
+    if (!mdsOk) {
+        console.error('❌ MDS: Fallo en inicialización');
+        return;
+    }
+
+    // 2️⃣ Registrar event listeners que dependen de MDS
+    const btnDailyStatus = document.getElementById('btn-daily-status');
+    if (btnDailyStatus) {
+        btnDailyStatus.addEventListener('click', async () => {
+            console.log("🔵 [1] Click en btn-daily-status");
+
+            try {
+                const resultado = await MDS_abrirModal();
+                console.log("🔵 [2] Resultado MDS:", resultado);
+
+                if (!resultado.success) {
+                    console.log("ℹ️ MDS: Usuario canceló");
+                    return;
+                }
+
+                const fechaConfirmada = resultado.fecha;
+                console.log("✅ MDS: Fecha confirmada:", fechaConfirmada);
+
+                const modal = document.getElementById('modal-daily-status');
+                if (!modal) {
+                    console.error("❌ No se encontró #modal-daily-status");
+                    return;
+                }
+
+                console.log("🔵 [3] Abriendo modal-daily-status");
+                modal.style.display = 'flex';
+
+                console.log("🔵 [4] Cargando matriz con fecha:", fechaConfirmada);
+                await cargarMatrizDiaria(fechaConfirmada);
+
+            } catch (error) {
+                console.error("❌ Error en flujo MDS:", error);
+                const modal = document.getElementById('modal-daily-status');
+                if (modal) {
+                    modal.style.display = 'flex';
+                    await cargarMatrizDiaria();
+                }
+            }
+        });
+        console.log('✅ MDS: Event listener registrado para btn-daily-status');
+    }
+
+    console.log('✅ MDS: Inicialización completa finalizada');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+
+    // ==========================================
+    // EJECUTAR EL PATRÓN READY-OR-LOAD
+    // ==========================================
+    //MDS_iniciarCuandoListo();
+
     // === Sincronizar cambios con backend cuando se detecta inicio/cierre por geofencing ===
     async function sincronizarEstadoGPS(id_servicio, tipo, hora) {
         // tipo: 'inicio' o 'fin'
@@ -1251,6 +2056,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 3. Llenar información principal
         document.getElementById('tabla-detalles-servicio').innerHTML = `
             <tr><th>Client</th><td>${servicioActualizado.cliente}</td></tr>
+            <tr><th>Contract</th><td>${servicioActualizado.nom_contrato}</td></tr>
             <tr><th>Truck</th><td>${servicioActualizado.truck}</td></tr>
             <tr><th>Scheduled Day</th><td>${servicioActualizado.dia_servicio}</td></tr>
             <tr><th>Status</th><td>${servicioActualizado.estado_servicio}</td></tr>
@@ -1422,7 +2228,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // === Variables de estado ===
     let estadoTemporal = null;
 
-    function carga_manual(){
+    function carga_manual() {
 
     }
 
@@ -1822,6 +2628,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // === Botón para dejar el dia como origen Reestablecer el PreDespacho ===
+    document.getElementById('btn-cargo_original').addEventListener('click', async () => {
+        const fecha_des = document.getElementById('fecha-despacho').value;
+        const confirmado = await suiteConfirm(
+            "Reset source data",
+            `The following process will delete the updates made for today and leave the records associated with the date: ${fecha_des}.\n\nDo you confirm you want to perform this process?`
+        );
+
+        if (!confirmado) return;
+        try {
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    modulo_servicios: 'borrarPredespacho',
+                    fecha_despacho: fecha_des
+                })
+            });
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const respuesta = await res.json();
+
+            if (respuesta.success === true) {
+                window.fechaDespachoSeleccionada = fecha_des;
+                await cargarListaDespacho();
+            }
+
+        } catch (err) {
+            console.error('Error al Reestablecer PreDespacho:', err);
+            await suiteAlertError('Error', 'Error Resetting Pre-Dispatch.');
+        }
+    });
+
     // === Control botón "Select Despacho" === 
     document.getElementById('btn-select-despacho').addEventListener('click', async () => {
         let formFlotante = document.getElementById('form-flotante-historico');
@@ -1897,18 +2736,94 @@ document.addEventListener('DOMContentLoaded', async () => {
             {
                 aceptar: 'Manual',
                 cancelar: 'Automatic'
-            }                
+            }
         );
 
         let sel_tipo_ser = 0;
         if (!tipo_servicio) {
             await suiteAlertInfo("Automatic Process", "You have chosen to process the service AUTOMATICALLY. Please proceed with the necessary steps.");
             sel_tipo_ser = 0;
-        }else{
+        } else {
             await openModal();
             sel_tipo_ser = 1;
         }
         await cargarListaDespacho();
+    });
+
+    async function recargarTablaZonas(fecha_des) {
+        try {
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    modulo_servicios: 'crearListRutas',
+                    fecha_despacho: fecha_des
+                })
+            });
+            const html = await res.text();
+            console.log("Regreso del Backend ", html);
+            // ✅ Reemplazar SOLO el contenedor con ID fijo
+            const wrapper = document.getElementById('listado_rutas');
+            //wrapper.outerHTML = "";
+
+            if (wrapper) {
+                wrapper.outerHTML = html;
+            } else {
+                console.error('❌ No se encontró #listado_rutas en el DOM');
+            }
+
+        } catch (err) {
+            console.error('Error al recargar tabla de Rutas:', err);
+            await suiteAlertError('Error', 'Could not refresh the Routes list.');
+        }
+    }
+
+    // Delegación de eventos para los items de ruta
+    document.addEventListener('click', function (e) {
+        const rutaItem = e.target.closest('.ruta-item');
+
+        if (!rutaItem) return; // No clickeó en una ruta
+
+        const idRuta = rutaItem.dataset.idRuta;
+        const nombreRuta = rutaItem.dataset.nombreRuta;
+
+        // Visual: marcar seleccionado
+        document.querySelectorAll('.ruta-item').forEach(item => {
+            item.style.border = 'none';
+            item.style.opacity = '0.7';
+        });
+        rutaItem.style.border = '3px solid #fff';
+        rutaItem.style.opacity = '1';
+
+        // Cargar clientes
+        suiteLoading('show');
+        cargarClientesDeRuta(idRuta, nombreRuta);
+        suiteLoading('hide');
+    });
+
+    document.getElementById('reordenar')?.addEventListener('click', async (e) => {
+        const fecha_des = document.getElementById('fecha-despacho').value;
+        const reo_modalReordenar = document.getElementById('reo-modal-despacho');
+        reo_modalReordenar.style.display = 'flex';
+
+        const btnCerrar_lista = document.getElementById('reoCloseReorder');
+
+        const btnContinuar = document.getElementById('reobtn-finalizar')
+
+        btnCerrar_lista.addEventListener('click', () => {
+            if (reo_modalReordenar) reo_modalReordenar.style.display = 'none';
+        });
+
+        btnContinuar.addEventListener('click', async () => {  // ← async agregado
+            if (reo_modalReordenar) reo_modalReordenar.style.display = 'none';
+            await cargarListaDespacho();  // ← Ahora funciona
+        });
+
+        if (!reo_modalReordenar) {
+            console.error("❌ No se encontró el modal #reo-modal-despacho");
+            return;
+        }
+        recargarTablaZonas(fecha_des)
     });
 
     document.getElementById('reporte')?.addEventListener('click', async (e) => {
@@ -1919,7 +2834,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 modulo_servicios: 'generar_reporte',
-                fecha_despacho: fecha_des
+                fecha_despacho: fecha_des,
+                tipo_de_reporte: tipo_de_reporte
             })
         });
 
@@ -1936,7 +2852,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 link.click();
                 document.body.removeChild(link);
             });
-            
+
             await suiteAlertSuccess("Success", `${respuesta.pdfs.length} downloaded reports`);
         } else {
             await suiteAlertError("Error", respuesta.error || "It could not be completed");
@@ -1946,21 +2862,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function cargarListaDespacho() {
         try {
             const fecha_despacho = document.getElementById('fecha-despacho')?.value || formatearFechaInput(new Date());
+            const guardar_despacho = document.getElementById('btn-guardar-despacho');
 
             // Validar fecha para habilitar/deshabilitar botones
-            if (fecha_despacho < formatearFechaInput(new Date())) {
-                document.getElementById('reordenar')?.setAttribute('disabled', 'disabled');
-                document.getElementById('btn-guardar-despacho')?.setAttribute('disabled', 'disabled');
-            } else {
+            let fecha_hoy = formatearFechaInput(new Date())
+            if (fecha_despacho >= fecha_hoy) {
                 document.getElementById('reordenar')?.removeAttribute('disabled');
-                document.getElementById('btn-guardar-despacho')?.removeAttribute('disabled');
+                if (si_es_servicio == true) {
+                    guardar_despacho.disabled = true;
+                } else {
+                    guardar_despacho?.removeAttribute('disabled');
+                }
+            } else {
+                document.getElementById('reordenar')?.setAttribute('disabled', 'disabled');
+                guardar_despacho?.setAttribute('disabled', 'disabled');
             }
-            
+
             window.listaAsignados = document.getElementById('lista-asignados');
             window.listaNoAsignados = document.getElementById('lista-no-asignados');
             window.htmlTotalTiempo = document.getElementById('htmlTotalTiempo');
 
-            // --- CORRECCIÓN: Validar que los elementos existen ---
+            // --- CORRECCIÓN: Validar que los elementos existen --- 
             if (!window.listaAsignados || !window.listaNoAsignados) {
                 console.error('❌ Los contenedores de listas no existen en el DOM');
                 return;
@@ -1983,22 +2905,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             const respuesta = await res.json();
 
             if (respuesta.success === false) {
+                tipo_de_reporte = 0;
                 window.listaAsignados.innerHTML = `<p>❌ ${respuesta.mess} </p>`;
                 window.listaNoAsignados.innerHTML = `<p>❌ ${respuesta.mess} </p>`;
             } else {
+                si_es_servicio = respuesta.ya_en_servicio; // Ya se genero Servicio
+                if (si_es_servicio == true) {
+                    guardar_despacho.disabled = true;
+                } else {
+                    guardar_despacho.disabled = false;
+                }
+
+                tipo_de_reporte = respuesta.tipo_de_reporte;
                 window.listaNoAsignados.innerHTML = respuesta.html_no_asignados;
                 window.listaAsignados.innerHTML = respuesta.html_asignados;
 
                 // --- CORRECCIÓN: Validar antes de asignar innerHTML ---
-                console.log("container: ", window.htmlTotalTiempo);
-                console.log("Respuesta: ", respuesta.htmlTotalTiempo);
-                
+                //console.log("container: ", window.htmlTotalTiempo);
+                //console.log("Respuesta: ", respuesta.htmlTotalTiempo);
+
                 if (window.htmlTotalTiempo) {
                     window.htmlTotalTiempo.innerHTML = respuesta.htmlTotalTiempo;
                 } else {
                     console.warn('⚠️ El elemento #htmlTotalTiempo no existe en el DOM');
                 }
-                
+
                 editable = respuesta.editable;
 
                 const tit_tipo_servicio = document.getElementById('tit_tipo_servicio');
@@ -2197,6 +3128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             itemSeleccionado = null;
             document.getElementById('btn-mover-a-no-asignados').disabled = true;
             document.getElementById('btn-mover-a-asignados').disabled = true;
+            document.getElementById('btn-mover-a-otra-ruta').disabled = true;
             return;
         }
 
@@ -2204,12 +3136,72 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tipo = itemSeleccionado ? itemSeleccionado.dataset.tipo : null;
         document.getElementById('btn-mover-a-no-asignados').disabled = (tipo !== 'asignado');
         document.getElementById('btn-mover-a-asignados').disabled = (tipo !== 'no-asignado');
+        document.getElementById('btn-mover-a-otra-ruta').disabled = (tipo !== 'asignado');
     }
 
     async function verificarRuta(elemento, tipo_dato) {
-console.log("🔍 verificarRuta llamado para:", elemento.dataset.id, "tipo:", tipo_dato);
         const id_cliente = elemento.dataset.id || elemento.getAttribute('data-id');
+        const id_contrato = elemento.dataset.id_contrato || elemento.getAttribute('data-id_contrato');
         const modulo = 'verificar_ruta';
+        const fecha = document.getElementById('fecha-despacho')?.value || null;
+        if (!fecha) {
+            console.warn('Fecha no seleccionada: no se persisten cambios');
+            return;
+        }
+
+        try {
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(
+                    {
+                        modulo_servicios: modulo,
+                        id_contrato: id_contrato,
+                        id_cliente: id_cliente,
+                        fecha: fecha
+                    }
+                )
+            });
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            const situacion = data.status;
+            const mensaje = data.message;
+            const cliente = data.cliente;
+
+            if (situacion == 'false') {
+                // Mostrar modal
+                const valorSeleccionado = await mostrarModalSelect(mensaje, cliente);
+
+                if (valorSeleccionado !== null) {
+                    console.log('Usuario seleccionó:', valorSeleccionado);
+                    moverItem(elemento, tipo_dato, valorSeleccionado);
+                    itemSeleccionado = null;
+                    document.getElementById('btn-mover-a-asignados').disabled = true;
+                    document.getElementById('btn-mover-a-no-asignados').disabled = true;
+                    document.getElementById('btn-mover-a-otra-ruta').disabled = true;
+                } else {
+                    console.log('Usuario canceló');
+                }
+            } else {
+
+                moverItem(elemento, tipo_dato, null);
+                document.getElementById('btn-mover-a-asignados').disabled = true;
+                document.getElementById('btn-mover-a-no-asignados').disabled = true;
+                document.getElementById('btn-mover-a-otra-ruta').disabled = true;
+            }
+        } catch (error) {
+            console.error('Error en verificarRuta:', error);
+            suiteAlertError('error', 'Error al verificar la ruta: ' + error.message);
+        }
+    }
+
+    async function verificarRuta2(elemento) {
+        const tipo_dato = 'asignado';
+        const id_cliente = elemento.dataset.id || elemento.getAttribute('data-id');
+        const modulo = 'verificar_ruta2';
         const fecha = document.getElementById('fecha-despacho')?.value || null;
         if (!fecha) {
             console.warn('Fecha no seleccionada: no se persisten cambios');
@@ -2235,30 +3227,35 @@ console.log("🔍 verificarRuta llamado para:", elemento.dataset.id, "tipo:", ti
             const situacion = data.status;
             const mensaje = data.message;
             const cliente = data.cliente;
+            const html_opciones = data.html_opciones
 
-            if (situacion == 'false') {
+            if (situacion == 'ok') {
                 // Mostrar modal
-                const valorSeleccionado = await mostrarModalSelect(mensaje, cliente);
+                const valorSeleccionado = await mostrarModalSelect(html_opciones, cliente);
 
                 if (valorSeleccionado !== null) {
                     console.log('Usuario seleccionó:', valorSeleccionado);
-                    moverItem(elemento, tipo_dato, valorSeleccionado);
+                    moverItemRoute(elemento, tipo_dato, valorSeleccionado);
                     itemSeleccionado = null;
                     document.getElementById('btn-mover-a-asignados').disabled = true;
                     document.getElementById('btn-mover-a-no-asignados').disabled = true;
+                    document.getElementById('btn-mover-a-otra-ruta').disabled = true;
                 } else {
                     console.log('Usuario canceló');
                 }
             } else {
-                moverItem(elemento, tipo_dato, null);
+                //moverItem(elemento, tipo_dato, null);
                 document.getElementById('btn-mover-a-asignados').disabled = true;
                 document.getElementById('btn-mover-a-no-asignados').disabled = true;
+                document.getElementById('btn-mover-a-otra-ruta').disabled = true;
             }
         } catch (error) {
             console.error('Error en verificarRuta:', error);
-            alert('Error al verificar la ruta: ' + error.message);
+            suiteAlertError('Error', 'Error al verificar la ruta: ' + error.message);
         }
     }
+
+
 
     /**
      * Muestra un modal con un select y devuelve la opción seleccionada
@@ -2317,10 +3314,8 @@ console.log("🔍 verificarRuta llamado para:", elemento.dataset.id, "tipo:", ti
         });
     }
 
-    async function moverItem(elemento, origen, rutaSeleccionada = null) {
-console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", origen);
-        //const listaNoAsignados = document.getElementById('lista-no-asignados');
-        const destino = origen === 'asignado' ? 'no-asignado' : 'asignado';
+    async function moverItemRoute(elemento, origen, rutaSeleccionada = null) {
+        const destino = origen === 'asignado' ? 'asignado' : 'no-asignado';
         const contenedorDestino = destino === 'asignado' ? window.listaAsignados : window.listaNoAsignados;
         const contenedorOrigen = origen === 'asignado' ? window.listaAsignados : window.listaNoAsignados;
 
@@ -2359,6 +3354,7 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
         // Deshabilitar botones
         document.getElementById('btn-mover-a-asignados').disabled = true;
         document.getElementById('btn-mover-a-no-asignados').disabled = true;
+        document.getElementById('btn-mover-a-otra-ruta').disabled = true;
 
         // Persistir cambio en servidor
         try {
@@ -2370,10 +3366,105 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
 
             let id_ruta_new = '';
 
-            if (destino == 'no-asignado'){
+            if (destino == 'no-asignado') {
                 id_ruta_new = null;
-            }else{
+            } else {
                 id_ruta_new = rutaSeleccionada.id_ruta ? rutaSeleccionada.id_ruta : null;
+            }
+            const modulo = destino === 'asignado' ? 'movePreservicio_add' : 'movePreservicio_remove';
+
+            console.log('Modulo: ', modulo);
+            console.log('Origen: ', clientes);
+            console.log('Fecha:', fecha);
+
+            const id_preservicio = elemento.dataset.id_preservicio;
+            const res = await fetch('/app/ajax/serviciosAjax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(
+                    {
+                        modulo_servicios: modulo,
+                        id_preservicio: id_preservicio,
+                        fecha: fecha,
+                        id_ruta_new: id_ruta_new
+                    }
+                )
+            });
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            // Recargar la lista para asegurar orden y consistencia
+            await cargarListaDespacho();
+        } catch (err) {
+            console.error('Error persistiendo cambios de preservicios:', err);
+        }
+    }
+
+    async function moverItem(elemento, origen, rutaSeleccionada = null) {
+        //const listaNoAsignados = document.getElementById('lista-no-asignados');
+        const destino = origen === 'asignado' ? 'no-asignado' : 'asignado';
+        const contenedorDestino = destino === 'asignado' ? window.listaAsignados : window.listaNoAsignados;
+        const contenedorOrigen = origen === 'asignado' ? window.listaAsignados : window.listaNoAsignados;
+        // Determinar elementos a mover (soporta multi-select)
+        let seleccionados = Array.from(contenedorOrigen.querySelectorAll('.item-despacho.seleccionado'));
+        if (seleccionados.length === 0) {
+            seleccionados = [elemento];
+        }
+
+        const clientes = [];
+        const contratos = [];
+        for (const el of seleccionados) {
+            // Quitar selección
+            el.classList.remove('seleccionado');
+
+            // Mover visualmente
+            contenedorDestino.insertAdjacentElement('beforeend', el);
+            el.dataset.tipo = destino;
+            el.style.backgroundColor = destino === 'asignado' ? '#f0fff0' : '';
+
+            // ✅ ACTUALIZAR LA RUTA VISUAL SI SE MOVIÓ A "ASIGNADOS"
+            if (destino === 'asignado' && rutaSeleccionada) {
+                const formatoRutaDiv = el.querySelector('.formatoRuta');
+                if (formatoRutaDiv) {
+                    formatoRutaDiv.innerHTML = `<span class="colorE">Route: </span> ${rutaSeleccionada.nombre_ruta}`;
+                }
+            }
+            const idCliente = el.dataset.id || el.getAttribute('data-id');
+            const idContrato = el.dataset.id_contrato || el.getAttribute('data-id_contrato');
+            if (idCliente) clientes.push(idCliente);
+            if (idContrato) contratos.push(idContrato);
+        }
+
+        // ✅ Actualizar contadores
+        //actualizarContadorPanel(window.listaAsignados, 'pie_panel_izquierdo');
+        actualizarContadorPanel(window.listaAsignados, 'totalRegistros');
+        actualizarContadorPanel(window.listaNoAsignados, 'pie_panel_derecho');
+
+        // Deshabilitar botones
+        document.getElementById('btn-mover-a-asignados').disabled = true;
+        document.getElementById('btn-mover-a-no-asignados').disabled = true;
+        document.getElementById('btn-mover-a-otra-ruta').disabled = true;
+
+        // Persistir cambio en servidor
+        try {
+            const fecha = document.getElementById('fecha-despacho')?.value || null;
+            if (!fecha) {
+                console.warn('Fecha no seleccionada: no se persisten cambios');
+                return;
+            }
+
+            let id_ruta_new = '';
+
+            if (destino == 'no-asignado') {
+                id_ruta_new = null;
+            } else {
+                if (rutaSeleccionada != null) {
+                    id_ruta_new = rutaSeleccionada.id_ruta ? rutaSeleccionada.id_ruta : null;
+                } else {
+                    id_ruta_new = null;
+                }
             }
 
             const modulo = destino === 'asignado' ? 'preservicio_add' : 'preservicio_remove';
@@ -2389,6 +3480,7 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
                     {
                         modulo_servicios: modulo,
                         clientes: clientes,
+                        contratos: contratos,
                         fecha: fecha,
                         id_ruta_new: id_ruta_new
                     }
@@ -2398,6 +3490,10 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
             if (!res.ok) throw new Error('HTTP ' + res.status);
             const data = await res.json();
             if (data.error) throw new Error(data.error);
+
+            if (id_ruta_new == null) {
+                suiteAlertSuccess('success', "The client joined the current office.")
+            }
 
             // Recargar la lista para asegurar orden y consistencia
             await cargarListaDespacho();
@@ -2419,6 +3515,13 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
             itemSeleccionado = null;
             document.getElementById('btn-mover-a-asignados').disabled = true;
             document.getElementById('btn-mover-a-no-asignados').disabled = true;
+            document.getElementById('btn-mover-a-otra-ruta').disabled = true;
+        }
+    });
+
+    document.getElementById('btn-mover-a-otra-ruta')?.addEventListener('click', () => {
+        if (itemSeleccionado && itemSeleccionado.dataset.tipo === 'asignado') {
+            verificarRuta2(itemSeleccionado);
         }
     });
 
@@ -2451,17 +3554,63 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
         }
     };
 
-
     // === Daily Status Modal ===
     document.getElementById('btn-daily-status')?.addEventListener('click', async () => {
-        const modal = document.getElementById('modal-daily-status');
-        if (!modal) {
-            console.error("❌ No se encontró el modal #modal-daily-status");
-            return;
+
+        console.log("🔵 [1] Click en btn-daily-status");
+
+        // 1️⃣ ABRIR MODAL MDS Y ESPERAR DECISIÓN DEL USUARIO
+        try {
+            let fechaConfirmada = MDS_obtenerFechaHoy();
+
+            const resultado = await MDS_abrirModal();
+
+            console.log("🔵 [2] Resultado MDS:", resultado);
+
+            // Si el usuario canceló, detener el flujo
+            if (!resultado.success) {
+                console.log("ℹ️ MDS: Usuario canceló - no se carga la matriz");
+                return;
+            }
+
+            // ✅ Usuario aplicó: obtener fecha confirmada (con fallback a hoy)
+            fechaConfirmada = resultado.fecha;
+
+            // 🔄 Fallback: si no hay fecha, usar hoy
+            if (!fechaConfirmada || fechaConfirmada.trim() === '') {
+                console.log("⚠️ MDS: Sin fecha válida, usando fecha actual como fallback");
+                fechaConfirmada = MDS_obtenerFechaHoy();
+            }
+
+            console.log("✅ MDS: Fecha confirmada:", fechaConfirmada);
+
+            // 2️⃣ AHORA SÍ: Mostrar modal de daily status y cargar matriz
+            const modal = document.getElementById('modal-daily-status');
+            if (!modal) {
+                console.error("❌ No se encontró el modal #modal-daily-status");
+                return;
+            }
+
+            console.log("🔵 [3] Abriendo modal-daily-status");
+            modal.style.display = 'flex';
+
+            // 3️⃣ Cargar matriz con la fecha confirmada
+            console.log("🔵 [4] Llamando a cargarMatrizDiaria con fecha:", fechaConfirmada);
+            await cargarMatrizDiaria(fechaConfirmada); // ← Pasar fecha si tu función lo acepta
+
+        } catch (error) {
+            console.error("❌ Error en flujo MDS:", error);
+
+            // Fallback: cargar con fecha actual si hay error
+            const fechaFallback = MDS_obtenerFechaHoy();
+            console.log("🔄 Fallback: cargando con fecha actual:", fechaFallback);
+
+            const modal = document.getElementById('modal-daily-status');
+            if (modal) {
+                modal.style.display = 'flex';
+                await cargarMatrizDiaria();
+            }
         }
-        modal.style.display = 'flex';
-        console.log("Llego al la captura del click");
-        await cargarMatrizDiaria();
     });
 
     document.getElementById('close-daily-status')?.addEventListener('click', () => {
@@ -2476,7 +3625,12 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
         }
     });
 
-    async function cargarMatrizDiaria() {
+    /**
+     * Carga la matriz diaria de servicios
+     * @param {string} fechaConfirmada - Fecha en formato YYYY-MM-DD (opcional)
+     *                                    Si no se proporciona, usa la fecha actual
+     */
+    async function cargarMatrizDiaria(fechaConfirmada = null) {        
         const tbody = document.getElementById('matrix-body');
         const thead = document.querySelector('#daily-status-matrix thead tr');
         const tfoot = document.getElementById('matrix-footer');
@@ -2485,17 +3639,37 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
         tbody.innerHTML = '';
         tfoot.innerHTML = '';
 
+        console.log('🔵 [cargarMatrizDiaria] Iniciando...');
+        console.log('🔵 [cargarMatrizDiaria] fechaConfirmada recibida:', fechaConfirmada);
+        
+        // ✅ FALLBACK: Si no hay fecha, usar hoy
+        if (!fechaConfirmada || fechaConfirmada.trim() === '') {
+            console.log('⚠️ [cargarMatrizDiaria] Sin fecha, usando hoy como fallback');
+            fechaConfirmada = new Date().toISOString().split('T')[0];
+        }
+        
+        console.log('✅ [cargarMatrizDiaria] Fecha final a usar:', fechaConfirmada);
+        
+        // ✅ Guardar la fecha en una variable global (si otras funciones la necesitan)
+        window.fechaConsultaGlobal = fechaConfirmada;
+
         try {
             const res = await fetch('/app/ajax/serviciosAjax.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ modulo_servicios: 'listar' })
+                body: JSON.stringify(
+                    { 
+                        modulo_servicios: 'listar',
+                        fecha: fechaConfirmada
+                    }
+                )
             });
 
             if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
 
             const respuesta = await res.json();
             const servicios = respuesta.servicios || [];
+
             const vehiculosSinServicio = respuesta.vehiculosSinServicio || [];
 
             if (!Array.isArray(servicios)) {
@@ -2503,7 +3677,7 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
             }
 
             const crews = [...new Set(servicios.map(s => s.truck))].sort();
-            const clientes = [...new Set(servicios.map(s => s.cliente))].sort();
+            const clientes = [...new Set(servicios.map(s => s.cliente))];
 
             crews.forEach(crew => {
                 const th = document.createElement('th');
@@ -2521,7 +3695,7 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
             const trResume = document.createElement('tr');
             const thResume = document.createElement('th');
             thResume.style.cssText = 'background: #bbdefb; font-weight: bold; text-align: center; height: 40px; font-size: 1.1em;';
-            thResume.innerHTML = `<div style="font-size: 1.1em;">RESUME</div>
+            thResume.innerHTML = `<div style="font-size: 1.1em;">RESUME  -  ${fechaConfirmada}</div>
                                     <div style="font-size: 0.8em; margin-top: 4px; color: #555;">P: Processed, R: Rescheduled, C: Cancelled, T: Total</div>
                                     <div>Total services for the day: ${totalServicios}<div>`;
             trResume.appendChild(thResume);
@@ -2539,18 +3713,148 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
             });
             tbody.appendChild(trResume);
 
+            // ==========================================
+            // DISTRIBUCION DE CLIENTES POR RUTA PARA VERIFICAR EL SERVICIO ACTUAL
+            // ==========================================
+
+            // ==========================================
+            // CONFIGURACIÓN DE FACTORES DE COLOR
+            // ==========================================
+            const COLOR_FACTOR_DETALLE = 0.25;  // Para celdas de cliente/crew (más tenue)
+            const COLOR_FACTOR_SEPARADOR = 0.45; // Para fila separadora (más visible)
+
+            // ==========================================
+            // RENDERIZADO PRINCIPAL
+            // ==========================================
+            const totalColumnas = 1 + crews.length; // 1 para cliente + N crews
+            let rutaAnterior = null;
+            let contadorClientesRuta = 0;
+
             console.log(`✅ ${servicios.length} servicios a mostrar: `, servicios);
-            clientes.forEach(cliente => {
+
+            console.log(`Clientes a mostrar: `, clientes);
+
+            // ==========================================
+            // Ciclo para el Arreglo servicios. Muestra cada uno de los clentes por ruta
+            // ==========================================
+            servicios.forEach((clienteData, index) => {
+                // ✅ Soporte para cliente como string u objeto
+                const clienteObj = typeof clienteData === 'object' ? clienteData : { cliente: clienteData };
+
+                const nombreCliente = clienteObj.cliente || clienteData;
+                const nombreContrato = clienteData.nombre_contrato;
+                const idRutaActual = clienteData.id_ruta;
+                const nombreRutaActual = clienteData.nombre_ruta;
+                const colorRutaActual = clienteData.color_ruta || '#f5f5f5';
+
+                // ✅ DETECTAR CAMBIO DE RUTA → Insertar separador
+                if (idRutaActual !== rutaAnterior) {
+
+                    // Si no es la primera ruta, cerrar el contador anterior (opcional para debug)
+                    if (rutaAnterior !== null) {
+                        console.log(`✅ Ruta "${rutaAnterior}" completada: ${contadorClientesRuta} clientes`);
+                    }
+
+                    // Reiniciar contador para nueva ruta
+                    contadorClientesRuta = 0;
+                    rutaAnterior = idRutaActual;
+
+                    // 🎨 Crear fila separadora
+                    const trSeparador = document.createElement('tr');
+                    trSeparador.className = 'ruta-separador';
+                    trSeparador.dataset.idRuta = idRutaActual;
+
+                    // Calcular color de fondo para separador (más visible que el detalle)
+                    const colorSeparador = suavizarColor(colorRutaActual, COLOR_FACTOR_SEPARADOR);
+
+                    trSeparador.innerHTML = `
+            <td colspan="${totalColumnas}" style="
+                background: ${colorSeparador};
+                border-bottom: 2px solid ${colorRutaActual};
+                padding: 8px 12px;
+                font-weight: 600;
+                color: #333;
+                text-align: left;
+                box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+            ">
+                <span style="margin-right: 8px;">🛣️</span>
+                <strong>${nombreRutaActual || 'Route #' + idRutaActual}</strong>
+                <span id="badge-ruta-${idRutaActual}" style="
+                    margin-left: 12px;
+                    background: rgba(255,255,255,0.7);
+                    padding: 2px 8px;
+                    border-radius: 12px;
+                    font-size: 12px;
+                    font-weight: normal;
+                    color: #555;
+                ">Charging...</span>
+            </td>
+        `;
+                    tbody.appendChild(trSeparador);
+                }
+
+                // ✅ Incrementar contador para esta ruta
+                contadorClientesRuta++;
+
+                // ✅ Actualizar badge con contador (en tiempo real)
+                const badge = document.getElementById(`badge-ruta-${idRutaActual}`);
+                if (badge) {
+                    badge.textContent = `${contadorClientesRuta} customer${contadorClientesRuta > 1 ? 's' : ''}`;
+                }
+
+                // ==========================================
+                // TU CÓDIGO ORIGINAL (casi sin cambios)
+                // ==========================================
                 const tr = document.createElement('tr');
                 const tdCliente = document.createElement('td');
-                tdCliente.textContent = cliente;
-                tdCliente.style.cssText = 'font-weight: bold; background: #f9f9f9; border: 1px solid #ddd; padding: 6px; position: sticky; left: 0; z-index: 2;';
+                tdCliente.textContent = nombreContrato;
+
+                // Color tenue para detalle (factor más bajo = más desvanecido)
+                const colorDetalleTenue = suavizarColor(colorRutaActual, COLOR_FACTOR_DETALLE);
+
+                tdCliente.style.cssText = `
+        font-weight: bold; 
+        background: ${colorDetalleTenue}; 
+        border: 1px solid #ddd; 
+        padding: 6px; 
+        position: sticky; 
+        left: 0; 
+        z-index: 2;
+        transition: background-color 0.2s ease;
+    `;
+
+                // Hover effect para cliente
+                tdCliente.addEventListener('mouseenter', () => {
+                    tdCliente.style.backgroundColor = suavizarColor(colorRutaActual, 0.4);
+                });
+                tdCliente.addEventListener('mouseleave', () => {
+                    tdCliente.style.backgroundColor = colorDetalleTenue;
+                });
+
                 tr.appendChild(tdCliente);
 
                 crews.forEach((crew, idx) => {
-                    const servicio = servicios.find(s => s.cliente === cliente && s.truck === crew);
+                    const servicio = servicios.find(s => s.cliente === nombreCliente && s.truck === crew);
                     const td = document.createElement('td');
-                    td.style.cssText = 'border: 1px solid #ddd; padding: 6px; text-align: center;';
+
+                    // Color para celdas de crew (mismo factor que detalle)
+                    const colorCrewTenue = suavizarColor(crew.color_ruta || colorRutaActual, COLOR_FACTOR_DETALLE);
+
+                    td.style.cssText = `
+            border: 1px solid #ddd; 
+            padding: 6px; 
+            text-align: center;
+            background-color: ${colorCrewTenue};
+            transition: background-color 0.2s ease;
+        `;
+
+                    // Hover para crew
+                    td.addEventListener('mouseenter', () => {
+                        td.style.backgroundColor = suavizarColor(crew.color_ruta || colorRutaActual, 0.4);
+                    });
+                    td.addEventListener('mouseleave', () => {
+                        td.style.backgroundColor = colorCrewTenue;
+                    });
 
                     if (servicio) {
                         totales[idx]++;
@@ -2582,6 +3886,11 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
                 tbody.appendChild(tr);
             });
 
+            // ✅ Log final para la última ruta
+            if (rutaAnterior !== null) {
+                console.log(`✅ Ruta "${rutaAnterior}" completada: ${contadorClientesRuta} clientes`);
+            }
+
             const resumeRow = tbody.querySelector('tr');
             crews.forEach((crew, idx) => {
                 const td = resumeRow.cells[idx + 1];
@@ -2593,10 +3902,63 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
                                 </div>`;
             });
 
-        } catch (err) {
-            console.error("Error al cargar matriz diaria:", err);
+        } catch (error) {
+            console.error('❌ [cargarMatrizDiaria] Error cargando matriz:', error);
             tbody.innerHTML = `<tr><td colspan="100">Error: ${err.message}</td></tr>`;
+            // Mensaje de error amigable
+            alert('❌ Error loading daily matrix. Please try again.');
+            
+        } finally {
+            // Ocultar indicador de carga
+            const loadingIndicator = document.getElementById('matriz-loading');
+            if (loadingIndicator) {
+                loadingIndicator.classList.add('hidden');
+            }
         }
+    }
+
+    /**
+     * Suaviza un color hex para usar como fondo (hace el color más claro)
+     * @param {string} hex - Color original (ej: "#f1c40f", "#ffb300")
+     * @param {number} factor - Nivel de suavizado (0.1 = muy suave, 0.9 = casi original)
+     * @returns {string} - Color hex suavizado
+     */
+    function suavizarColor(hex, factor = 0.25) {
+        // Si no hay color, retornar gris muy claro
+        if (!hex || hex.trim() === '') return '#f5f5f5';
+
+        // Remover # si existe
+        hex = hex.replace('#', '');
+
+        // Convertir a RGB
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+
+        // Mezclar con blanco (factor = 0.25 significa 25% color original, 75% blanco)
+        const newR = Math.round(r * factor + 255 * (1 - factor));
+        const newG = Math.round(g * factor + 255 * (1 - factor));
+        const newB = Math.round(b * factor + 255 * (1 - factor));
+
+        // Convertir de vuelta a hex
+        return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+    }
+
+    /**
+     * Alternativa: Agregar transparencia (alpha) al color
+     * @param {string} hex - Color original
+     * @param {number} alpha - Transparencia (0.1 = muy transparente, 1 = opaco)
+     * @returns {string} - Color RGBA
+     */
+    function colorConTransparencia(hex, alpha = 0.25) {
+        if (!hex || hex.trim() === '') return 'rgba(245, 245, 245, 0.5)';
+
+        hex = hex.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
     // === AQUÍ agregas esta línea ===
@@ -3068,7 +4430,7 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
             const data = await res.json();
 
             if (data.success) {
-                await suiteAlertSuccess("Éxito", data.message);
+                await suiteAlertSuccess("Success", data.message);
                 console.log("📊 Detalles:", data.detalles);
             } else {
                 await suiteAlertError("Error", data.error || "No se pudo completar");
@@ -3081,8 +4443,8 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
 
     document.getElementById('btn-reconciliar-historico-completo')?.addEventListener('click', async () => {
         const confirmado = await suiteConfirm(
-            "Reconciliar Datos",
-            "¿Ejecutar reconciliación histórica?\n\nSe procesarán servicios sin hora GPS."
+            "Reconcile Data",
+            "Perform historical reconciliation?\n\nServices without GPS time will be processed."
         );
 
         if (!confirmado) return;
@@ -3096,13 +4458,13 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
             const data = await res.json();
 
             if (data.success) {
-                await suiteAlertSuccess("Éxito", data.message);
+                await suiteAlertSuccess("Success", data.message);
                 console.log("📊 Detalles:", data.detalles);
             } else {
-                await suiteAlertError("Error", data.error || "No se pudo completar");
+                await suiteAlertError("Error", data.error || "It could not be completed");
             }
         } catch (err) {
-            await suiteAlertError("Error", "Fallo de conexión en btn-reconciliar-historico: " + err.message);
+            await suiteAlertError("Error", "Connection failure in btn-reconcile-historico: " + err.message);
             console.error(err);
         }
     });
@@ -3437,6 +4799,7 @@ console.log("🚚 moverItem llamado para:", elemento.dataset.id, "origen:", orig
             moverItem(item, 'no-asignado', null);
             document.getElementById('btn-mover-a-asignados').disabled = true;
             document.getElementById('btn-mover-a-no-asignados').disabled = true;
+            document.getElementById('btn-mover-a-otra-ruta').disabled = true;
         }
     });
 
@@ -3626,4 +4989,29 @@ function actualizarCeldaActividadGps(servicio) {
             setTimeout(() => location.reload(), 5000);
         }
     }, esperaMs);
+
+    // ============================================
+    // EXPONER FUNCIONES AL SCOPE GLOBAL
+    // (Para que onclick inline pueda encontrarlas)
+    // =========================================
+
+    window.cargarClientesDeRuta = cargarClientesDeRuta;
+    window.moverCliente = moverCliente;
+    window.guardarOrdenCompleto = guardarOrdenCompleto;
+    window.actualizarNumerosOrden = actualizarNumerosOrden;
+    window.actualizarEstadoBotones = actualizarEstadoBotones;
 }
+
+/* ==========================================
+   script.js - MDS Module
+   ========================================== */
+
+// Patrón de inicialización segura (al inicio del archivo)
+(function ensureMDSInit() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', MDS_iniciarCuandoListo);
+    } else {
+        // Pequeño timeout para asegurar que el DOM está realmente listo
+        setTimeout(MDS_iniciarCuandoListo, 0);
+    }
+})();

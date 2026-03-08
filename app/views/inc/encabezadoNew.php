@@ -10,12 +10,12 @@ switch ($opcion) {
         $clase = "fa-solid fa-tags";
         break;
 
-    case 'clienteNew':
+    case 'clientesNew':
         $titulo_act = "New Customer";
         $clase = "fa-solid fa-user-pen";
         break;
 
-    case 'contratoNew':
+    case 'contratosNew':
         $titulo_act = "New Contract";
         $clase = "fa-solid fa-file-signature";
         break;

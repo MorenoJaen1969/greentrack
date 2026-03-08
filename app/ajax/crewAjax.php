@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_crew'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_crew"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_crew"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/crewController.php';
+
 use app\controllers\crewController;
 
 $controller = new crewController();
@@ -83,7 +84,7 @@ switch ($modulo) {
         $tabla_html = $controller->listarcrewControlador($dato_ori);
         echo $tabla_html; // Solo el HTML de la tabla + paginación 
         break;
-    
+
     case 'cambio_cant_reg':
         $datos = $inputData['datos'];
 
@@ -97,7 +98,7 @@ switch ($modulo) {
 
         $_SESSION['nav_crew'] = [
             'pagina_crew' => 1,
-            'registrosPorPagina' => $registrosPorPagina 
+            'registrosPorPagina' => $registrosPorPagina
         ];
 
         $dato_ori = [
@@ -131,4 +132,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_proveedores'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_proveedores"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_proveedores"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/proveedoresController.php';
+
 use app\controllers\proveedoresController;
 
 $controller = new proveedoresController();
@@ -72,20 +73,20 @@ switch ($modulo) {
 
         $controller->actualizar_direccion($id_direccion, $direccion, $lat, $lng, $cambio);
         break;
-    
+
     case 'eliminar':
         $id_direccion = $inputData['id_direccion'];
 
         $controller->eliminar_direccion($id_direccion);
         break;
-    
+
     case 'listar_tabla':
         $pagina = $inputData['pagina'] ?? 1;
         $registros_por_pagina = $inputData['registros_por_pagina'] ?? 10;
         $url_origen = $inputData['url_origen'] ?? 'proveedores';
         $busca_frase = $inputData['busca_frase'] ?? '';
 
-        // Llamar a tu método existente
+        // Llamar a tu método existente 
         $dato_ori = [
             $pagina,
             $registros_por_pagina,
@@ -99,7 +100,7 @@ switch ($modulo) {
         $tabla_html = $controller->listarproveedoresControlador($dato_ori);
         echo $tabla_html; // Solo el HTML de la tabla + paginación
         break;
-    
+
     case 'cambio_cant_reg':
         $datos = $inputData['datos'];
 
@@ -113,7 +114,7 @@ switch ($modulo) {
 
         $_SESSION['nav_proveedores'] = [
             'pagina_proveedores' => 1,
-            'registrosPorPagina' => $registrosPorPagina 
+            'registrosPorPagina' => $registrosPorPagina
         ];
 
         $dato_ori = [
@@ -137,4 +138,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

@@ -219,7 +219,6 @@ $opcion = "contratosVista";
                 </div>
 
                 <div id="tab1" class="tabcontent tab-link" style="display:none">
-                    <!-- Formulario del Arrendatario -->
                     <h3>Customer Details</h3>
 
                     <div class="forma01">
@@ -234,9 +233,20 @@ $opcion = "contratosVista";
                             <div class="form-group-ct">
                                 <div class="form-group-ct">
                                     <label for="id_cliente" class="ancho_label1">Customers:</label>
-                                    <select class="form-control-co form-font" id="id_cliente" name="id_cliente" <?php echo !$modo_edicion ? 'disabled' : ''; ?> required>
-                                        <!-- Se llenará con JS -->
-                                    </select>
+                                    <!-- Contenedor del select personalizado -->
+                                    <div class="ser-select-foto" id="ser-select-customer">
+                                        <!-- Campo visible (lo que ve el usuario) -->
+                                        <div class="ser-select-trigger" tabindex="0">
+                                            <span id="ser-id_cliente" class="ser-select-selected">Select a customer...</span>
+                                            <span class="ser-select-arrow">▼</span>
+                                        </div>
+                                        <!-- Lista desplegable de opciones -->
+                                        <ul class="ser-select-options">
+                                            <!-- Las opciones se generan con JS -->
+                                        </ul>
+                                        <!-- Input oculto para enviar el valor en formularios -->
+                                        <input type="hidden" name="id_cliente" id="ser-select-driver-value">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -642,6 +652,13 @@ $opcion = "contratosVista";
         p04,
         p05
     ];
+
+    // ==========================================
+    // VARIABLE DE MÓDULO (para evitar globales implícitos)
+    // ==========================================
+    let _opcionesSelect = []; 
+    let _selectAPI = null; // Para guardar referencia del API retornado
+
 
     let r_retorno = "<?php echo $ruta_retorno . "/" . $pagina_retorno; ?>";
 
@@ -1163,22 +1180,262 @@ $opcion = "contratosVista";
         } catch (err) { console.error("Error al cargar Fecuencia de Pago:", err); }
     }
 
+    /**
+     * Inicializa un select personalizado con fotos
+     * @param {Function} onChange - Callback cuando se selecciona una opción
+     */
     async function cargar_id_cliente(id_cliente, ruta) {
         try {
-            const res = await fetch(ruta,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        modulo_clientes: 'crear_select',
-                        id_cliente: id_cliente
-                    })
+            // 1. Fetch inicial de datos
+            const res02 = await fetch(ruta, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    modulo_clientes: 'solo_datos',
+                    filtro: "All"
+                })
+            });
+            const result02 = await res02.json();
+
+            if (!result02.success || !result02.data) {
+                console.error('❌ Error cargando datos:', result02);
+                return null;
+            }
+
+            _opcionesSelect = result02.data; // ✅ Declaración correcta
+            // 2. Referencias al DOM (una sola vez)
+            const container = document.getElementById('ser-select-customer');
+            if (!container) {
+                console.error(`❌ Contenedor 'ser-select-customer' no encontrado`);
+                return null;
+            }
+
+            const trigger = container.querySelector('.ser-select-trigger');
+            const selectedSpan = container.querySelector('.ser-select-selected');
+            const optionsList = container.querySelector('.ser-select-options');
+            const hiddenInput = container.querySelector('input[type="hidden"]');
+
+
+            // 3. Función para renderizar opciones (REUTILIZABLE)
+            function renderOpciones(lista) {
+                optionsList.innerHTML = '';
+
+                if (!lista || lista.length === 0) {
+                    optionsList.innerHTML = '<li class="ser-select-option disabled">Sin resultados</li>';
+                    return;
                 }
-            );
-            if (res.ok) document.getElementById('id_cliente').innerHTML = await res.text();
-        } catch (err) { console.error("Error al cargar Clientes:", err); }
+
+                lista.forEach(opcion => {
+                    let foto_def = null;
+                    let nom_cliente = null;
+
+                    // Tu lógica de fotos y nombres (intacta ✅)
+                    if (!opcion['cliente_foto'] || opcion['cliente_foto'].trim().length === 0) {
+                        switch (opcion['sexo']) {
+                            case 'Male':
+                                foto_def = '/app/views/fotos/responsable.png';
+                                nom_cliente = opcion['abreviatura'] + ' ' + opcion['cliente'];
+                                break;
+                            case 'Female':
+                                foto_def = '/app/views/fotos/responsable-mujer.png';
+                                nom_cliente = opcion['abreviatura'] + ' ' + opcion['cliente'];
+                                break;
+                            default:
+                                foto_def = '/app/views/fotos/compania.png';
+                                nom_cliente = opcion['cliente'];
+                                break;
+                        }
+                    } else {
+                        foto_def = '/app/views/img/uploads/fotos/' + opcion['cliente_foto'];
+                        nom_cliente = (opcion['tipo_persona'] === 'Natural Person') 
+                            ? opcion['abreviatura'] + ' ' + opcion['cliente']
+                            : opcion['cliente'];
+                    }
+
+                    // Crear elemento li
+                    const li = document.createElement('li');
+                    li.className = 'ser-select-option';
+                    li.dataset.id = opcion['id_cliente'];
+                    li.innerHTML = `
+                        <img src="${foto_def}" alt="${opcion['cliente']}" onerror="this.src='https://via.placeholder.com/32?text=👤'">
+                        <div class="ser-info">
+                            <span class="ser-nombre">${nom_cliente}</span>
+                        </div>
+                    `;
+                    optionsList.appendChild(li);
+                });
+            }
+
+            // 4. EVENTOS (se adjuntan UNA SOLA VEZ)
+            
+            // Click en trigger: abrir/cerrar
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                container.classList.toggle('open');
+            });
+
+            // Click fuera: cerrar
+            document.addEventListener('click', (e) => {
+                if (!container.contains(e.target)) {
+                    container.classList.remove('open');
+                }
+            });
+
+            // Teclado: accesibilidad
+            trigger.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    container.classList.toggle('open');
+                }
+                if (e.key === 'Escape') {
+                    container.classList.remove('open');
+                }
+            });
+
+            // ✅ EVENT DELEGATION para opciones (evita listeners por cada li)
+            optionsList.addEventListener('click', (e) => {
+                const li = e.target.closest('.ser-select-option');
+                if (!li || li.classList.contains('disabled')) return;
+
+                const id_cliente = li.dataset.id;
+                const opcion = _opcionesSelect.find(o => o.id_cliente == id_cliente);
+                if (!opcion) return;
+
+                // Remover selección previa visual
+                optionsList.querySelectorAll('.ser-select-option').forEach(el => 
+                    el.classList.remove('selected')
+                );
+                li.classList.add('selected');
+
+                // Actualizar trigger (reconstruir nom_cliente para el trigger)
+                let foto_def = opcion['cliente_foto'] 
+                    ? '/app/views/img/uploads/fotos/' + opcion['cliente_foto']
+                    : (opcion['sexo'] === 'Male' ? '/app/views/fotos/responsable.png' : 
+                    opcion['sexo'] === 'Female' ? '/app/views/fotos/responsable-mujer.png' : 
+                    '/app/views/fotos/compania.png');
+                
+                let nom_trigger = (opcion['tipo_persona'] === 'Natural Person')
+                    ? opcion['abreviatura'] + ' ' + opcion['cliente']
+                    : opcion['cliente'];
+                    
+                selectedSpan.innerHTML = `<img src="${foto_def}">${nom_trigger}`;
+                
+                if (hiddenInput) hiddenInput.value = id_cliente;
+                container.classList.remove('open');
+                
+                if (typeof onChange === 'function') onChange(opcion);
+            });
+
+            // 5. Render inicial
+            renderOpciones(_opcionesSelect);
+
+            // === NUEVO: Pre-seleccionar id_cliente si está definido ===
+            if (id_cliente && id_cliente !== '' && id_cliente !== 'undefined') {
+                
+                console.log('🎯 Pre-seleccionando id_cliente:', id_cliente);
+                
+                // 1. Encontrar la opción en los datos
+                const opcionSeleccionada = _opcionesSelect.find(o => o.id_cliente == id_cliente);
+                
+                if (opcionSeleccionada) {
+                    
+                    // 2. Reconstruir nom_cliente (misma lógica que en renderOpciones)
+                    let foto_def = null;
+                    let nom_cliente = null;
+                    
+                    if (!opcionSeleccionada['cliente_foto'] || opcionSeleccionada['cliente_foto'].trim().length === 0) {
+                        switch (opcionSeleccionada['sexo']) {
+                            case 'Male':
+                                foto_def = '/app/views/fotos/responsable.png';
+                                nom_cliente = opcionSeleccionada['abreviatura'] + ' ' + opcionSeleccionada['cliente'];
+                                break;
+                            case 'Female':
+                                foto_def = '/app/views/fotos/responsable-mujer.png';
+                                nom_cliente = opcionSeleccionada['abreviatura'] + ' ' + opcionSeleccionada['cliente'];
+                                break;
+                            default:
+                                foto_def = '/app/views/fotos/compania.png';
+                                nom_cliente = opcionSeleccionada['cliente'];
+                                break;
+                        }
+                    } else {
+                        foto_def = '/app/views/img/uploads/fotos/' + opcionSeleccionada['cliente_foto'];
+                        nom_cliente = (opcionSeleccionada['tipo_persona'] === 'Natural Person') 
+                            ? opcionSeleccionada['abreviatura'] + ' ' + opcionSeleccionada['cliente']
+                            : opcionSeleccionada['cliente'];
+                    }
+                    
+                    // 3. Actualizar el trigger (lo que se ve cuando está cerrado)
+                    if (selectedSpan) {
+                        selectedSpan.innerHTML = `<img src="${foto_def}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:8px">${nom_cliente}`;
+                    }
+                    
+                    // 4. Actualizar el input oculto (para enviar en formulario)
+                    if (hiddenInput) {
+                        hiddenInput.value = id_cliente;
+                    }
+                    
+                    // 5. Marcar visualmente la opción en la lista (opcional, por si abren el dropdown)
+                    const liSeleccionado = optionsList.querySelector(`.ser-select-option[data-id="${id_cliente}"]`);
+                    if (liSeleccionado) {
+                        liSeleccionado.classList.add('selected');
+                    }
+                    
+                    console.log('✅ Cliente pre-seleccionado:', opcionSeleccionada.cliente);
+                } else {
+                    console.warn('⚠️ id_cliente no encontrado en las opciones:', id_cliente);
+                }
+            }
+            // === FIN: Pre-selección ===            
+
+            // 7. API PÚBLICA (con refresh que recarga datos, no solo re-renderiza)
+            _selectAPI = {
+                refresh: async function(nuevaRuta, nuevoFiltro = null) {
+                    try {
+                        const res = await fetch(nuevaRuta, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                modulo_clientes: 'solo_datos',
+                                filtro: nuevoFiltro || "All"
+                            })
+                        });
+                        const result = await res.json();
+                        if (result.success && result.data) {
+                            _opcionesSelect = result.data;
+                            renderOpciones(_opcionesSelect);
+                            return true;
+                        }
+                        return false;
+                    } catch (error) {
+                        console.error('❌ Error en refresh:', error);
+                        return false;
+                    }
+                },
+                setSelected: function(id_cliente) {
+                    const li = optionsList.querySelector(`.ser-select-option[data-id="${id_cliente}"]`);
+                    if (li) li.click();
+                },
+                getValue: function() {
+                    return hiddenInput?.value || null;
+                },
+                reset: function() {
+                    selectedSpan.textContent = 'Seleccionar...';
+                    if (hiddenInput) hiddenInput.value = '';
+                    optionsList.querySelectorAll('.ser-select-option').forEach(el => 
+                        el.classList.remove('selected')
+                    );
+                }
+            };
+
+            return _selectAPI;
+
+        } catch (error) {
+            console.error('❌ Error en serInicializarSelectFoto:', error);
+            return null;
+        }
     }
 
     async function cargar_id_direccion(id_direccion, id_cliente, ruta) {

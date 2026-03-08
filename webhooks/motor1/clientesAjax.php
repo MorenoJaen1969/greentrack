@@ -15,7 +15,7 @@ use app\controllers\serviciosController;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit;
 }
 
@@ -53,7 +53,7 @@ $telefono_cliente = $data['telefono'] ?? '';
 $email_cliente = $data['email'] ?? '';
 $direccion_cliente = $data['direccion'] ?? '';
 $latitud = $data['latitud'] ?? '';
-$longitud = $data['longitud'] ?? '';    
+$longitud = $data['longitud'] ?? '';
 
 $params = [
     'id_cliente' => $id_cliente,
@@ -69,9 +69,9 @@ $params = [
 try {
     if (ob_get_level()) {
         ob_clean(); // Limpia el búfer actual sin enviarlo
-    }    
+    }
     $controller = new serviciosController();
-    
+
     $resultado = $controller->procesarClientesDesdeMotor1($params);
     if (!headers_sent()) {
         http_response_code(200);
@@ -99,4 +99,3 @@ try {
     echo json_encode(['error' => 'Internal server error: ' . $e->getMessage()]);
     exit;
 }
-

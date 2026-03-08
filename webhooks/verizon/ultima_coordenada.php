@@ -11,7 +11,7 @@ header("Content-Type: application/json; charset=UTF-8");
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -45,4 +45,3 @@ try {
     http_response_code(500);
     echo json_encode(['error' => 'Error interno']);
 }
-?>

@@ -328,4 +328,24 @@ class estadosController extends mainModel
         $data = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
         return $data;
     }
+
+    public function getEstados($id_pais) {
+        try {
+            $stmt = "SELECT e.id_estado, e.nombre, e.centro_lat AS latitud_centro, 
+                    e.centro_lng AS longitud_centro, 7 AS zoom_default, p.codigo_iso2 AS pais_iso 
+                FROM estados e
+                INNER JOIN paises p ON e.id_pais = p.id_pais
+                WHERE e.id_pais = :v_id_pais AND e.activo = 1
+                ORDER BY e.nombre ASC";
+            $params = [
+                'v_id_pais' => $id_pais
+            ];
+            $data = $this->ejecutarConsulta($stmt, "", $params, "fetchAll");
+
+            return $data;
+        } catch (Exception $e) {
+            return $e->getMessage();
+        }
+    }    
+
 }

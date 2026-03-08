@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_zips'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_zips"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_zips"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/zipsController.php';
+
 use app\controllers\zipsController;
 
 $controller = new zipsController();
@@ -68,22 +69,22 @@ switch ($modulo) {
         $id_zip = $inputData['id_zip'];
 
         $zips = $controller->consultar_zips($id_ciudad);
-        $cadena='';
+        $cadena = '';
 
         $cadena = '<option value="">Select a ZIP</option>';
 
-        foreach ($zips as $curr){
-            $cadena = $cadena. '<option value="' . $curr['id_zip'] . '" ';
-            if($id_zip == $curr['id_zip']){ 
-                $cadena = $cadena. 'selected> ';
-            }else{
-                $cadena = $cadena. '> ';
+        foreach ($zips as $curr) {
+            $cadena = $cadena . '<option value="' . $curr['id_zip'] . '" ';
+            if ($id_zip == $curr['id_zip']) {
+                $cadena = $cadena . 'selected> ';
+            } else {
+                $cadena = $cadena . '> ';
             }
-            $cadena = $cadena. $curr['nombre'] . '</option>';
+            $cadena = $cadena . $curr['nombre'] . '</option>';
         }
         echo $cadena;
         break;
-    
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);
@@ -91,4 +92,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

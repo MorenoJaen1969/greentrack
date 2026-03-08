@@ -202,8 +202,9 @@ class contratosController extends mainModel
 		$dias_var = "Days";
 
 		$campos = "c.*, ct.id_tipo_persona, ct.nombre AS cliente_nombre, ct.apellido AS cliente_apellido, ct.nombre_comercial, 
-			d.dia_ingles AS day_work, ar.descripcion as area_desc,
+			d.dia_ingles AS day_work, ar.descripcion as area_desc, c.id_ruta, r.nombre_ruta AS ruta_desc,
 			ct.telefono AS cliente_telefono, ct.email AS cliente_email, s.status, fs.concepto, se.id_servicio, se.fecha_programada,
+            ct.cliente_foto, ct.id_sexo, 
 			CASE
 				WHEN c.fecha_fin <= CURDATE() THEN '$vencido_var'
 				ELSE
@@ -247,7 +248,7 @@ class contratosController extends mainModel
 		if (isset($busqueda) && $busqueda != "") {
 			// === Generar la cláusula ORDER BY ===
 
-			$campos_filtro = "ct.nombre LIKE '%$busqueda%' OR ct.apellido LIKE '%$busqueda%' OR ct.nombre_comercial LIKE '%$busqueda%' OR d.dia_ingles LIKE '%$busqueda%'";
+			$campos_filtro = "ct.nombre LIKE '%$busqueda%' OR ct.apellido LIKE '%$busqueda%' OR ct.nombre_comercial LIKE '%$busqueda%' OR d.dia_ingles LIKE '%$busqueda%' OR r.nombre_ruta LIKE '%$busqueda%'";
 
 			$consulta_datos = "SELECT " . $campos . " 
                     FROM contratos c
@@ -256,6 +257,7 @@ class contratosController extends mainModel
 					LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = c.id_frecuencia_servicio
 					LEFT JOIN dias_semana AS d ON d.id_dia_semana = c.id_dia_semana
 					LEFT JOIN areas AS ar ON ar.id_area = c.id_area
+					LEFT JOIN rutas AS r ON r.id_ruta = c.id_ruta
 					LEFT JOIN (
 						SELECT 
 							id_servicio,
@@ -274,6 +276,7 @@ class contratosController extends mainModel
 					LEFT JOIN status_all AS s ON s.id_status = c.id_status 
 					LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = c.id_frecuencia_servicio
 					LEFT JOIN dias_semana AS d ON d.id_dia_semana = c.id_dia_semana
+					LEFT JOIN rutas AS r ON r.id_ruta = c.id_ruta
 					LEFT JOIN (
 						SELECT 
 							id_servicio,
@@ -293,6 +296,7 @@ class contratosController extends mainModel
 					LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = c.id_frecuencia_servicio
 					LEFT JOIN dias_semana AS d ON d.id_dia_semana = c.id_dia_semana
 					LEFT JOIN areas AS ar ON ar.id_area = c.id_area
+					LEFT JOIN rutas AS r ON r.id_ruta = c.id_ruta
 					LEFT JOIN (
 						SELECT 
 							id_servicio,
@@ -312,6 +316,7 @@ class contratosController extends mainModel
 					LEFT JOIN status_all AS s ON s.id_status = c.id_status 
 					LEFT JOIN frecuencia_servicio AS fs ON fs.id_frecuencia_servicio = c.id_frecuencia_servicio
 					LEFT JOIN dias_semana AS d ON d.id_dia_semana = c.id_dia_semana
+					LEFT JOIN rutas AS r ON r.id_ruta = c.id_ruta
 					LEFT JOIN (
 						SELECT 
 							id_servicio,
@@ -350,13 +355,16 @@ class contratosController extends mainModel
 					<thead class="cabecera">
 						<tr>
 							<th class="has-text-centered">#</th>
-							<th class="has-text-centered">Contract</th>
+							<th class="has-text-centered" style="width: 80px;"><i class="fa-solid fa-camera"></i></th>
 							<th class="has-text-centered">Responsible</th>
+							<th class="has-text-centered" style="width: 80px;"><i class="fa-solid fa-camera"></i></th>
+							<th class="has-text-centered"># Contract</th>
 							<th class="has-text-centered">Contract</th>
 							<th class="has-text-centered">Time Remaining</th>
 							<th class="has-text-centered">Area</th>
 							<th class="has-text-centered">Service Frequency</th>
 							<th class="has-text-centered">Service Day</th>
+							<th class="has-text-centered">Route</th>
 							<th class="has-text-centered">Last Service</th>
 							<th class="has-text-centered">Status</th>
 							<th class="has-text-centered" colspan="3">Options</th>
@@ -420,7 +428,40 @@ class contratosController extends mainModel
 				$tabla .= '
                         <tr class="has-text-centered table-row">
                             <td>' . $contador . '</td>
-                            <td>' . $this->ceros($rows['id_contrato']) . '</td>';
+                            <td class="table-img-column">
+								<figure class="image is-48x48" style="margin-left: auto; margin-right: auto;">';
+
+                if (empty($rows['cliente_foto'])) {
+					if ($rows['id_tipo_persona'] == 2) {
+						$tabla .= '<img class="is-rounded side_max" src="/app/views/fotos/compania.png">';
+					} else {
+						if ($rows['id_sexo'] == 1) {
+							$tabla .= '<img class="is-rounded side_max" src="/app/views/fotos/responsable.png">';
+						} else {
+							$tabla .= '<img class="is-rounded side_max" src="/app/views/fotos/responsable-mujer.png">';
+						}
+					}
+                } else {
+                    //$ruta_img = RUTA_APP . '/app/views/img/uploads/fotos/'. $rows['usuario_foto'];
+                    $ruta_img = '/app/views/img/uploads/fotos/' . $rows['cliente_foto'];
+                    if ($this->isFile($ruta_img)) {
+                        $foto_act = '/app/views/img/uploads/fotos/'. $rows['cliente_foto'];
+                        $tabla .= '<img class="is-rounded  side_max" src="' . $foto_act . '">';
+                    } else {
+						if ($rows['id_tipo_persona'] == 2) {
+							$tabla .= '<img class="is-rounded side_max" src="/app/views/fotos/compania.png">';
+						} else {
+							if ($rows['id_sexo'] == 1) {
+								$tabla .= '<img class="is-rounded side_max" src="/app/views/fotos/responsable.png">';
+							} else {
+								$tabla .= '<img class="is-rounded side_max" src="/app/views/fotos/responsable-mujer.png">';
+							}
+						}
+                    }
+                }
+                $tabla .= '
+								</figure>
+                            </td>';
 				if (empty($rows['nombre_comercial'])){
 				$tabla .= '
                             <td>' . $rows['cliente_nombre'] . " " . $rows['cliente_apellido'] . '</td>';
@@ -428,6 +469,28 @@ class contratosController extends mainModel
 				$tabla .= '
                             <td>' . $rows['nombre_comercial'] . '</td>';
 				}	
+
+				$tabla .= '
+                            <td class="table-img-column">
+								<figure class="image is-48x48" style="margin-left: auto; margin-right: auto;">';
+                if (empty($rows['contrato_foto'])) {
+					$tabla .= '<img class="is-rounded side_max" src="/app/views/fotos/contrato1.png">';
+                } else {
+                    //$ruta_img = RUTA_APP . '/app/views/img/uploads/fotos/'. $rows['usuario_foto'];
+                    $ruta_img = '/app/views/img/uploads/fotos/' . $rows['contrato_foto'];
+                    if ($this->isFile($ruta_img)) {
+                        $foto_act = '/app/views/img/uploads/fotos/'. $rows['contrato_foto'];
+                        $tabla .= '<img class="is-rounded  side_max" src="' . $foto_act . '">';
+                    } else {
+						$tabla .= '<img class="is-rounded side_max" src="/app/views/fotos/contrato1.png">';
+                    }
+                }
+				$tabla .= '
+								</figure>
+                            </td>';
+
+				$tabla .= '
+                            <td>' . $this->ceros($rows['id_contrato']) . '</td>';
 
 				if (empty($rows['nombre'])){
 					$nom_contrato = $rows['nombre_comercial'];
@@ -451,6 +514,7 @@ class contratosController extends mainModel
                             <td>' . $rows['area_desc'] . '</td>
                             <td>' . $rows['concepto'] . '</td>
 							<td>' . $rows['day_work'] . '</td>
+							<td>' . $rows['ruta_desc'] . '</td>
 							<td>' . "(# " . $rows['id_servicio'] . ") - (🗓️ " . $rows['fecha_programada'] . ')</td>
                             <td>' . $rows['status'] . '</td>
                             <td>
@@ -508,6 +572,11 @@ class contratosController extends mainModel
 		}
 		return $tabla;
 	}
+
+	public function isFile($file) {
+        $f = pathinfo($file, PATHINFO_EXTENSION);
+        return (strlen($f) > 0) ? true : false;
+    }	
 
 	public function crearContratos()
 	{
@@ -849,7 +918,7 @@ class contratosController extends mainModel
 		}
 
 
-		if ($frecuencia_base !== 1) { // 1 = semanal
+		if ($frecuencia_base !== 1) { // 1 = semanal 
 			return 'P1W'; // Por defecto, semanal
 		}
 
@@ -941,12 +1010,13 @@ class contratosController extends mainModel
 	}
 
 	public function guardarCambios($datos){
+	
 		$id_contrato = (int) $datos['id_contrato'];
 
 		$id_cliente  = (int) $datos['id_cliente'];
 		$id_direccion = (int) $datos['id_direccion'];
 		$nombre = $datos['nom_contrato'];
-		$costo = $this->verifica_num($datos['$costo']);
+		$costo = isset($datos['$costo']) ? $this->verifica_num($datos['$costo']) : 0;
 		$fecha_ini = $datos['fecha_ini'];
 		$fecha_fin = $datos['fecha_fin'];
 		$id_status = (int) $datos['id_status'];
@@ -1029,6 +1099,9 @@ class contratosController extends mainModel
         ];
 
         try {
+			if (!empty($id_direccion) && !empty($id_ruta)){ 
+				$this->asignarCuadriculaADireccion($id_direccion, $id_ruta);
+			}
 			$resulta = $this->actualizarDatos("contratos", $datos, $condicion);
             if ($resulta) {
 				if ($id_status == 22) {
@@ -1039,7 +1112,7 @@ class contratosController extends mainModel
 						WHERE ct.id_contrato = :v_id_contrato 
 							AND ct.id_status = :v_id_status
 							AND ct.fecha_cancelacion IS NOT NULL
-							AND ss.fecha_programada > ct.fecha_cancelacion";
+							AND ss.service_date > ct.fecha_cancelacion";
 					$params = [
 						":v_id_contrato" => $id_contrato,
 						":v_id_status" => $id_status
@@ -1257,5 +1330,280 @@ class contratosController extends mainModel
 		}
 
 		return $respuesta;
+	}
+
+
+    // ***************************************************************** //
+    // Proceso para actualizar la tabla
+    // ***************************************************************** //
+
+    /**
+     * Asigna una cuadrícula a una ruta basada en coordenadas de dirección
+     * 
+     * @param int $id_direccion ID de la dirección
+     * @param int $id_ruta ID de la ruta a asignar
+     * @return array Resultado de la operación
+     */
+    public function asignarCuadriculaADireccion($id_direccion, $id_ruta)
+    {
+        try {
+            // 1. OBTENER COORDENADAS DE LA DIRECCIÓN
+            $sql = "SELECT lat, lng, direccion 
+                    FROM direcciones 
+                    WHERE id_direccion = :id_direccion 
+                    AND lat IS NOT NULL 
+                    AND lng IS NOT NULL";
+            
+            $params = [
+                ":id_direccion" => $id_direccion
+            ];
+            $direccion = $this->ejecutarConsulta($sql, "", $params);
+            
+            if (!$direccion || empty($direccion['lat']) || empty($direccion['lng'])) {
+                return [
+                    'success' => false,
+                    'error' => 'Dirección no tiene coordenadas válidas',
+                    'id_direccion' => $id_direccion
+                ];
+            }
+            
+            $lat = (float) $direccion['lat'];
+            $lng = (float) $direccion['lng'];
+            
+            // 2. ENCONTRAR LA CUADRÍCULA QUE CONTIENE ESTAS COORDENADAS
+            // La coordenada debe estar DENTRO del rectángulo: lat_sw < lat < lat_ne Y lng_sw < lng < lng_ne
+            $sql = "SELECT id_zona, nombre_zona, lat_sw, lng_sw, lat_ne, lng_ne
+                    FROM zonas_cuadricula
+                    WHERE :lat > lat_sw 
+                    AND :lat < lat_ne
+                    AND :lng > lng_sw 
+                    AND :lng < lng_ne
+                    AND activo = 1
+                    LIMIT 1";
+            
+            $params = [
+                ":lat" => $lat,
+                ":lng" => $lng
+            ];
+
+            $cuadricula = $this->ejecutarConsulta($sql, "", $params);
+            
+            if (!$cuadricula) {
+                return [
+                    'success' => false,
+                    'error' => 'No se encontró cuadrícula para estas coordenadas',
+                    'lat' => $lat,
+                    'lng' => $lng,
+                    'direccion' => $direccion['direccion']
+                ];
+            }
+            
+            $idZona = $cuadricula['id_zona'];
+            $nombreZona = $cuadricula['nombre_zona'];
+            
+            // 3. VERIFICAR SI YA EXISTE LA RELACIÓN EN rutas_zonas_cuadricula
+            $sql = "SELECT id_ruta_zona, id_ruta, orden_en_ruta
+                    FROM rutas_zonas_cuadricula
+                    WHERE id_zona = :id_zona 
+                    AND id_ruta = :id_ruta
+                    AND activo = 1";
+            
+            $existeRelacion = $this->ejecutarConsulta($sql, "", [
+                ":id_zona" => $idZona,
+                ":id_ruta" => $id_ruta
+            ]);
+            
+            if ($existeRelacion) {
+                return [
+                    'success' => true,
+                    'action' => 'already_exists',
+                    'message' => 'La cuadrícula ya está asignada a esta ruta',
+                    'id_zona' => $idZona,
+                    'nombre_zona' => $nombreZona,
+                    'id_ruta_zona' => $existeRelacion['id_ruta_zona']
+                ];
+            }
+            
+            // 4. OBTENER EL SIGUIENTE ORDEN EN LA RUTA
+            $sql = "SELECT COALESCE(MAX(orden_en_ruta), 0) + 1 as siguiente_orden
+                    FROM rutas_zonas_cuadricula
+                    WHERE id_ruta = :id_ruta
+                    AND activo = 1";
+            
+            $ordenResult = $this->ejecutarConsulta($sql, "", [":id_ruta" => $id_ruta]);
+            $siguienteOrden = $ordenResult['siguiente_orden'] ?? 1;
+            
+            // 5. INSERTAR LA NUEVA RELACIÓN
+            $sql = "INSERT INTO rutas_zonas_cuadricula 
+                    (id_ruta, id_zona, orden_en_ruta, activo, creado_en, actualizado_en)
+                    VALUES 
+                    (:id_ruta, :id_zona, :orden_en_ruta, 1, NOW(), NOW())";
+            
+            $params = [
+                ":id_ruta" => $id_ruta,
+                ":id_zona" => $idZona,
+                ":orden_en_ruta" => $siguienteOrden
+            ];
+
+            $this->ejecutarConsulta($sql, "", $params);
+            
+            return [
+                'success' => true,
+                'action' => 'inserted',
+                'message' => 'Cuadrícula asignada exitosamente'
+            ];
+            
+        } catch (Exception $e) {
+            return [
+                'success' => false,
+                'error' => 'Error en base de datos: ' . $e->getMessage(),
+                'id_direccion' => $id_direccion
+            ];
+        }
+    }    
+
+	public function completa0($valor)
+	{
+		$nue_valor = $this->ceros($valor);
+		http_response_code(200);
+		echo json_encode(['success' => true,'dato' => $nue_valor]);
+		exit;
+	}
+
+	/**
+	 * Convierte minutos a formato TIME (HH:MM:SS)
+	 * @param int $minutos - Cantidad de minutos (ej: 55, 125, 1440)
+	 * @return string - Formato "HH:MM:SS" (ej: "00:55:00", "02:05:00", "24:00:00")
+	 */
+	public function minutosATiempo($minutos) {
+		// Validar que sea numérico
+		if (!is_numeric($minutos) || $minutos < 0) {
+			return '00:00:00';
+		}
+		
+		$minutos = (int)$minutos;
+		
+		// Calcular horas, minutos y segundos
+		$horas = floor($minutos / 60);
+		$minutos_restantes = $minutos % 60;
+		$segundos = 0;
+		
+		// Formatear con ceros a la izquierda (HH:MM:SS)
+		return sprintf('%02d:%02d:%02d', $horas, $minutos_restantes, $segundos);
+	}	
+	
+	public function ingresarContrato($data)
+	{
+		if (!empty($data)) {
+			$id_status = $data['id_status'];
+			$contrato_foto = $data['contrato_foto'];
+			$id_cliente = $data['id_cliente'];
+			$id_direccion = $data['id_direccion'];
+			$nombre = $data['nombre'];
+			$tiempo_servicio = $this->minutosATiempo($data['tiempo_servicio']);
+			$retraso_invierno = $data['retraso_invierno'];
+			$id_area = $data['id_area'];
+			$num_semanas = $data['num_semanas'];
+			$costo = $data['costo'];
+			$id_dia_semana = $data['id_dia_semana'];
+			$secondary_day = $data['secondary_day'];
+			$id_ruta = $data['id_ruta'];
+			$fecha_ini = $data['fecha_ini'];
+			$fecha_fin = $data['fecha_fin'];
+			$id_frecuencia_servicio = $data['id_frecuencia_servicio'];
+			$id_frecuencia_pago = $data['id_frecuencia_pago'];
+			$foto = $data['foto'];
+
+			try{
+				$sql = "SELECT id_contrato
+							FROM contratos
+							ORDER BY id_contrato DESC LIMIT 1";
+				$params = [];
+				$contrato_actual = $this->ejecutarConsulta($sql, "", $params);
+
+				$new_id_contrato = (int) $contrato_actual['id_contrato'] + 1;
+
+				$contrato = [
+					['campo_nombre' => 'id_contrato', 'campo_marcador' => ':id_contrato', 'campo_valor' => $new_id_contrato],
+					['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $id_cliente],
+					['campo_nombre' => 'id_status', 'campo_marcador' => ':id_status', 'campo_valor' => $id_status],
+					['campo_nombre' => 'contrato_foto', 'campo_marcador' => ':contrato_foto', 'campo_valor' => $contrato_foto],
+					['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $id_direccion],
+					['campo_nombre' => 'nombre', 'campo_marcador' => ':nombre', 'campo_valor' => $nombre],
+					['campo_nombre' => 'tiempo_servicio', 'campo_marcador' => ':tiempo_servicio', 'campo_valor' => $tiempo_servicio],
+					['campo_nombre' => 'retraso_invierno', 'campo_marcador' => ':retraso_invierno', 'campo_valor' => $retraso_invierno],
+					['campo_nombre' => 'id_area', 'campo_marcador' => ':id_area', 'campo_valor' => $id_area],
+					['campo_nombre' => 'num_semanas', 'campo_marcador' => ':num_semanas', 'campo_valor' => $num_semanas],
+					['campo_nombre' => 'costo', 'campo_marcador' => ':costo', 'campo_valor' => $costo],
+					['campo_nombre' => 'id_dia_semana', 'campo_marcador' => ':id_dia_semana', 'campo_valor' => $id_dia_semana],
+					['campo_nombre' => 'secondary_day', 'campo_marcador' => ':secondary_day', 'campo_valor' => $secondary_day],
+					['campo_nombre' => 'id_ruta', 'campo_marcador' => ':id_ruta', 'campo_valor' => $id_ruta],
+					['campo_nombre' => 'fecha_ini', 'campo_marcador' => ':fecha_ini', 'campo_valor' => $fecha_ini],
+					['campo_nombre' => 'fecha_fin', 'campo_marcador' => ':fecha_fin', 'campo_valor' => $fecha_fin],
+					['campo_nombre' => 'id_frecuencia_servicio', 'campo_marcador' => ':id_frecuencia_servicio', 'campo_valor' => $id_frecuencia_servicio],
+					['campo_nombre' => 'id_frecuencia_pago', 'campo_marcador' => ':id_frecuencia_pago', 'campo_valor' => $id_frecuencia_pago]
+				];
+				$this->guardarDatos('contratos', $contrato);
+				$id_contrato = $new_id_contrato;
+				$this->log("Contrato guardado con éxito con el número: " . $id_contrato);
+				$this->log("Detalle del registro: " . json_encode($contrato));
+
+				if (!empty($foto)){
+					$this->foto($foto, $contrato_foto);
+				}
+
+				http_response_code(200);
+				echo json_encode(['success' => true, 'message' => 'Contrat successfully added, under number ' . $id_contrato]);
+
+			} catch (Exception $e) {
+				$this->logWithBacktrace("error al guardar Contrato " . $e->getMessage(), true);
+				http_response_code(405);
+				echo json_encode([
+					'success' => false,
+					'message' => 'Error loading new Costumer: ' . $e->getMessage()
+				]);
+			}
+		} else {
+			$this->logWithBacktrace("El archivo Data, llego vacio", true);
+			http_response_code(405);
+			echo json_encode([
+				'success' => false,
+				'message' => 'There is no data to be recorded'
+			]);
+		}
+	}
+
+	public function foto($foto, $contrato_foto){
+		try{		
+			$uploadDir = APP_R_PROY . 'app/views/img/uploads/fotos/';
+			if (!file_exists($uploadDir)) {
+				mkdir($uploadDir, 0775, true);
+				chgrp($uploadDir, 'www-data');
+				chmod($uploadDir, 0775);
+			}
+
+			$extension = pathinfo($foto['name'], PATHINFO_EXTENSION);
+			$allowedExtensions = ['jpg', 'jpeg', 'png', 'gif'];
+
+			if (!in_array(strtolower($extension), $allowedExtensions)) {
+				$this->logWithBacktrace("Intento de cambio de foto fallido: extensión de archivo no permitida", true);
+				return false; // Extensión no permitida
+			}
+
+			$targetFile = $uploadDir . $contrato_foto;
+
+			if (move_uploaded_file($foto['tmp_name'], $targetFile)) {
+				chmod($targetFile, 0644); // Asegurarse de que el archivo sea legible
+				return true;
+			} else {
+				$this->logWithBacktrace("Intento de cambio de foto fallido: error al mover el archivo", true);
+				return false; // Error al mover el archivo
+			}
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error loading new Photo: ' . $e->getMessage()
+            ]);
+        }
 	}
 }

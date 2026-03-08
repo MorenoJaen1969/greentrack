@@ -15,6 +15,7 @@ if (!defined('APP_R_PROY')) {
 require_once APP_R_PROY . 'app/models/mainModel.php';
 
 use app\models\mainModel;
+
 $modelo = new mainModel();
 
 // === 2. Detectar mensaje de Amazon SNS (Confirmación) ===
@@ -60,7 +61,7 @@ if (isset($_SERVER['HTTP_X_AMZ_SNS_MESSAGE_TYPE'])) {
 // === 3. Si no es SNS, verificar método POST (para pruebas) ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -80,7 +81,8 @@ procesarGPS($modelo, $gpsData);
 exit();
 
 // === 4. Función para procesar los datos GPS ===
-function procesarGPS($modelo, $data) {
+function procesarGPS($modelo, $data)
+{
     // Validar estructura mínima
     if (!isset($data['data']['latitude']) || !isset($data['data']['longitude'])) {
         error_log("GPS: Datos incompletos -> " . json_encode($data));
@@ -115,5 +117,3 @@ function procesarGPS($modelo, $data) {
         echo json_encode(['error' => 'Error interno']);
     }
 }
-
-?>

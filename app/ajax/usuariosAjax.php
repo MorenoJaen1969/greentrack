@@ -9,7 +9,7 @@ while (ob_get_level()) {
 }
 
 // === 2. Iniciar sesión ===
-require_once "../views/inc/session_start.php"; 
+require_once "../views/inc/session_start.php";
 
 // === 3. Cargar configuración y autoload === 
 require_once "../../config/app.php";
@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 7. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -54,7 +54,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -68,12 +68,13 @@ $modulo = $inputData['modulo_usuarios'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'Falta el parámetro "modulo_usuarios"']);
+    echo json_encode(['success' => false, 'error' => 'The parameter is missing. "modulo_usuarios"']);
     exit();
 }
 
 // === 10. Cargar el controlador ===
 require_once '../controllers/usuariosController.php';
+
 use app\controllers\usuariosController;
 
 $controller = new usuariosController();
@@ -179,11 +180,11 @@ try {
             $token = $inputData['token'];
             $dispositivo = $inputData['dispositivo'];
             $modo = $inputData['modo'] ?? 'active'; // 'active' o 'pause'
-            
+
             $resultado = $controller->heartbeat($token, $dispositivo, $modo);
-            echo json_encode(['success' => true]);            
+            echo json_encode(['success' => true]);
             exit();
-            
+
 
         case 'changeAvatar';
             if (!isset($_FILES['avatar']) || !isset($inputData['email']) || !isset($inputData['token'])) {
@@ -199,7 +200,7 @@ try {
                 echo json_encode(['success' => true]);
             } else {
                 echo json_encode(['success' => false, 'message' => 'File move failed']);
-            }            
+            }
             exit();
 
         case 'update_usuario':
@@ -213,11 +214,9 @@ try {
             echo json_encode(['success' => false, 'error' => 'Módulo no válido: ' . $modulo]);
             exit();
     }
-
 } catch (Exception $e) {
     echo json_encode(['success' => false, 'error' => 'Error interno: ' . $e->getMessage()]);
 }
 
 ob_end_clean(); // Limpiar cualquier salida previa
 exit();
-?>

@@ -327,4 +327,23 @@ class condadosController extends mainModel
         $data = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
         return $data;
     }
+
+    public function getCondados($id_estado) {
+        try {
+            $stmt = "SELECT c.id_condado, c.nombre, c.centro_lat AS latitud_centro, 
+                    c.centro_lng AS longitud_centro, 10 AS zoom_default
+                FROM condados c
+                INNER JOIN estados e ON c.id_estado = e.id_estado
+                WHERE c.id_estado = :v_id_estado AND c.activo = 1
+                ORDER BY c.nombre ASC";
+            $params = [
+                'v_id_estado' => $id_estado
+            ];
+            $data = $this->ejecutarConsulta($stmt, "", $params, "fetchAll");
+
+            return $data;
+        } catch (Exception $e) {
+            return $e->getMessage();
+        }
+    }    
 }

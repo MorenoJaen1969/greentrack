@@ -1,6 +1,6 @@
 <?php
 // rutasAjax.php
-// === 1. Iniciar buffer y sesión (lo primero) ===
+// === 1. Iniciar buffer y sesión (lo primero) === 
 ob_start();
 require_once "../views/inc/session_start.php";
 
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,17 +51,18 @@ $modulo = $inputData['modulo_rutas'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_rutas"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_rutas"']);
     exit();
 }
 
 // === 8. Cargar el controlador === 
 require_once  '../controllers/rutas_mapaController.php';
+
 use app\controllers\rutas_mapaController;
 
 $controller = new rutas_mapaController();
 
-// === 9. Enrutar según el módulo ===
+// === 9. Enrutar según el módulo === 
 switch ($modulo) {
     case 'listar_rutas':
         try {
@@ -78,7 +79,7 @@ switch ($modulo) {
         $id_ruta = $inputData['id_ruta'] ?? null;
         if (!$id_ruta) {
             http_response_code(400);
-            echo json_encode(['error' => 'Falta el parámetro "id_ruta"']);
+            echo json_encode(['error' => 'The parameter is missing. "id_ruta"']);
             exit();
         }
         try {
@@ -95,10 +96,10 @@ switch ($modulo) {
         $nombre_ruta = $inputData['nombre_ruta'] ?? null;
         $color_ruta = $inputData['color_ruta'] ?? '#000000';
         $zonas = $inputData['zonas'] ?? []; // NUEVO: array de zonas con direcciones
-        
+
         if (!$nombre_ruta) {
             http_response_code(400);
-            echo json_encode(['error' => 'Falta el parámetro "nombre_ruta"']);
+            echo json_encode(['error' => 'The parameter is missing. "nombre_ruta"']);
             exit();
         }
         if (empty($zonas)) {
@@ -106,12 +107,12 @@ switch ($modulo) {
             echo json_encode(['error' => 'Debe seleccionar al menos una zona']);
             exit();
         }
-        
+
         try {
             $id_ruta = $controller->crearRutaCompleta($nombre_ruta, $color_ruta, $zonas);
             echo json_encode([
-                'success' => true, 
-                'message' => 'Ruta creada exitosamente', 
+                'success' => true,
+                'message' => 'Ruta creada exitosamente',
                 'id_ruta' => $id_ruta
             ]);
         } catch (Exception $e) {
@@ -125,13 +126,13 @@ switch ($modulo) {
         $nombre_ruta = $inputData['nombre_ruta'] ?? null;
         $color_ruta = $inputData['color_ruta'] ?? null;
         $cambios = $inputData['cambios'] ?? null;
-        
+
         if (!$id_ruta || !$nombre_ruta) {
             http_response_code(400);
             echo json_encode(['error' => 'Faltan parámetros requeridos']);
             exit();
         }
-        
+
         try {
             $resultado = $controller->actualizarRutaCompleta($id_ruta, $nombre_ruta, $color_ruta, $cambios);
             http_response_code(200);
@@ -150,7 +151,7 @@ switch ($modulo) {
         $id_ruta = $inputData['id_ruta'] ?? null;
         if (!$id_ruta) {
             http_response_code(400);
-            echo json_encode(['error' => 'Falta el parámetro "id_ruta"']);
+            echo json_encode(['error' => 'The parameter is missing. "id_ruta"']);
             exit();
         }
         try {
@@ -177,13 +178,13 @@ switch ($modulo) {
         // Para modal de selección: direcciones disponibles en una zona
         $id_zona = $inputData['id_zona'] ?? null;
         $id_ruta_actual = $inputData['id_ruta_actual'] ?? null; // Para excluir o marcar las ya en ruta
-        
+
         if (!$id_zona) {
             http_response_code(400);
-            echo json_encode(['error' => 'Falta el parámetro "id_zona"']);
+            echo json_encode(['error' => 'The parameter is missing. "id_zona"']);
             exit();
         }
-        
+
         try {
             $direcciones = $controller->obtenerDireccionesZonaParaSeleccion($id_zona, $id_ruta_actual);
             http_response_code(200);
@@ -219,17 +220,17 @@ switch ($modulo) {
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
         break;
-                
+
     case 'actualizar_orden_direcciones':
         $id_ruta = $inputData['id_ruta'] ?? null;
         $orden_direcciones = $inputData['orden_direcciones'] ?? [];
-        
+
         if (!$id_ruta || !is_array($orden_direcciones)) {
             http_response_code(400);
             echo json_encode(['error' => 'Parámetros inválidos']);
             exit();
         }
-        
+
         try {
             $controller->actualizarOrdenDirecciones($id_ruta, $orden_direcciones);
             http_response_code(200);
@@ -244,7 +245,7 @@ switch ($modulo) {
         $id_ciudad = $inputData['id_ciudad'] ?? null;
         if (!$id_ciudad) {
             http_response_code(400);
-            echo json_encode(['error' => 'Falta el parámetro "id_ciudad"']);
+            echo json_encode(['error' => 'The parameter is missing. "id_ciudad"']);
             exit();
         }
         try {
@@ -276,17 +277,17 @@ switch ($modulo) {
         $id_ruta = $inputData['id_ruta'];
 
         $routes = $controller->consultar_rutas();
-        $cadena='';
+        $cadena = '';
         $cadena = '<option value="">Select a Route</option>';
 
-        foreach ($routes as $curr){
-            $cadena = $cadena. '<option value="' . $curr['id_ruta'] . '" ';
-            if($id_ruta == $curr['id_ruta']){ 
-                $cadena = $cadena. 'selected> ';
-            }else{
-                $cadena = $cadena. '> ';
+        foreach ($routes as $curr) {
+            $cadena = $cadena . '<option value="' . $curr['id_ruta'] . '" ';
+            if ($id_ruta == $curr['id_ruta']) {
+                $cadena = $cadena . 'selected> ';
+            } else {
+                $cadena = $cadena . '> ';
             }
-            $cadena = $cadena. $curr['nombre_ruta'] . '</option>';
+            $cadena = $cadena . $curr['nombre_ruta'] . '</option>';
         }
         echo $cadena;
         break;
@@ -300,7 +301,7 @@ switch ($modulo) {
         http_response_code(200);
         echo json_encode([
             'success' => true,
-            'resulta' => $resulta   
+            'resulta' => $resulta
         ]);
         exit();
 
@@ -327,7 +328,7 @@ switch ($modulo) {
 
         if (!$id_ruta) {
             http_response_code(400);
-            echo json_encode(['error' => 'Falta el parámetro "id_ruta"']);
+            echo json_encode(['error' => 'The parameter is missing. "id_ruta"']);
             exit();
         }
 
@@ -341,7 +342,7 @@ switch ($modulo) {
             $resultado = $controller->guardarCambiosBatch($id_ruta, $nombre_ruta, $color_ruta, $cambios);
             http_response_code(200);
             echo json_encode([
-                'success' => true, 
+                'success' => true,
                 'message' => 'Changes saved successfully',
                 'data' => $resultado
             ]);
@@ -350,7 +351,7 @@ switch ($modulo) {
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
         break;
-        
+
     // rutas_mapaAjax.php
     case 'listar_direcciones_libres_con_contrato':
         try {
@@ -360,13 +361,13 @@ switch ($modulo) {
             http_response_code(500);
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
-        exit();        
+        exit();
 
     case 'obtener_clientes':
         $id_ruta = $inputData['id_ruta'] ?? null;
         if (!$id_ruta) {
             http_response_code(400);
-            echo json_encode(['error' => 'Falta el parámetro "id_ruta"']);
+            echo json_encode(['error' => 'The parameter is missing. "id_ruta"']);
             exit();
         }
         try {
@@ -412,4 +413,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

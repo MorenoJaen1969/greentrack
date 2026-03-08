@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_route_day'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_route_day"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_route_day"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/route_dayController.php';
+
 use app\controllers\route_dayController;
 
 $controller = new route_dayController();
@@ -82,14 +83,14 @@ switch ($modulo) {
         $day = $inputData['day'] ?? null;
         $route_ids = $inputData['route_ids'] ?? [];
 
-        if (!$day || !in_array($day, ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'])) {
+        if (!$day || !in_array($day, ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])) {
             echo json_encode(['success' => false, 'message' => 'Invalid day']);
             exit;
         }
 
         $resultado = $controller->guardar_asignacion_dia($day, $route_ids);
 
-        if (!$resultado){
+        if (!$resultado) {
             echo json_encode(['success' => false, 'message' => 'Database error']);
         } else {
             echo json_encode(['success' => true]);
@@ -109,4 +110,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

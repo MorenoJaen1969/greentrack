@@ -94,7 +94,6 @@ $opcion = "clientes";
 
 
 $cont_status = $clientes->contar_status();
-error_log("Status: " . print_r($cont_status, true));
 $count_activos = $cont_status['activos'] ?? 0;
 $count_inactivos = $cont_status['inactivos'] ?? 0;
 $count_todos = $count_activos + $count_inactivos;
@@ -105,9 +104,7 @@ $clase_f = "fa-solid fa-filter";
 ?>
 
 <main>
-    <?php
-    require_once $encabezado;
-    ?>
+    <?php require_once $encabezado; ?>
 
     <div class="containe-grid">
         <div class="containe-grid-01">

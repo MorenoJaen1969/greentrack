@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_DG'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "datos_generales"']);
+    echo json_encode(['error' => 'The parameter is missing. "datos_generales"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/datosgeneralesController.php';
+
 use app\controllers\datosgeneralesController;
 
 $controller = new datosgeneralesController();
@@ -66,7 +67,7 @@ switch ($modulo) {
     case 'obtener_clave':
         $clave = $inputData['clave'] ?? null;
         if ($clave) {
-            $controller->obtener_Clave($clave);  
+            $controller->obtener_Clave($clave);
         } else {
             http_response_code(400);
             echo json_encode(['error' => 'La clave es requerida']);
@@ -74,7 +75,7 @@ switch ($modulo) {
         break;
 
     case 'datos_para_gps':
-        $controller->datos_para_gps();  
+        $controller->datos_para_gps();
         break;
 
     case 'verificar_acceso':
@@ -82,29 +83,29 @@ switch ($modulo) {
         http_response_code($result['success'] ? 200 : 401);
         echo json_encode($result);
         break;
-        
+
     case 'autenticar':
         $result = $controller->autenticarParametros($inputData);
         http_response_code($result['success'] ? 200 : 401);
         echo json_encode($result);
         break;
-        
+
     case 'cerrar_sesion':
         $result = $controller->cerrarSesionParametros();
         echo json_encode($result);
         break;
-        
+
     case 'set_redirect_url':
         $url = $inputData['url'] ?? '';
         $result = $controller->setRedirectUrl($url);
         echo json_encode($result);
         break;
-        
+
     case 'clear_redirect_url':
         $result = $controller->clearRedirectUrl();
         echo json_encode($result);
         break;
-        
+
     case 'es_url_protegida':
         $url = $inputData['url'] ?? '';
         $result = [
@@ -114,26 +115,26 @@ switch ($modulo) {
         ];
         echo json_encode($result);
         break;
-        
+
     case 'obtener_procesos_protegidos':
         $result = $controller->obtenerProcesosProtegidos();
         http_response_code(200);
         echo json_encode(['success' => true, 'procesos' => $result]);
         break;
-        
+
     // Configuration methods
     case 'obtener_configuracion':
         $result = $controller->obtenerConfiguracion();
         http_response_code($result['success'] ? 200 : 500);
         echo json_encode($result);
         break;
-        
+
     case 'guardar_configuracion':
         $result = $controller->guardarConfiguracion($inputData);
         http_response_code($result['success'] ? 200 : 400);
         echo json_encode($result);
         break;
-        
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Invalid module: ' . $modulo]);
@@ -141,4 +142,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

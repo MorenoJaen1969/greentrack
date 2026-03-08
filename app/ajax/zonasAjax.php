@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_zonas'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_zonas"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_zonas"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/zonasController.php';
+
 use app\controllers\zonasController;
 
 $controller = new zonasController();
@@ -90,9 +91,13 @@ switch ($modulo) {
 
         try {
             $id_zona = $controller->crearZona(
-                $lat_sw, $lng_sw, $lat_ne, $lng_ne,
+                $lat_sw,
+                $lng_sw,
+                $lat_ne,
+                $lng_ne,
                 $ids_direcciones,
-                $nombre_zona, $id_ruta
+                $nombre_zona,
+                $id_ruta
             );
             echo json_encode(['success' => true, 'id_zona' => $id_zona, 'message' => 'Zona creada exitosamente']);
         } catch (Exception $e) {
@@ -116,7 +121,7 @@ switch ($modulo) {
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
         break;
-                
+
     case 'eliminar_direccion_de_zona':
         $id_zona = $inputData['id_zona'] ?? null;
         $id_direccion = $inputData['id_direccion'] ?? null;
@@ -141,4 +146,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

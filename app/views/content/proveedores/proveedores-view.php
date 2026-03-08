@@ -209,7 +209,7 @@ window.CONFIG_BUSQUEDA = <?php echo json_encode([
                 })
             });
             const html = await res.text();
-            // ✅ Reemplazar SOLO el contenedor con ID fijo
+            // ✅ Reemplazar SOLO el contenedor con ID fijo 
 
             const wrapper = document.getElementById('tabla-proveedores-wrapper');
             if (wrapper) {

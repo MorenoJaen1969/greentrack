@@ -8,11 +8,11 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 9999;
+    z-index: 15000;
     cursor: not-allowed;
 }
 
-/* INFINITO HORIZONTAL que realmente ocupa 80vw */
+/* INFINITO HORIZONTAL que realmente ocupa 80vw  */
 /* INFINITO HORIZONTAL - TAMAÑO MONUMENTAL */
 .infinity-svg {
     width: 80vmin !important;   /* 80% del menor lado de la pantalla */

@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_estados'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_estados"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_estados"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/estadosController.php';
+
 use app\controllers\estadosController;
 
 $controller = new estadosController();
@@ -68,22 +69,35 @@ switch ($modulo) {
         $id_estado = $inputData['id_estado'];
 
         $estados = $controller->consultar_estados($id_pais);
-        $cadena='';
+        $cadena = '';
 
         $cadena = '<option value="">Select a State</option>';
 
-        foreach ($estados as $curr){
-            $cadena = $cadena. '<option value="' . $curr['id_estado'] . '" ';
-            if($id_estado == $curr['id_estado']){ 
-                $cadena = $cadena. 'selected> ';
-            }else{
-                $cadena = $cadena. '> ';
+        foreach ($estados as $curr) {
+            $cadena = $cadena . '<option value="' . $curr['id_estado'] . '" ';
+            if ($id_estado == $curr['id_estado']) {
+                $cadena = $cadena . 'selected> ';
+            } else {
+                $cadena = $cadena . '> ';
             }
-            $cadena = $cadena. $curr['nombre'] . '</option>';
+            $cadena = $cadena . $curr['nombre'] . '</option>';
         }
         echo $cadena;
         break;
-    
+
+    case 'data_direcciones':
+        $id_pais = $inputData['id_pais'];
+        $estados = $controller->getEstados($id_pais);
+
+        if (is_array($estados)) {
+            http_response_code(200);
+            echo json_encode(['success' => true, 'data' => $estados]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Query error: ' . $estados]);
+        }
+        exit();
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);
@@ -91,4 +105,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

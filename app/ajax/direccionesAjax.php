@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_direcciones'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_direcciones"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_direcciones"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/direccionesController.php';
+
 use app\controllers\direccionesController;
 
 $controller = new direccionesController();
@@ -72,13 +73,13 @@ switch ($modulo) {
 
         $controller->actualizar_direccion($id_direccion, $direccion, $lat, $lng, $cambio);
         break;
-    
+
     case 'eliminar':
         $id_direccion = $inputData['id_direccion'];
 
         $controller->eliminar_direccion($id_direccion);
         break;
-    
+
     case 'listar_tabla':
         $pagina = $inputData['pagina'] ?? 1;
         $registros_por_pagina = $inputData['registros_por_pagina'] ?? 10;
@@ -99,7 +100,7 @@ switch ($modulo) {
         $tabla_html = $controller->listardireccionesControlador($dato_ori);
         echo $tabla_html; // Solo el HTML de la tabla + paginación
         break;
-    
+
     case 'cambio_cant_reg':
         $datos = $inputData['datos'];
 
@@ -113,7 +114,7 @@ switch ($modulo) {
 
         $_SESSION['nav_direcciones'] = [
             'pagina_direcciones' => 1,
-            'registrosPorPagina' => $registrosPorPagina 
+            'registrosPorPagina' => $registrosPorPagina
         ];
 
         $dato_ori = [
@@ -129,7 +130,7 @@ switch ($modulo) {
         $tabla_html = $controller->listardireccionesControlador($dato_ori);
         echo $tabla_html; // Solo el HTML de la tabla + paginación
         break;
-    
+
     case 'update_direccion':
         // Extraer datos del formulario (FormData envía como $_POST)
         $id_direccion = $inputData['id_direccion'] ?? null;
@@ -174,7 +175,7 @@ switch ($modulo) {
         ];
         $condicion = [
             'condicion_campo' => 'id_direccion',
-            'condicion_operador' => '=', 
+            'condicion_operador' => '=',
             'condicion_marcador' => ':id_direccion',
             'condicion_valor' => $id_direccion
         ];
@@ -182,9 +183,43 @@ switch ($modulo) {
         $controller->guardarCambios('direcciones', $datos, $condicion);
         break;
 
+    case 'guardar_direccion':
+        $datos = $inputData['paquete'];
+        
+        $direccion = $datos['direccion'];
+        $lat = $datos['latitud'];
+        $lng = $datos['longitud'];
+        $id_pais = $datos['id_pais'];
+        $id_estado = $datos['id_estado'];
+        $id_condado = $datos['id_condado'];
+        $id_ciudad = $datos['id_ciudad'];
+        $id_zip = $datos['zip'];
+        $id_address_clas = 1;
+        $id_cliente = $datos['id_cliente'];
+        $id_address_type = 3;
+        $id_status = 10;
+        $id_land_use = $datos['id_land_use'];
+
+        $datos = [
+            ['campo_nombre' => 'direccion', 'campo_marcador' => ':direccion', 'campo_valor' => $direccion],
+            ['campo_nombre' => 'lat', 'campo_marcador' => ':lat', 'campo_valor' => $lat],
+            ['campo_nombre' => 'lng', 'campo_marcador' => ':lng', 'campo_valor' => $lng],
+            ['campo_nombre' => 'id_pais', 'campo_marcador' => ':id_pais', 'campo_valor' => $id_pais],
+            ['campo_nombre' => 'id_estado', 'campo_marcador' => ':id_estado', 'campo_valor' => $id_estado],
+            ['campo_nombre' => 'id_condado', 'campo_marcador' => ':id_condado', 'campo_valor' => $id_condado],
+            ['campo_nombre' => 'id_ciudad', 'campo_marcador' => ':id_ciudad', 'campo_valor' => $id_ciudad],
+            ['campo_nombre' => 'id_address_clas', 'campo_marcador' => ':id_address_clas', 'campo_valor' => $id_address_clas],
+            ['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $id_cliente],
+            ['campo_nombre' => 'id_address_type', 'campo_marcador' => ':id_address_type', 'campo_valor' => $id_address_type],
+            ['campo_nombre' => 'id_status', 'campo_marcador' => ':id_status', 'campo_valor' => $id_status],
+            ['campo_nombre' => 'id_land_use', 'campo_marcador' => ':id_land_use', 'campo_valor' => $id_land_use]
+        ];
+        $controller->nuevoRegistro('direcciones', $datos, $id_zip);
+        exit();
+
     case 'guardar_geofence':
         $accion  = $inputData['accion'];
-        if ($accion=='guardar'){
+        if ($accion == 'guardar') {
             $id_direccion = $inputData['id_direccion'] ?? null;
             $geofence_data = $inputData['geofence_data'] ?? '';
 
@@ -211,9 +246,9 @@ switch ($modulo) {
             }
 
             // Determinar tipo
-            $tipo = isset($decoded['properties']['type']) && $decoded['properties']['type'] === 'circle' 
-                ? 'circle' 
-                : 'polygon';        
+            $tipo = isset($decoded['properties']['type']) && $decoded['properties']['type'] === 'circle'
+                ? 'circle'
+                : 'polygon';
 
             $datos = [
                 ['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $id_direccion],
@@ -222,9 +257,8 @@ switch ($modulo) {
             ];
             $condicion = [];
             $controller->guardarGeofence('geofence', $datos, $condicion, $id_direccion, 0, false);
-
-        }else{
-            if ($accion=='modificar'){
+        } else {
+            if ($accion == 'modificar') {
                 $id_direccion = $inputData['id_direccion'];
                 $id_geofence = $inputData['id_geofence'];
                 $datos = [
@@ -258,28 +292,49 @@ switch ($modulo) {
     case 'crear_select':
         $id_cliente = $inputData['id_cliente'];
         $id_direccion = $inputData['id_direccion'];
-            
+
         $direcciones = $controller->consultar_direcciones($id_cliente);
-        $cadena='';
+        
+        if(empty($id_direccion)){
+            $cant_reg = count((array) $direcciones);
+            if ($cant_reg === 1) {
+                $id_direccion = $direcciones[0]['id_direccion'];
+            }
+        }
+
+        $cadena = '';
 
         $cadena = '<option value="">Select a Address</option>';
 
-        foreach ($direcciones as $curr){
-            $cadena = $cadena. '<option value="' . $curr['id_direccion'] . '" ';
-            if($id_direccion == $curr['id_direccion']){ 
-                $cadena = $cadena. 'selected> ';
-            }else{
-                $cadena = $cadena. '> ';
+        foreach ($direcciones as $curr) {
+            $cadena = $cadena . '<option value="' . $curr['id_direccion'] . '" ';
+            if ($id_direccion == $curr['id_direccion']) {
+                $cadena = $cadena . 'selected> ';
+            } else {
+                $cadena = $cadena . '> ';
             }
-            $cadena = $cadena. $curr['direccion'] . '</option>';
+            $cadena = $cadena . $curr['direccion'] . '</option>';
         }
         echo $cadena;
         break;
 
+    case 'contar_direcciones':
+        $id_cliente = $inputData['id_cliente'];
+        $direcciones = $controller->contar_direcciones($id_cliente);
+
+        if (count((array) $direcciones) === 1){
+            $id_direccion = $direcciones[0]['id_direccion'];
+        } else {
+            $id_direccion = 0;
+        }
+        http_response_code(200);
+        echo json_encode(['success' => true, 'direcciones' => $direcciones, 'id_direccion' =>$id_direccion]);
+        exit();
+
     case 'listar_direcciones_con_coordenadas':
         $controller->consultar_direcciones_con_coordenadas();
         break;
-                
+
     case 'listar_direcciones_en_area':
         $lat_sw = $inputData['lat_sw'] ?? null;
         $lng_sw = $inputData['lng_sw'] ?? null;
@@ -308,4 +363,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

@@ -25,7 +25,7 @@ echo "╚═══════════════════════�
 // ======================================================================
 
 $CONFIG = [
-    'csv_verificado' => '/var/www/greentrack/scripts/separacion_nombres_limpieza_VERIFICADO.csv',
+    'csv_verificado' => '/var/www/greentrack/scripts/actualizar_geografia/separacion_nombres_limpieza_VERIFICADO.csv',
     'apply_changes' => true,  // ← ¡MANTENER false PARA SIMULACIÓN!
     'backup_sql' => '/var/www/greentrack/scripts/backup_nombres_' . date('Ymd_His') . '.sql',
     'log_file' => '/var/www/greentrack/scripts/actualizacion_nombres_log.txt'

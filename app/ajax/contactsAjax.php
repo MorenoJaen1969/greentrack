@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -41,7 +41,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -53,7 +53,7 @@ $modulo = $inputData['modulo_contacts'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_contacts"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_contacts"']);
     exit();
 }
 
@@ -180,7 +180,7 @@ switch ($modulo) {
 
     case 'unread_count':
         $params = [
-            'success' => false, 
+            'success' => false,
             'count' => 0
         ];
         if (!isset($_SESSION['user_valid']) || !$_SESSION['user_valid']) {
@@ -196,7 +196,7 @@ switch ($modulo) {
         $count = $controller->getNumberChatNew($userId);
 
         $params = [
-            'success' => true, 
+            'success' => true,
             'count' => $count
         ];
         echo json_encode($params);

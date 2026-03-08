@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_dia_semana'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_dia_semana"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_dia_semana"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/dia_semanaController.php';
+
 use app\controllers\dia_semanaController;
 
 $controller = new dia_semanaController();
@@ -73,42 +74,42 @@ switch ($modulo) {
         $id_dia_semana = $inputData['id_dia_semana'];
 
         $dia_semana = $controller->consultar_dia_semana();
-        $cadena='';
+        $cadena = '';
 
         $cadena = '<option value="">Select a Day Work</option>';
 
-        foreach ($dia_semana as $curr){
-            $cadena = $cadena. '<option value="' . $curr['id_dia_semana'] . '" ';
-            if($id_dia_semana == $curr['id_dia_semana']){ 
-                $cadena = $cadena. 'selected> ';
-            }else{
-                $cadena = $cadena. '> ';
+        foreach ($dia_semana as $curr) {
+            $cadena = $cadena . '<option value="' . $curr['id_dia_semana'] . '" ';
+            if ($id_dia_semana == $curr['id_dia_semana']) {
+                $cadena = $cadena . 'selected> ';
+            } else {
+                $cadena = $cadena . '> ';
             }
-            $cadena = $cadena. $curr['dia_ingles'] . '</option>';
+            $cadena = $cadena . $curr['dia_ingles'] . '</option>';
         }
         echo $cadena;
         break;
-    
+
     case 'crear_select_two_d':
         $secondary_day = $inputData['secondary_day'];
 
         $dia_semana = $controller->consultar_dia_semana();
-        $cadena='';
+        $cadena = '';
 
         $cadena = '<option value="">Select a Day Work</option>';
 
-        foreach ($dia_semana as $curr){
-            $cadena = $cadena. '<option value="' . $curr['id_dia_semana'] . '" ';
-            if($secondary_day == $curr['id_dia_semana']){ 
-                $cadena = $cadena. 'selected> ';
-            }else{
-                $cadena = $cadena. '> ';
+        foreach ($dia_semana as $curr) {
+            $cadena = $cadena . '<option value="' . $curr['id_dia_semana'] . '" ';
+            if ($secondary_day == $curr['id_dia_semana']) {
+                $cadena = $cadena . 'selected> ';
+            } else {
+                $cadena = $cadena . '> ';
             }
-            $cadena = $cadena. $curr['dia_ingles'] . '</option>';
+            $cadena = $cadena . $curr['dia_ingles'] . '</option>';
         }
         echo $cadena;
         break;
-        
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);
@@ -116,4 +117,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

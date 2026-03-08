@@ -1,3 +1,8 @@
+<?php
+    $ruta_diasNoActividad_ajax = RUTA_APP . "/app/ajax/dias_no_actividadAjax.php";
+    $ruta_servicios_ajax = RUTA_APP . "/app/ajax/serviciosAjax.php";
+?>
+
 <div class="dashboard-container">
     <!-- 30% - Carrusel de servicios -->
     <div class="carousel-wrapper">
@@ -26,12 +31,12 @@
             </h3>
         </div>
 
-        <!-- Contenedor del carrusel (igual a tu estructura) -->
+        <!-- Contenedor del carrusel (igual a tu estructura)  -->
         <div class="carrusel-container">
             <div class="contenedor-piso-detalles">
                 <div class="carrusel" id="servicio-carrusel">
                     <div id="carrusel" class="dis_caja forma_caja">
-                        <!-- Aquí se cargan las tarjetas o el mensaje de estado -->
+                        <!-- Aquí se cargan las tarjetas o el mensaje de estado --> 
                     </div>
                     <!-- Tarjetas generadas por JS -->
                 </div>
@@ -48,7 +53,7 @@
 <!-- Modal: Daily Status Matrix -->
 <div id="modal-daily-status" class="estilo_modal1">
     <div class="primer_nivel">
-        <!-- Encabezado -->
+        <!-- Encabezado  -->
         <div
             style="padding: 15px; background: #2196F3; color: white; display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin: 0; font-size: 1.2em;">Daily Status – Crew vs Clients</h3>
@@ -110,6 +115,9 @@
                     <div class="titServicios1">
                         <h4 id="tit_tipo_servicio" style="margin: 0; color: #2c7;">Pre-Assigned</h4>
                         <div>
+                            <button id="btn-cargo_original" class="btn-accion" style="margin: 0; padding: 10px; color: rgb(39, 64, 179);">Origin Load</button>
+                        </div>
+                        <div>
                             <label for="fecha-despacho">This dispatch is for the day:</label>
                             <input type="date" id="fecha-despacho" class="formatoFecha">
                         </div>
@@ -136,6 +144,7 @@
                 <div class="boxes">
                     <button id="btn-mover-a-no-asignados" disabled title="Remove from Today">➡️</button>
                     <button id="btn-mover-a-asignados" disabled title="Add to Today">⬅️</button>
+                    <button id="btn-mover-a-otra-ruta" class="det_boton" disabled title="move route">🔃</button>
                 </div>
             </div>
 
@@ -163,6 +172,38 @@
             </div>
         </div>
 
+    </div>
+</div>
+
+<!-- Formulario para ordenar los preservicios asignados -->
+<div id="reo-modal-despacho" class="modal-overlay" style="display: none;">
+    <div class="reoModalReorder">
+        <!-- Encabezado -->
+        <div class="modal-header">
+            <h3 class="titulo_modal">Reorder Dispatch</h3>
+            <!-- <button id="btn-zona_c">🔄 Crear Zonas Cuadriculas</button> -->
+            <button id="reoCloseReorder" class="btn_cerrar">&times;</button>
+        </div>
+        <div class="reoModalReorderContainer">
+            <div class="reoGridReorder_01">
+                <div class="formatoLista">
+                    <h4>Available Routes</h4>
+                    <table class="tabla-detalles" id="tabla-detalles-servicio1">
+                        <div id="listado_rutas"></div> 
+                    </table>                        
+                </div>
+            </div>
+
+            <div class="reoGridReorder_02"> 
+                <div id="clientes-ruta-seleccionada" class="reoContainer">
+                    <div id="listado_clientes"></div> 
+                </div> 
+            </div>
+
+            <div class="reoGridReorder_03"> 
+                <button id="reobtn-finalizar" class="btn-accion btn-finalizar">Continue with the Pre-service</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -485,17 +526,208 @@
     </div>
 </div>
 
+<!-- ==========================================
+MODAL: Schedule Configuration (MDS)
+========================================== -->
+<div id="MDS_modal" class="MDS_modal-overlay">
+    <div class="MDS_modal-container">
+        
+        <!-- Header con botón cerrar -->
+        <div class="MDS_modal-header">
+            <h2 class="MDS_modal-title">
+                <span class="MDS_icon">📅</span>
+                Schedule Configuration
+            </h2>
+            <button id="MDS_btn_close" class="MDS_btn-close" aria-label="Close modal">✕</button>
+        </div>
+        
+        <!-- Divider -->
+        <div class="MDS_divider"></div>
+        
+        <!-- Body -->
+        <div class="MDS_modal-body">
+            
+            <!-- Sección: Fecha de Consulta -->
+            <div class="MDS_section">
+                <label class="MDS_label" for="MDS_input_fecha">Consultation Date</label>
+                <div class="MDS_input-group">
+                    <input 
+                        type="date" 
+                        id="MDS_input_fecha" 
+                        class="MDS_input"
+                        aria-label="Select consultation date"
+                    >
+                    <button id="MDS_btn_hoy" class="MDS_btn-secondary" type="button">
+                        🔄 Today
+                    </button>
+                </div>
+                <div id="MDS_mensaje_alerta" class="MDS_alert MDS_hidden"></div>
+            </div>
+            
+            <!-- Divider -->
+            <div class="MDS_divider"></div>
+            
+            <!-- Sección: Resumen de Rutas y Servicios -->
+            <div class="MDS_section">
+                <label class="MDS_label">Schedule Summary</label>
+                <div class="MDS_cards-grid">
+                    <div class="MDS_card MDS_card-rutas">
+                        <div class="MDS_card-icon">🛣️</div>
+                        <div class="MDS_card-content">
+                            <span id="MDS_total_rutas" class="MDS_card-value">0</span>
+                            <span class="MDS_card-label">Active Routes</span>
+                        </div>
+                    </div>
+                    <div class="MDS_card MDS_card-servicios">
+                        <div class="MDS_card-icon">📋</div>
+                        <div class="MDS_card-content">
+                            <span id="MDS_total_servicios" class="MDS_card-value">0</span>
+                            <span class="MDS_card-label">Scheduled Services</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Divider -->
+            <div class="MDS_divider"></div>
+            
+            <!-- Sección: Desglose por Estado -->
+            <div class="MDS_section">
+                <label class="MDS_label">Services Breakdown</label>
+                <div class="MDS_badges-container">
+                    
+                    <!-- ✅ Confirmed (Ambos motores) -->
+                    <div class="MDS_badge MDS_badge-success">
+                        <span class="MDS_badge-icon">✅</span>
+                        <span id="MDS_fully_completed" class="MDS_badge-value">0</span>
+                        <span class="MDS_badge-text">Confirmed</span>
+                    </div>
+                    
+                    <!-- ⚠️ Partial (Un solo motor) -->
+                    <div class="MDS_badge MDS_badge-warning">
+                        <span class="MDS_badge-icon">⚠️</span>
+                        <span id="MDS_partially_confirmed" class="MDS_badge-value">0</span>
+                        <span class="MDS_badge-text">Partial</span>
+                    </div>
+                    
+                    <!-- ❌ Unconfirmed (Ningún motor) -->
+                    <div class="MDS_badge MDS_badge-danger">
+                        <span class="MDS_badge-icon">❌</span>
+                        <span id="MDS_not_confirmed" class="MDS_badge-value">0</span>
+                        <span class="MDS_badge-text">Unconfirmed</span>
+                    </div>
+                    
+                    <!-- 🕒 Pending (Programado, no iniciado) -->
+                    <div class="MDS_badge MDS_badge-info">
+                        <span class="MDS_badge-icon">🕒</span>
+                        <span id="MDS_pendientes" class="MDS_badge-value">0</span>
+                        <span class="MDS_badge-text">Pending</span>
+                    </div>
+                    
+                    <!-- 🚫 Cancelled/Rescheduled -->
+                    <div class="MDS_badge MDS_badge-secondary">
+                        <span class="MDS_badge-icon">🚫</span>
+                        <span id="MDS_no_completados" class="MDS_badge-value">0</span>
+                        <span class="MDS_badge-text">Cancelled</span>
+                    </div>
+                    
+                    <!-- 🔁 COMPATIBILIDAD: Badge antiguo "Finalizados" (opcional) -->
+                    <!-- Si NO lo usas visualmente, puedes eliminar este bloque -->
+                    <div class="MDS_badge MDS_badge-success">
+                        <span class="MDS_badge-icon">✅</span>
+                        <span id="MDS_finalizados" class="MDS_badge-value">0</span>
+                        <span class="MDS_badge-text">Total Confirmed</span>
+                    </div>
+
+                    <!-- ❌ OTROS / No Completados (Badge que faltaba) -->
+                    <div class="MDS_badge MDS_badge-danger">
+                        <span class="MDS_badge-icon">❌</span>
+                        <span id="MDS_otros" class="MDS_badge-value">0</span>
+                        <span class="MDS_badge-text">Other</span>
+                    </div>                    
+                </div>
+                
+                <!-- Hint explicativo -->
+                <small class="MDS_hint">
+                    <span style="color:#28a745">●</span> Confirmed: Both systems &nbsp;
+                    <span style="color:#ffc107">●</span> Partial: One system &nbsp;
+                    <span style="color:#dc3545">●</span> Unconfirmed: None
+                </small>
+
+            </div>
+
+            <!-- Loading Spinner -->
+            <div id="MDS_loading" class="MDS_loading MDS_hidden">
+                <div class="MDS_spinner"></div>
+                <span>Loading summary...</span>
+            </div>
+            
+        </div>
+        
+        <!-- Divider -->
+        <div class="MDS_divider"></div>
+        
+        <!-- Footer con botones -->
+        <div class="MDS_modal-footer">
+            <button id="MDS_btn_cancelar" class="MDS_btn-outline" type="button">Cancel</button>
+            <button id="MDS_btn_aplicar" class="MDS_btn-primary" type="button">
+                ✅ Apply & Consult
+            </button>
+        </div>
+        
+    </div>
+</div>
 
 <!-- Fondo oscuro -->
 <div id="modalOverlay" class="modal-overlay-bg" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;"></div>
 
 <script>
+    /* ==========================================
+    MODAL MDS - Schedule Configuration
+    Prefijo: MDS_
+    ========================================== */
+
+    const ruta_diasNoActividad_ajax = "<?php echo $ruta_diasNoActividad_ajax; ?>";
+    const ruta_servicios_ajax = "<?php echo $ruta_servicios_ajax; ?>";
+
+    // ==========================================
+    // VARIABLES DE CONTROL
+    // ==========================================
+    let MDS_fechaActual = null;
+    let MDS_fechaSeleccionada = null;
+    let MDS_modalAbierto = false;
+    let MDS_debounceTimer = null;
+
+    // Elementos del DOM
+    let MDS_modal = null;
+    let MDS_input_fecha = null;
+    let MDS_btn_close = null;
+    let MDS_btn_hoy = null;
+    let MDS_btn_aplicar = null;
+    let MDS_btn_cancelar = null;
+    let MDS_mensaje_alerta = null;
+    let MDS_loading = null;
+
+    // Elementos de resumen
+    let MDS_total_rutas = null;
+    let MDS_total_servicios = null;
+    let MDS_finalizados = null;
+    let MDS_pendientes = null;
+    let MDS_otros = null;
+
+    // ==========================================
+    // MODIFICAR: MDS_abrirModal para retornar Promise
+    // ==========================================
+    let MDS_resolvePromise = null; // Para resolver la Promise externamente    
+    // ==========================================
+
     let currentRouteId = null;
     let van = 0;
     let resolveModalPromise = null;
+    let si_es_servicio = null;
     
-    // Varioble para el tipo de reporte a ser visualizado
-    // 0 = Preservicio, 1 = Servicio sin procesar, 2 = Servicio Porcesado
+    // Varioble para el tipo de reporte a ser visualizado 
+    // 0 = Preservicio, 1 = Servicio sin procesar, 2 = Servicio Porcesado 
     //
     let tipo_de_reporte = 0;
 
@@ -1450,8 +1682,10 @@
 
             const btnNo = document.getElementById('btn-mover-a-no-asignados');
             const btnYes = document.getElementById('btn-mover-a-asignados');
+            const btnMove = document.getElementById('btn-mover-a-otra-ruta');
             if (btnNo) btnNo.disabled = processed;
             if (btnYes) btnYes.disabled = processed;
+            if (btnMove) btnMove.disabled = processed;
 
             const panel = document.getElementById('panel_sinServicio');
             if (panel) {

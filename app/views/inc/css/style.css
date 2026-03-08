@@ -1678,6 +1678,64 @@ li.divider {
 
 }
 
+.reoModalReorder {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    height: 60vh;
+    overflow: hidden;
+    padding: 24px 28px 18px 28px;
+    position: relative;
+    width: 70vw;
+}
+
+.reoModalReorderContainer {
+    border-radius: 12px;
+    display: grid;
+    grid-template-columns: 40% 60%;
+    grid-template-rows: 90% 10%;
+    gap: 5px;
+    height: 55vh;
+    margin: auto;
+    width: 65vw;
+}
+
+.reoGridReorder_01 {
+    background: #bdc7ff;
+    border-color: #003366;
+    border-radius: 12px;
+    grid-column: 1/2;
+    grid-row: 1/2;
+    margin-top: 10px;
+}
+
+.reoGridReorder_02 {
+    background: #9b93e0;
+    border-color: #003366;
+    border-radius: 12px;
+    grid-column: 2/3;
+    grid-row: 1/2;
+    margin-top: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.reoGridReorder_03 {
+    border-color: #003366;
+    border-radius: 12px;
+    grid-column: 1/3;
+    grid-row: 2/3;
+    margin-top: 10px;
+}
+
+.reoContainer {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-top: 20px;
+    padding: 15px;
+}
+
 .lista_despacho {
     border: 1px solid #ccc;
     border-radius: 8px;
@@ -1692,7 +1750,7 @@ li.divider {
 .pie_despacho {
     border: 1px solid #ccc;
     border-radius: 8px;
-    height: 9vh;
+    height: 17vh;
     margin-bottom: 5px;
     max-height: 320px;
     min-width: 35vw;
@@ -2839,7 +2897,7 @@ h6 {
 }
 
 .formatoFecha {
-    font-size: 0.9em;
+    font-size: 1.5em;
     padding: 0.3rem;
     border: 1px solid #999;
     border-radius: 4px;
@@ -3164,6 +3222,35 @@ h6 {
     cursor: not-allowed;
 }
 
+.det_boton {
+    margin-top: 60px !important;
+}
+
+.formatoLista {
+    margin: auto;
+    padding: 10px;
+}
+
+/* Agregar en tu archivo de estilos */
+.ruta-item {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.ruta-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.ruta-item.seleccionada {
+    border: 3px solid #fff !important;
+    opacity: 1 !important;
+}
+
+.ruta-item:not(.seleccionada) {
+    opacity: 0.8;
+}
 
 /* =======================================================*/
 
@@ -3326,6 +3413,38 @@ h6 {
     display: none;
 }
 
+/* Separador de ruta: efectos visuales */
+.ruta-separador td {
+    cursor: default;
+    user-select: none;
+}
+
+/* Borde superior para separar visualmente grupos */
+.ruta-separador + tr td {
+    border-top: 2px solid #bbb;
+}
+
+/* Animación sutil al cargar */
+.ruta-separador {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Asegurar que el sticky funcione sobre separadores */
+td[style*="position: sticky"] {
+    z-index: 3 !important; /* Mayor que el separador */
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;
@@ -3348,6 +3467,7 @@ h6 {
 }
 
 /* =======================================================*/
+
 
 @keyframes modalFadeIn {
     from {
@@ -3507,5 +3627,468 @@ h6 {
 
     .menu_lat .submenu {
         padding-left: 1rem;
+    }
+}
+
+/* ==========================================
+   MODAL MDS - Schedule Configuration
+   Prefijo: MDS_
+   ========================================== */
+
+/* Overlay (fondo oscuro) */
+.MDS_modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    animation: MDS_fadeIn 0.3s ease-out;
+}
+
+.MDS_modal-overlay.MDS_active {
+    display: flex;
+}
+
+/* Container principal (50vw sin límites) */
+.MDS_modal-container {
+    width: 50vw;
+    height: auto;
+    max-height: 85vh;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: MDS_slideIn 0.3s ease-out;
+}
+
+/* Header */
+.MDS_modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2.5vh 3vw;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+}
+
+.MDS_modal-title {
+    font-size: 2.2vh;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 1vw;
+}
+
+.MDS_icon {
+    font-size: 2.5vh;
+}
+
+/* Botón cerrar (X) */
+.MDS_btn-close {
+    width: 4vh;
+    height: 4vh;
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    border-radius: 50%;
+    font-size: 2vh;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.MDS_btn-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg);
+}
+
+/* Divider (línea separadora) */
+.MDS_divider {
+    height: 0.2vh;
+    background: linear-gradient(90deg, transparent, #e0e0e0, transparent);
+    margin: 0;
+}
+
+/* Body */
+.MDS_modal-body {
+    padding: 3vh 3vw;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Secciones */
+.MDS_section {
+    margin-bottom: 3vh;
+}
+
+.MDS_section:last-child {
+    margin-bottom: 0;
+}
+
+/* Labels */
+.MDS_label {
+    display: block;
+    font-size: 1.6vh;
+    font-weight: 600;
+    color: #555555;
+    margin-bottom: 1.5vh;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Input group */
+.MDS_input-group {
+    display: flex;
+    gap: 1vw;
+    align-items: center;
+}
+
+.MDS_input {
+    flex: 1;
+    padding: 1.5vh 1.5vw;
+    font-size: 1.8vh;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.MDS_input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Botones secundarios */
+.MDS_btn-secondary {
+    padding: 1.5vh 2vw;
+    font-size: 1.6vh;
+    background: #f5f5f5;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+    color: #555555;
+}
+
+.MDS_btn-secondary:hover {
+    background: #e0e0e0;
+    border-color: #cccccc;
+}
+
+/* Alertas */
+.MDS_alert {
+    margin-top: 1.5vh;
+    padding: 1.5vh 1.5vw;
+    border-radius: 8px;
+    font-size: 1.6vh;
+    display: flex;
+    align-items: center;
+    gap: 1vw;
+}
+
+.MDS_alert-warning {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    color: #856404;
+}
+
+.MDS_alert-success {
+    background: #d4edda;
+    border-left: 4px solid #28a745;
+    color: #155724;
+}
+
+.MDS_alert-danger {
+    background: #f8d7da;
+    border-left: 4px solid #dc3545;
+    color: #721c24;
+}
+
+.MDS_hidden {
+    display: none !important;
+}
+
+/* Grid de cards */
+.MDS_cards-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2vw;
+}
+
+/* Cards */
+.MDS_card {
+    padding: 2.5vh 2vw;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 1.5vw;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.MDS_card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.MDS_card-rutas {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+}
+
+.MDS_card-servicios {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: #ffffff;
+}
+
+.MDS_card-icon {
+    font-size: 4vh;
+    opacity: 0.9;
+}
+
+.MDS_card-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.MDS_card-value {
+    font-size: 3.5vh;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.MDS_card-label {
+    font-size: 1.4vh;
+    opacity: 0.9;
+    margin-top: 0.5vh;
+}
+
+/* Badges container */
+.MDS_badges-container {
+    display: flex;
+    gap: 1.5vw;
+    flex-wrap: wrap;
+}
+
+/* Badges */
+.MDS_badge {
+    flex: 1;
+    min-width: 12vw;
+    padding: 1.5vh 1.5vw;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 1vw;
+    font-size: 1.6vh;
+}
+
+.MDS_badge-success {
+    background: #d4edda;
+    border-left: 4px solid #28a745;
+    color: #155724;
+}
+
+.MDS_badge-warning {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    color: #856404;
+}
+
+.MDS_badge-danger {
+    background: #f8d7da;
+    border-left: 4px solid #dc3545;
+    color: #721c24;
+}
+
+.MDS_badge-icon {
+    font-size: 2vh;
+}
+
+.MDS_badge-value {
+    font-weight: 700;
+    font-size: 1.8vh;
+}
+
+.MDS_badge-text {
+    margin-left: auto;
+    opacity: 0.8;
+}
+
+/* Loading spinner */
+.MDS_loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4vh 0;
+    color: #667eea;
+    font-size: 1.6vh;
+    gap: 1.5vh;
+}
+
+.MDS_spinner {
+    width: 5vh;
+    height: 5vh;
+    border: 4px solid #f0f0f0;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: MDS_spin 1s linear infinite;
+}
+
+/* Footer */
+.MDS_modal-footer {
+    padding: 2.5vh 3vw;
+    background: #f9f9f9;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1.5vw;
+}
+
+/* Botones del footer */
+.MDS_btn-outline {
+    padding: 1.5vh 2.5vw;
+    font-size: 1.6vh;
+    background: transparent;
+    border: 2px solid #cccccc;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+    color: #555555;
+}
+
+.MDS_btn-outline:hover {
+    background: #f0f0f0;
+    border-color: #999999;
+}
+
+.MDS_btn-primary {
+    padding: 1.5vh 3vw;
+    font-size: 1.6vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 600;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.MDS_btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.MDS_btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* CSS adicional para el hint */
+.MDS_hint {
+    display: block;
+    margin-top: 1.5vh;
+    font-size: 1.3vh;
+    color: #888;
+    line-height: 1.6;
+}
+
+.MDS_hint span[style*="color"] {
+    display: inline-block;
+    width: 1vh;
+    height: 1vh;
+    border-radius: 50%;
+    margin-right: 0.5vw;
+    vertical-align: middle;
+}
+
+/* Badges adicionales */
+.MDS_badge-info {
+    background: #cce5ff;
+    border-left: 4px solid #007bff;
+    color: #004085;
+}
+
+.MDS_badge-secondary {
+    background: #e2e3e5;
+    border-left: 4px solid #6c757d;
+    color: #383d41;
+}
+
+/* Hint explicativo */
+.MDS_hint {
+    display: block;
+    margin-top: 1.5vh;
+    font-size: 1.3vh;
+    color: #888;
+    line-height: 1.6;
+}
+
+.MDS_hint span[style*="color"] {
+    display: inline-block;
+    width: 1vh;
+    height: 1vh;
+    border-radius: 50%;
+    margin-right: 0.5vw;
+    vertical-align: middle;
+}
+
+/* Animations */
+@keyframes MDS_fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes MDS_slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes MDS_spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive: Ajustes mínimos para móviles (opcional) */
+@media (max-width: 768px) {
+    .MDS_modal-container {
+        width: 90vw;
+    }
+    
+    .MDS_cards-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .MDS_badges-container {
+        flex-direction: column;
+    }
+    
+    .MDS_badge {
+        min-width: 100%;
     }
 }

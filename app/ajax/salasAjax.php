@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -41,7 +41,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -53,12 +53,13 @@ $modulo = $inputData['modulo_salas'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_salas"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_salas"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/salasController.php';
+
 use app\controllers\salasController;
 
 $controller = new salasController();
@@ -93,4 +94,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

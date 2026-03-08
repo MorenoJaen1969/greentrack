@@ -158,14 +158,14 @@ function suiteLoading(action = 'show') {
                     </linearGradient>
                 </defs>
                 <path class="infinity-path" 
-                      d="M 200,60 
-                         C 100,0 100,120 200,60 
-                         C 300,120 300,0 200,60 
-                         Z" 
-                      fill="none" 
-                      stroke="url(#glassGradient)" 
-                      stroke-width="20" 
-                      stroke-linecap="round"/>
+                        d="M 200,60 
+                            C 100,0 100,120 200,60 
+                            C 300,120 300,0 200,60 
+                            Z" 
+                        fill="none" 
+                        stroke="url(#glassGradient)" 
+                        stroke-width="20" 
+                        stroke-linecap="round"/>
             </svg>
         `;
         

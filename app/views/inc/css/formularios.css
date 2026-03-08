@@ -177,8 +177,813 @@ main {
     font-weight: 400 !important;
 }
 
+.foto-cliente{
+    width: 150px;
+    height: 150px;
+    border: 3px dashed #ccc;
+    border-radius: 50%;
+    margin: 0 auto 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f9f9f9;
+    overflow: hidden;
+    position: relative;
+}                                                
+
+.foto-cliente-edit{
+    border: 3px dashed #ccc;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f9f9f9;
+    overflow: hidden;
+    position: relative;
+    width: 20vh;
+    height: 20vh;
+    margin-bottom: 5px;
+}                                                
+
+.foto-imagen{
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; 
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+}             
+
+.foto-imagen-edit{
+    width: 100% !important; 
+    height: 100% !important; 
+    object-fit: cover; 
+    display: block;
+    position: absolute;
+    margin: 0 !important;
+    top: 0;
+    left: 0;
+}
+
+.foto-boton{
+    padding: 8px 16px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}                    
+
+/* Estilos del Sistema de Direcciones */
+
+.direcciones-container {
+    display: grid;
+    grid-template-columns: 35% 65%;
+    gap: 20px;
+    height: calc(100vh - 200px);
+}
+
+.panel-izquierdo {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    overflow-y: auto;
+}
+
+.header-direcciones {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.header-direcciones h3 {
+    margin: 0;
+    color: #495057;
+    font-size: 1.1em;
+}
+
+.btn-primary {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.3s;
+}
+
+.btn-primary:hover {
+    background: #218838;
+    transform: translateY(-1px);
+}
+
+.lista-direcciones {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.item-direccion {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.item-direccion:hover {
+    border-color: #28a745;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.item-direccion.activa {
+    border-color: #28a745;
+    background: #e8f5e9;
+}
+
+.item-direccion .tipo-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.item-direccion .tipo-residencial { background: #e3f2fd; color: #1565c0; }
+.item-direccion .tipo-comercial { background: #fff3e0; color: #e65100; }
+.item-direccion .tipo-oficina { background: #f3e5f5; color: #7b1fa2; }
+
+.item-direccion .direccion-corta {
+    font-weight: 500;
+    color: #212529;
+    font-size: 0.95em;
+}
+
+.item-direccion .ciudad-pais {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
+.panel-derecho {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.mapa-container {
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.coordenadas-display {
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 8px 12px;
+    font-family: monospace;
+    font-size: 0.85em;
+    text-align: center;
+}
+
+.form-direccion {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.form-direccion h4 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #495057;
+    border-bottom: 2px solid #28a745;
+    padding-bottom: 10px;
+}
+
+.cascada-geografica {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.nivel-cascada {
+    transition: all 0.3s ease;
+}
+
+.nivel-cascada label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #495057;
+    font-size: 0.9em;
+}
+
+.select-cascada {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.95em;
+    transition: border-color 0.2s;
+}
+
+.select-cascada:focus {
+    border-color: #28a745;
+    outline: none;
+}
+
+.select-cascada:disabled {
+    background: #e9ecef;
+    cursor: not-allowed;
+}
+
+.nivel-cascada.habilitado {
+    opacity: 1 !important;
+    pointer-events: all !important;
+}
+
+.nivel-cascada.cargando::after {
+    content: "⏳ Loading...";
+    display: block;
+    font-size: 0.8em;
+    color: #28a745;
+    margin-top: 5px;
+}
+
+.estado-carga {
+    font-size: 0.8em;
+    color: #6c757d;
+    margin-left: 5px;
+}
+
+.detalles-direccion {
+    border-top: 2px dashed #dee2e6;
+    padding-top: 20px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.form-group label {
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #495057;
+    font-size: 0.9em;
+}
+
+.input-direccion {
+    padding: 10px;
+    border: 2px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.95em;
+}
+
+.input-direccion:focus {
+    border-color: #28a745;
+    outline: none;
+}
+
+.btn-small {
+    padding: 5px 10px;
+    font-size: 0.85em;
+    background: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 5px;
+}
+
+.verificacion-mapa {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 6px;
+    padding: 15px;
+    margin: 20px 0;
+}
+
+.verificacion-mapa p {
+    margin: 0 0 10px 0;
+    color: #856404;
+}
+
+.ayuda-mapa {
+    font-size: 0.85em;
+    color: #6c757d;
+    font-style: italic;
+    margin-top: 10px !important;
+}
+
+.acciones-formulario {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px solid #dee2e6;
+}
+
+.btn-submit {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    flex: 1;
+}
+
+.btn-cancel {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+}
+
+/* Animaciones */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.cargando {
+    animation: pulse 1.5s infinite;
+}
+
+/* ============================================== */
+/* ====== nuevo control para direcciones ======== */
+/* ============================================== */
+
+/* Estilos del Modal PLAT - Aislados del sistema */
+.plat-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 9999;
+    overflow-y: auto;
+}
+
+.plat-modal-dialog {
+    position: relative;
+    width: 90%;
+    max-width: 1100px;
+    margin: 30px auto;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.plat-modal-content {
+    position: relative;
+}
+
+.plat-modal-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #e5e5e5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+}
+
+.plat-modal-header h5 {
+    margin: 0;
+    color: #333;
+    font-size: 1.25rem;
+}
+
+.plat-btn-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    text-align: center;
+}
+
+.plat-btn-close:hover {
+    color: #000;
+}
+
+.plat-modal-body {
+    padding: 20px;
+}
+
+.plat-modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #e5e5e5;
+    text-align: right;
+    background: #f8f9fa;
+    border-radius: 0 0 8px 8px;
+}
+
+.plat-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.plat-form-column {
+    min-width: 0;
+}
+
+.plat-form-section {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    border: 1px solid #e9ecef;
+}
+
+.plat-form-section h6 {
+    margin: 0 0 15px 0;
+    color: #495057;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #dee2e6;
+    padding-bottom: 8px;
+}
+
+.plat-form-group {
+    margin-bottom: 15px;
+}
+
+.plat-form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.875rem;
+}
+
+.plat-form-control {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    transition: border-color 0.15s;
+}
+
+.plat-form-control:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.plat-form-control:disabled {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+
+.plat-form-row {
+    display: flex;
+    gap: 10px;
+}
+
+.plat-col-8 { flex: 0 0 66.666%; }
+.plat-col-4 { flex: 0 0 33.333%; }
+.plat-col-6 { flex: 0 0 50%; }
+
+.plat-checkbox-group {
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 8px;
+}
+
+.plat-checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: normal;
+}
+
+.plat-checkbox-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
+.plat-mapa-formulario-wrapper {
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    overflow: hidden;
+    height: 100%;
+    min-height: 450px;
+    display: flex;
+    flex-direction: column;
+}
+
+.plat-mapa-toolbar {
+    padding: 10px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.plat-mapa-hint {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.plat-mapa-formulario-container {
+    flex: 1;
+    min-height: 380px;
+    background: #e9ecef;
+}
+
+.plat-coordenadas-display {
+    padding: 8px;
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    text-align: center;
+}
+
+.plat-alert {
+    padding: 12px;
+    border-radius: 4px;
+    margin-top: 15px;
+    font-size: 0.875rem;
+}
+
+.plat-alert-info {
+    background-color: #e7f3ff;
+    border: 1px solid #b8daff;
+    color: #004085;
+}
+
+.plat-btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+}
+
+.plat-btn-secondary {
+    background: #6c757d;
+    color: white;
+    border-color: #6c757d;
+}
+
+.plat-btn-secondary:hover {
+    background: #5a6268;
+}
+
+.plat-btn-primary {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.plat-btn-primary:hover {
+    background: #0056b3;
+}
+
+.plat-boton-ruta {
+    padding:10px 15px;
+    background:#17a2b8;
+    color:white;
+    border:none;
+    border-radius:4px;
+    cursor:pointer;
+    font-size:0.85rem;
+    font-weight:600;
+    opacity:0.5;
+    margin-right: 10px;
+}
+
+.plat-boton-delete {
+    padding:10px 15px;
+    background:#b83d17;
+    color:white;
+    border:none;
+    border-radius:4px;
+    cursor:pointer;
+    font-size:0.85rem;
+    font-weight:600;
+    opacity:0.5;
+    margin-right: 10px;
+}
+
+@media (max-width: 768px) {
+    .plat-form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .plat-modal-dialog {
+        width: 95%;
+        margin: 10px auto;
+    }
+}
+
+/* Forzar que los radios se vean habilitados */
+input[name="filtro_estado"],
+input[name="filtro_estado"] + label {
+    opacity: 1 !important;
+    cursor: pointer !important;
+}
+
+input[name="filtro_estado"]:disabled,
+input[name="filtro_estado"]:disabled + label {
+    opacity: 1 !important;
+    cursor: pointer !important;
+    color: inherit !important;
+}
+
+/* Estilo para el seleccionado */
+input[name="filtro_estado"]:checked + label {
+    font-weight: 600;
+    color: #0066cc;
+}
+
+/* Contenedor principal */
+.ser-select-foto {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+}
+
+
+/* Trigger: lo que se ve cuando está cerrado */
+.ser-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    user-select: none;
+}
+
+.ser-select-trigger:hover {
+    border-color: #0066cc;
+}
+
+.ser-select-trigger:focus {
+    outline: none;
+    border-color: #0066cc;
+    box-shadow: 0 0 0 2px rgba(0,102,204,0.2);
+}
+
+.ser-select-selected {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.ser-select-selected img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #ddd;
+}
+
+.ser-select-arrow {
+    font-size: 10px;
+    color: #666;
+    transition: transform 0.2s;
+}
+
+.ser-select-foto.open .ser-select-arrow {
+    transform: rotate(180deg);
+}
+
+/* Lista de opciones */
+.ser-select-options {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+    z-index: 1000;
+    display: none;
+}
+
+.ser-select-foto.open .ser-select-options {
+    display: block;
+}
+
+/* Cada opción */
+.ser-select-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.ser-select-option:hover {
+    background: #f0f7ff;
+}
+
+.ser-select-option.selected {
+    background: #e6f2ff;
+    font-weight: 500;
+}
+
+.ser-select-option img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #ddd;
+    flex-shrink: 0;
+}
+
+.ser-select-option .ser-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* Para que text-overflow funcione */
+}
+
+.ser-select-option .ser-nombre {
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ser-select-option .ser-detalle {
+    font-size: 12px;
+    color: #666;
+}
+
+/* Scroll personalizado */
+.ser-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+.ser-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+.ser-select-options::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+.ser-select-options::-webkit-scrollbar-thumb:hover {
+    background: #aaa;
+}
+
 /* ============================================
-   GRID PRINCIPAL DEL CRUD
+                GRID PRINCIPAL DEL CRUD
    ============================================ */
 .crud-container {
     display: grid;
@@ -190,7 +995,7 @@ main {
 }
 
 /* ============================================
-   PANEL LATERAL DE FILTROS
+            PANEL LATERAL DE FILTROS
    ============================================ */
 .crud-sidebar-filters {
     position: sticky;
@@ -726,6 +1531,14 @@ main {
     max-width: 20% !important;
 }
 
+.side_middle {
+    max-width: 40% !important;
+}
+
+.side_max {
+    max-width: 100% !important;
+}
+
 .w_max {
     width: 10vw;
 }
@@ -830,6 +1643,24 @@ table {
     margin-top: 10px;
     padding: 20px;
     max-width: 80vw;
+}
+
+.form-column {
+    flex-direction: column !important;
+    gap: 5px !important;
+}
+
+/* Estilo para campos con error */
+.input-error {
+    border: 2px solid #e74c3c !important;
+    background-color: #fdf2f2 !important;
+    box-shadow: 0 0 5px rgba(231, 76, 60, 0.3);
+    transition: all 0.3s ease;
+}
+
+.input-error:focus {
+    box-shadow: 0 0 8px rgba(231, 76, 60, 0.5);
+    outline: none;
 }
 
 .form-horizontal .form-group {
@@ -974,6 +1805,29 @@ table {
 .format_textarea {
     resize: vertical !important;
     height: 20vh !important;
+}
+
+/* Estilo para inputs de teléfono */
+.telefono-mask {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+    font-size: 1.1em;
+}
+
+.telefono-mask::placeholder {
+    color: #aaa;
+    font-size: 0.9em;
+}
+
+/* Indicador de validación */
+.telefono-mask.valido {
+    border-color: #27ae60 !important;
+    background-color: #f0fff0;
+}
+
+.telefono-mask.invalido {
+    border-color: #e74c3c !important;
+    background-color: #fff0f0;
 }
 
 .time-hhmmss {
@@ -1182,6 +2036,12 @@ h3 {
 /* Asegurar que el tab content sea visible */
 .tabcontent {
     min-height: 600px;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.tabcontent-especial {
+    min-height: 350px;
     opacity: 1 !important;
     visibility: visible !important;
 }
@@ -1617,7 +2477,106 @@ span {
     transform: scaleX(1);
 }
 
-/* ===========  Modal  =========== */
+.header-new {
+    align-items: center;
+    background-color: #5284b2;
+    border-bottom: 1px solid #dee2e6;
+    border-top-left-radius: 0.3rem;
+    border-top-right-radius: 0.3rem;
+    color: white;
+    display: flex;
+    flex-shrink: 0;
+    height: 4.5vh;
+    justify-content: space-between;
+    margin: 0;
+    padding: 0.5rem 0.5rem;
+    -ms-flex-align: start;
+    -ms-flex-pack: justify;
+    -ms-flex-negative: 0;
+}
+
+.grid_header {
+    display: grid;
+    grid-template-rows: 100%;
+    grid-template-columns: 50% 50%;
+    width: 95.5vw;
+    margin: auto;
+    padding: 0;
+}
+
+.grid_header01 {
+    grid-column: 1/2;
+    grid-row: 1/2;
+}
+
+.grid_header02 {
+    grid-column: 2/3;
+    grid-row: 1/2;
+}
+
+.grid_header_int{
+    display: grid;
+    grid-template-rows: 100%;
+    grid-template-columns: 50% 50%;
+    margin: auto;
+    padding-left: 10px;
+    padding-right: 10px;
+    gap: 10px;
+}
+
+.grid_header_int01{
+    background: #e2e2ff;
+    border: 1px solid #307fce;
+    border-top-left-radius: 0.3rem;
+    border-top-right-radius: 0.3rem;
+    grid-column: 1/2;
+    grid-row: 1/2;
+}
+
+.grid_header_int02{
+    background: #e2e2ff;
+    border: 1px solid #307fce;
+    border-top-left-radius: 0.3rem;
+    border-top-right-radius: 0.3rem;
+    grid-column: 2/3;
+    grid-row: 1/2;
+}
+
+.grid_de3_int{
+    display: grid;
+    grid-template-rows: 60% 40%;
+    grid-template-columns: 75% 25%;
+    margin: auto;
+    padding-left: 10px;
+    padding-right: 10px;
+    gap: 10px;
+}
+
+.grid_de3_int01{
+    grid-column: 1/2;
+    grid-row: 1/2;
+    height: 30vh;    
+}
+
+.grid_de3_int02{
+    background: #ffffff;
+    border: 1px solid #307fce;
+    border-radius: 10px;
+    grid-column: 2/3;
+    grid-row: 1/2;
+    margin-top: 10px;
+    margin-right: 10px;
+    height: 30vh;    
+    margin-bottom: 10px;
+}
+
+.grid_de3_int03{
+    grid-column: 1/3;
+    grid-row: 2/3;
+    height: 20vh;    
+}
+
+/* ===========  Modal  =========== */ 
 .modal_fade {
     background-color: #111111bd;
     bottom: 0;
@@ -1859,6 +2818,28 @@ span {
     -moz-border-radius: 1rem;
     -ms-border-radius: 1rem;
     -o-border-radius: 1rem;
+}
+
+.grupo_modal_address {
+    display: grid;
+    grid-template-rows: auto;
+    grid-template-columns: 50% 50%;
+    justify-content: stretch;
+
+    width: 100%;
+    margin: 0 auto;
+    padding: 10px;
+    gap: 20px;
+}
+
+.grupo_modal_address01 {
+    grid-column: 1/2;
+    grid-row: 1/2;
+}
+
+.grupo_modal_address02 {
+    grid-column: 2/3;
+    grid-row: 1/2;
 }
 
 .photo-container {
@@ -2550,4 +3531,25 @@ body {
         flex: 1;
         min-width: 140px;
     }
+}
+
+.table-img-column {
+    width: 80px !important;
+    min-width: 80px !important;
+    max-width: 80px !important;
+    padding: 0.5rem !important;
+}
+
+.table-img-column img {
+    max-width: 64px;
+    max-height: 64px;
+    width: auto;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    object-fit: cover;
+}
+
+.table td {
+    vertical-align: middle !important;
 }

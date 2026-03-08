@@ -24,7 +24,7 @@ class ciudadesController extends mainModel
 		// ¡ESTA LÍNEA ES CRUCIAL!
 		parent::__construct();
 
-		// Nombre del controlador actual abreviado para reconocer el archivo
+		// Nombre del controlador actual abreviado para reconocer el archivo 
 		$nom_controlador = "ciudadesController";
 		// ____________________________________________________________________
 
@@ -329,4 +329,24 @@ class ciudadesController extends mainModel
 
         return $data;
     }
+
+    public function getCiudades($id_condado) {
+        try {
+            $stmt = "SELECT c.id_ciudad, c.nombre, c.centro_lat AS latitud_centro, 
+                    c.centro_lng AS longitud_centro, 13 AS zoom_default
+                FROM ciudades c
+                INNER JOIN condados co ON c.id_condado = co.id_condado
+                WHERE co.id_condado = :v_id_condado
+                ORDER BY c.nombre ASC";
+            $params = [
+                'v_id_condado' => $id_condado
+            ];
+            $data = $this->ejecutarConsulta($stmt, "", $params, "fetchAll");
+
+            return $data;
+        } catch (Exception $e) {
+            return $e->getMessage();
+        }
+    }    
+
 }

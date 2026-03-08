@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_address_clas'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_address_clas"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_address_clas"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/address_clasController.php';
+
 use app\controllers\address_clasController;
 
 $controller = new address_clasController();
@@ -73,18 +74,18 @@ switch ($modulo) {
         $id_address_clas = $inputData['id_address_clas'];
 
         $address_clas = $controller->consultar_address_clas($id_address_clas);
-        $cadena='';
+        $cadena = '';
 
         $cadena = '<option value="">Select a Address Clasification</option>';
 
-        foreach ($address_clas as $curr){
-            $cadena = $cadena. '<option value="' . $curr['id_address_clas'] . '" ';
-            if($id_address_clas == $curr['id_address_clas']){ 
-                $cadena = $cadena. 'selected> ';
-            }else{
-                $cadena = $cadena. '> ';
+        foreach ($address_clas as $curr) {
+            $cadena = $cadena . '<option value="' . $curr['id_address_clas'] . '" ';
+            if ($id_address_clas == $curr['id_address_clas']) {
+                $cadena = $cadena . 'selected> ';
+            } else {
+                $cadena = $cadena . '> ';
             }
-            $cadena = $cadena. $curr['address_clas'] . '</option>';
+            $cadena = $cadena . $curr['address_clas'] . '</option>';
         }
         echo $cadena;
         break;
@@ -95,7 +96,7 @@ switch ($modulo) {
 
         $controller->cerrar_parada($id_parada, $vehicle_id);
         break;
-    
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);
@@ -103,4 +104,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

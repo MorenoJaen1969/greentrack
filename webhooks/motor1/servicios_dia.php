@@ -18,7 +18,7 @@ use app\lib\Motor3PDFGenerator;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit;
 }
 
@@ -46,13 +46,13 @@ if (!file_exists($log_raw_path)) {
 $hex_input = bin2hex(substr($input, 0, 10));
 $has_bom = (substr($hex_input, 0, 6) === 'efbbbf');
 
-$raw_log_entry = 
+$raw_log_entry =
     "[" . date('Y-m-d H:i:s') . "] IP: " . $_SERVER['REMOTE_ADDR'] . "\n" .
     "BOM: " . ($has_bom ? 'SÍ (EF BB BF)' : 'NO') . "\n" .
     "Longitud: " . strlen($input) . " bytes\n" .
     "Hex iniciales: $hex_input\n" .
-    "Contenido:\n" . 
-    $input . "\n" . 
+    "Contenido:\n" .
+    $input . "\n" .
     str_repeat("-", 80) . "\n";
 
 file_put_contents($log_raw_file, $raw_log_entry, FILE_APPEND | LOCK_EX);
@@ -103,10 +103,10 @@ try {
         if (isset($resultado['servicios_para_motor3']) && count($resultado['servicios_para_motor3']) > 0) {
             $pdf_generator = new Motor3PDFGenerator(); // Clase simple para PDF
             $pdf_urls = $pdf_generator->generarPDFsDesdeServicios(
-                $resultado['servicios_para_motor3'], 
+                $resultado['servicios_para_motor3'],
                 $fecha_servicio
             );
-            
+
             // Agregar URLs de PDF a la respuesta
             $resultado['pdf_urls'] = $pdf_urls;
         }
@@ -115,15 +115,8 @@ try {
 
     http_response_code(200);
     echo json_encode($resultado, JSON_PRETTY_PRINT);
-
 } catch (Exception $e) {
     error_log("Error en servicios_dia.php: " . $e->getMessage());
     http_response_code(500);
     echo json_encode(['error' => 'Internal server error']);
 }
-
-
-
-
-
-

@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -49,6 +49,7 @@ if (!$token) {
 
 // === Cargar controlador y validar ===
 require_once '../controllers/usuariosController.php';
+
 use app\controllers\usuariosController;
 
 $controller = new usuariosController();
@@ -69,10 +70,10 @@ if (!empty($validacion)) {
         ],
         'permisos_chat' => ['chat_interno'] // Por defecto
     ];
-    
+
     // Aquí podrías agregar lógica para determinar permisos específicos
     // basado en el email o otros criterios
-    
+
     http_response_code(200);
     echo json_encode($response);
 } else {
@@ -85,4 +86,3 @@ if (!empty($validacion)) {
 }
 
 exit();
-?>

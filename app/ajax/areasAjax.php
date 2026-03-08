@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_areas'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_areas"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_areas"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/areasController.php';
+
 use app\controllers\areasController;
 
 $controller = new areasController();
@@ -73,18 +74,18 @@ switch ($modulo) {
         $id_area = $inputData['id_area'];
 
         $areas = $controller->consultar_areas();
-        $cadena='';
+        $cadena = '';
 
         $cadena = '<option value="">Select a Area</option>';
 
-        foreach ($areas as $curr){
-            $cadena = $cadena. '<option value="' . $curr['id_area'] . '" ';
-            if($id_area == $curr['id_area']){ 
-                $cadena = $cadena. 'selected> ';
-            }else{
-                $cadena = $cadena. '> ';
+        foreach ($areas as $curr) {
+            $cadena = $cadena . '<option value="' . $curr['id_area'] . '" ';
+            if ($id_area == $curr['id_area']) {
+                $cadena = $cadena . 'selected> ';
+            } else {
+                $cadena = $cadena . '> ';
             }
-            $cadena = $cadena. $curr['descripcion'] . '</option>';
+            $cadena = $cadena . $curr['descripcion'] . '</option>';
         }
         echo $cadena;
         break;
@@ -96,4 +97,3 @@ switch ($modulo) {
 }
 
 exit();
-?>

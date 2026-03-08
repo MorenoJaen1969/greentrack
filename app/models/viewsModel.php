@@ -4,7 +4,7 @@
 
 	class viewsModel{
 
-		/*---------- Modelo obtener vista ----------*/
+		/*---------- Modelo obtener vista ----------*/ 
 		protected function obtenerVistasModelo($vista_req){
 			$cont_orig = $vista_req;
 
@@ -22,6 +22,7 @@
 				"clientesNew",
 				"clientesVista",
 				"contratos",
+				"contratosNew",
 				"contratosVista",
 				"crew",
 				"crewNew",

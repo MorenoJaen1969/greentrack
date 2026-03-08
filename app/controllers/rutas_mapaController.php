@@ -208,7 +208,7 @@ class rutas_mapaController extends mainModel
             }
 
             // Obtener zonas de la ruta
-            $sql_zonas = "SELECT zc.id_zona, zc.nombre_zona, zc.lat_sw,
+             $sql_zonas = "SELECT zc.id_zona, zc.nombre_zona, zc.lat_sw,
                     zc.lng_sw, zc.lat_ne, zc.lng_ne
                 FROM rutas_zonas_cuadricula rz
                 INNER JOIN zonas_cuadricula zc ON rz.id_zona = zc.id_zona
@@ -305,6 +305,8 @@ class rutas_mapaController extends mainModel
                 }
             }
 
+            $this->log("Direcciones con Zonas: " . json_encode($direccionesConZona));
+
             // Reconstruir: insertar direcciones en sus zonas respetando el orden global
             foreach ($direccionesConZona as $dir) {
                 $idZona = $dir['id_zona'];
@@ -312,6 +314,8 @@ class rutas_mapaController extends mainModel
                 
                 $zonasAgrupadas[$idZona]['direcciones'][] = $dir;
             }
+
+            $this->log("Zonas agrupadas: " . json_encode($zonasAgrupadas[$idZona]));
 
             // Ordenar zonas según aparición de su primera dirección en la ruta
             $ordenZonas = [];
@@ -338,6 +342,7 @@ class rutas_mapaController extends mainModel
                     $zonasOrdenadas[] = $zonaData;
                 }
             }
+            $this->log("Zonas ordenadas: " . json_encode($zonasOrdenadas));
 
             $ruta['zonas'] = $zonasOrdenadas;
             $this->log("Ruta de Consulta: $id_ruta");
@@ -633,10 +638,15 @@ class rutas_mapaController extends mainModel
     public function listarTodasZonas()
     {
         try {
-            $sql = "SELECT id_zona, nombre_zona, lat_sw, lng_sw, lat_ne, lng_ne 
-                        FROM zonas_cuadricula 
-                        WHERE activo = 1 
-                        ORDER BY id_zona";
+            $sql = "SELECT zc.id_zona, zc.nombre_zona, zc.lat_sw, zc.lng_sw, zc.lat_ne, zc.lng_ne,
+                    ci.nombre AS ciudad, co.nombre AS condado, es.nombre AS estado, pa.nombre AS pais
+                FROM zonas_cuadricula zc
+                INNER JOIN ciudades ci ON zc.id_ciudad_origen = ci.id_ciudad 
+                INNER JOIN condados co ON ci.id_condado	= co.id_condado
+                INNER JOIN estados es ON ci.id_estado = es.id_estado
+                INNER JOIN paises pa ON ci.id_pais = pa.id_pais
+                WHERE zc.activo = 1 
+                ORDER BY zc.id_zona";
 
             $zonas = $this->ejecutarConsulta($sql, '', [], "fetchAll");
 
@@ -812,11 +822,16 @@ class rutas_mapaController extends mainModel
 
 		// 2 - Determinar las Rutas asignadas al dia seleccionado
 		$sql = "SELECT rda.day_of_week, rda.id_ruta, r.nombre_ruta
-					FROM route_day_assignments AS rda
-					LEFT JOIN rutas AS r ON rda.id_ruta = r.id_ruta
-					WHERE UPPER(day_of_week) = :v_day_of_week";
+                        FROM route_day_assignments AS rda
+                        LEFT JOIN rutas AS r ON rda.id_ruta = r.id_ruta
+                        WHERE UPPER(day_of_week) = :v_day_of_week
+                            AND rda.id_ruta IN (select COALESCE(id_ruta_new, id_ruta) AS id_ruta 
+                                from preservicios 
+                                WHERE fecha_programada = :v_fecha_programada)";
+
 		$params = [
-			":v_day_of_week" => $variable_php_upper
+			":v_day_of_week" => $variable_php_upper,
+            ":v_fecha_programada" => $fecha_proceso
 		];
 		$rutas = $this->ejecutarConsulta($sql, "", $params, "fetchAll");
 
@@ -1228,6 +1243,8 @@ class rutas_mapaController extends mainModel
      */
     public function actualizarRutaCompleta($id_ruta, $nombre_ruta, $color_ruta, $cambios)
     {
+        $this->log("🔄 actualizarRutaCompleta: Ruta $id_ruta");
+
         try {
             // 1. Actualizar datos básicos
             $datos = [
@@ -1573,4 +1590,5 @@ class rutas_mapaController extends mainModel
             $orden++;
         }
     }    
+
 }

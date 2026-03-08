@@ -329,6 +329,7 @@ class clientesController extends mainModel
 					<thead class="cabecera">
 						<tr>
 							<th class="has-text-centered">#</th>
+							<th class="has-text-centered w_max"><i class="fa-solid fa-camera"></i></th>
 							<th class="has-text-centered">Identification</th>
 							<th class="has-text-centered">Type of Person</th>
 							<th class="has-text-centered">Status</th>
@@ -344,7 +345,6 @@ class clientesController extends mainModel
 			$ruta_clientes = '/clientes/' . $pagina . '/';
 
 			foreach ($datos as $rows) {
-
 				$id_cliente = $rows['id_cliente'];
 				$sql = "SELECT COUNT(s.id_cliente) AS total_servicio 
                     FROM servicios AS s
@@ -437,7 +437,42 @@ class clientesController extends mainModel
 
 				$tabla .= '
                         <tr class="has-text-centered table-row">
-                            <td>' . $contador . '</td>';
+                            <td>' . $contador . '</td>
+                            <td class="table-img-column">
+								<figure class="image is-48x48" style="margin-left: auto; margin-right: auto;">';
+
+                if (empty($rows['cliente_foto'])) {
+					if ($rows['id_tipo_persona'] == 2) {
+						$tabla .= '<img class="is-rounded  side_max" src="/app/views/fotos/compania.png">';
+					} else {
+						if ($rows['id_sexo'] == 1) {
+							$tabla .= '<img class="is-rounded  side_max" src="/app/views/fotos/responsable.png">';
+						} else {
+							$tabla .= '<img class="is-rounded  side_max" src="/app/views/fotos/responsable-mujer.png">';
+						}
+					}
+                } else {
+                    //$ruta_img = RUTA_APP . '/app/views/img/uploads/fotos/'. $rows['usuario_foto'];
+                    $ruta_img = '/app/views/img/uploads/fotos/' . $rows['cliente_foto'];
+                    if ($this->isFile($ruta_img)) {
+                        $foto_act = '/app/views/img/uploads/fotos/'. $rows['cliente_foto'];
+                        $tabla .= '<img class="is-rounded   side_max" src="' . $foto_act . '">';
+                    } else {
+						if ($rows['id_tipo_persona'] == 2) {
+							$tabla .= '<img class="is-rounded  side_max" src="/app/views/fotos/compania.png">';
+						} else {
+							if ($rows['id_sexo'] == 1) {
+								$tabla .= '<img class="is-rounded  side_max" src="/app/views/fotos/responsable.png">';
+							} else {
+								$tabla .= '<img class="is-rounded  side_max" src="/app/views/fotos/responsable-mujer.png">';
+							}
+						}
+                    }
+                }
+                $tabla .= '
+								</figure>
+                            </td>';
+
 				if ($rows['id_tipo_persona'] == 1) {
 					$abre = $rows['abreviatura'] ? trim($rows['abreviatura']) : "";
 					$nomb = $rows['nombre'] ? trim($rows['nombre']) : "";
@@ -596,17 +631,9 @@ class clientesController extends mainModel
 
 	public function consultar_clientes()
 	{
-        $sql = "SELECT id_cliente,
-				COALESCE(
-					CASE 
-						WHEN id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(nombre, ''), NULLIF(apellido, '')))
-						WHEN id_tipo_persona = 2 THEN NULLIF(nombre_comercial, '')
-						ELSE NULLIF(nombre, '')
-					END,
-					'[SIN NOMBRE]'
-				) AS cliente
+        $sql = 'SELECT id_cliente, nombre AS cliente
 			FROM clientes
-			ORDER BY cliente";
+			ORDER BY nombre';
         
         $param = [];
 
@@ -614,6 +641,165 @@ class clientesController extends mainModel
 
         return $data;
 
+	}	
+
+	public function contar_with_without(){
+		$NoContracts = count((array)$this->consultar_clientes_with_without('NoContracts'));	
+
+		$WithContracts = count((array)$this->consultar_clientes_with_without('WithContracts'));	
+
+		$all = count((array)$this->consultar_clientes_with_without('All'));	
+
+		$respuesta['NoContracts'] = $NoContracts;
+		$respuesta['WithContracts'] = $WithContracts;
+		$respuesta['All'] = $all;
+
+		return $respuesta;
+	}
+
+
+	public function consultar_clientes_with_without($filtro)
+	{
+		$param = [];
+		
+		// ==========================================
+		// ESCENARIO 1: Clientes SIN contratos activos (status 18)
+		// → Aquí SÍ necesitamos el análisis detallado
+		// ==========================================
+		if ($filtro === 'NoContracts') {
+			
+			$sql = "
+				SELECT 
+					id_cliente, tipo_persona, abreviatura, cliente_foto, sexo, cliente, telefono, telefono2, email,
+					CASE 
+						WHEN total_contratos = 0 THEN 'Sin contratos'
+						WHEN cancelados > 0 AND inactivos = 0 AND completados = 0 AND pendientes = 0 AND otros = 0
+							THEN 'Contratos cancelados'
+						WHEN inactivos > 0 AND cancelados = 0 AND completados = 0 AND pendientes = 0 AND otros = 0
+							THEN 'Contratos inactivos'
+						WHEN completados > 0 AND cancelados = 0 AND inactivos = 0 AND pendientes = 0 AND otros = 0
+							THEN 'Contratos completados'
+						WHEN pendientes > 0 AND cancelados = 0 AND inactivos = 0 AND completados = 0 AND otros = 0
+							THEN 'Contratos pendientes'
+						WHEN cancelados > 0 AND inactivos > 0 AND completados = 0
+							THEN 'Mezcla: Cancelados + Inactivos'
+						WHEN cancelados > 0 AND completados > 0 AND inactivos = 0
+							THEN 'Mezcla: Cancelados + Completados'
+						WHEN inactivos > 0 AND completados > 0 AND cancelados = 0
+							THEN 'Mezcla: Inactivos + Completados'
+						WHEN cancelados > 0 AND inactivos > 0 AND completados > 0
+							THEN 'Mezcla: Cancelados + Inactivos + Completados'
+						ELSE 'Mezcla: Otros estados'
+					END AS razon_inclusion,
+					activos, inactivos, pendientes, completados, cancelados, otros, total_contratos
+				FROM (
+					SELECT 
+						c.id_cliente, 
+						tp.descripcion AS tipo_persona, 
+						t.abreviatura, 
+						c.cliente_foto, 
+						s.sexo,
+						COALESCE(
+							CASE 
+								WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+								WHEN c.id_tipo_persona = 2 THEN TRIM(NULLIF(c.nombre_comercial, ''))
+								ELSE NULLIF(c.nombre, '') 
+							END,
+							'[SIN NOMBRE]'
+						) AS cliente,
+						c.telefono, c.telefono2, c.email,						 
+						(SELECT COUNT(*) FROM contratos co WHERE co.id_cliente = c.id_cliente AND co.id_status = 18) AS activos,
+						(SELECT COUNT(*) FROM contratos co WHERE co.id_cliente = c.id_cliente AND co.id_status = 19) AS inactivos,
+						(SELECT COUNT(*) FROM contratos co WHERE co.id_cliente = c.id_cliente AND co.id_status = 20) AS pendientes,
+						(SELECT COUNT(*) FROM contratos co WHERE co.id_cliente = c.id_cliente AND co.id_status = 21) AS completados,
+						(SELECT COUNT(*) FROM contratos co WHERE co.id_cliente = c.id_cliente AND co.id_status = 22) AS cancelados,
+						(SELECT COUNT(*) FROM contratos co WHERE co.id_cliente = c.id_cliente AND co.id_status IN (23,24,25)) AS otros,
+						(SELECT COUNT(*) FROM contratos co WHERE co.id_cliente = c.id_cliente AND co.id_status != 49) AS total_contratos
+					FROM clientes c
+					LEFT JOIN tipo_persona tp ON tp.id_tipo_persona = c.id_tipo_persona
+					LEFT JOIN tratamientos t ON t.id_tratamiento = c.id_tratamiento
+					LEFT JOIN sexo s ON s.id_sexo = c.id_sexo 
+					WHERE c.id_status = 1 
+					AND NOT EXISTS (
+						SELECT 1 FROM contratos co 
+						WHERE co.id_cliente = c.id_cliente AND co.id_status = 18
+					)
+				) AS subconsulta
+				ORDER BY razon_inclusion, cliente;
+			";
+			
+			return $this->ejecutarConsulta($sql, "", $param, "fetchAll");
+		}
+		
+		// ==========================================
+		// ESCENARIO 2: Clientes CON contratos activos (status 18)
+		// → Lista simple, sin análisis complejo
+		// ==========================================
+		elseif ($filtro === 'WithContracts') {
+			
+			$sql = "
+				SELECT 
+					c.id_cliente, 
+					tp.descripcion AS tipo_persona, 
+					t.abreviatura, 
+					c.cliente_foto, 
+					s.sexo,
+					COALESCE(
+						CASE 
+							WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+							WHEN c.id_tipo_persona = 2 THEN TRIM(NULLIF(c.nombre_comercial, ''))
+							ELSE NULLIF(c.nombre, '') 
+						END,
+						'[SIN NOMBRE]'
+					) AS cliente,
+					c.telefono, c.telefono2, c.email
+				FROM clientes c
+				LEFT JOIN tipo_persona tp ON tp.id_tipo_persona = c.id_tipo_persona
+				LEFT JOIN tratamientos t ON t.id_tratamiento = c.id_tratamiento
+				LEFT JOIN sexo s ON s.id_sexo = c.id_sexo 
+				WHERE c.id_status = 1 
+				AND EXISTS (
+					SELECT 1 FROM contratos co 
+					WHERE co.id_cliente = c.id_cliente AND co.id_status = 18
+				)
+				ORDER BY cliente;
+			";
+			
+			return $this->ejecutarConsulta($sql, "", $param, "fetchAll");
+		}
+		
+		// ==========================================
+		// ESCENARIO 3: Todos los clientes activos (default)
+		// → Lista simple, solo filtro por c.id_status = 1
+		// ==========================================
+		else {
+			
+			$sql = "
+				SELECT 
+					c.id_cliente, 
+					tp.descripcion AS tipo_persona, 
+					t.abreviatura, 
+					c.cliente_foto, 
+					s.sexo,
+					COALESCE(
+						CASE 
+							WHEN c.id_tipo_persona = 1 THEN TRIM(CONCAT_WS(' ', NULLIF(c.nombre, ''), NULLIF(c.apellido, '')))
+							WHEN c.id_tipo_persona = 2 THEN TRIM(NULLIF(c.nombre_comercial, ''))
+							ELSE NULLIF(c.nombre, '') 
+						END,
+						'[SIN NOMBRE]'
+					) AS cliente,
+					c.telefono, c.telefono2, c.email
+				FROM clientes c
+				LEFT JOIN tipo_persona tp ON tp.id_tipo_persona = c.id_tipo_persona
+				LEFT JOIN tratamientos t ON t.id_tratamiento = c.id_tratamiento
+				LEFT JOIN sexo s ON s.id_sexo = c.id_sexo 
+				WHERE c.id_status = 1 
+				ORDER BY cliente;
+			";
+			
+			return $this->ejecutarConsulta($sql, "", $param, "fetchAll");
+		}
 	}
 
 	public function consulta_registro($paquete)
@@ -623,7 +809,7 @@ class clientesController extends mainModel
 		$sql = "SELECT c.id_cliente, c.nombre, c.telefono, c.email, c.id_status, DATE(c.fecha_creacion) AS fecha_creacion,
 				c.apellido, c.id_tipo_persona, c.id_frecuencia_pago, c.nombre_comercial, 
 				s.status, tp.descripcion, c.notas, c.observaciones, c.fecha_status, c.id_tratamiento, 
-				t.descripcion AS tratamiento, c.cliente_foto, c.id_sexo, c.telefono
+				t.descripcion AS tratamiento, c.cliente_foto, c.id_sexo, c.telefono, c.telefono2
 			FROM clientes AS c
 			LEFT JOIN status_all AS s ON c.id_status = s.id_status 
 			LEFT JOIN tipo_persona AS tp ON tp.id_tipo_persona = c.id_tipo_persona
@@ -637,12 +823,11 @@ class clientesController extends mainModel
 
 		$consulta = $this->ejecutarConsulta($sql, "", $param);
 
-		$sql_d = "SELECT c.id_direccion, c.id_cliente, d.direccion, d.lat, d.lng, s.status, d.id_pais, d.id_estado, d.id_condado, d.id_ciudad, d.id_zip
-				FROM contratos AS c
-				LEFT JOIN direcciones AS d ON d.id_direccion = c.id_direccion
+		$sql_d = "SELECT d.id_direccion, d.id_cliente, d.direccion, d.lat, d.lng, s.status, d.id_pais, d.id_estado, d.id_condado, d.id_ciudad, d.id_zip
+				FROM direcciones AS d
 				LEFT JOIN status_all AS s ON d.id_status = s.id_status
-				WHERE c.id_cliente = :v_id_cliente
-				GROUP BY c.id_cliente, c.id_direccion";
+				WHERE d.id_cliente = :v_id_cliente
+				GROUP BY d.id_cliente, d.id_direccion";
 
 		$param = [
 			':v_id_cliente' => $id_cliente
@@ -688,6 +873,101 @@ class clientesController extends mainModel
             echo json_encode([
                 'success' => false,
                 'message' => 'Error retrieving contracts: ' . $e->getMessage()
+            ]);
+        }
+	}
+
+	public function ingresarClientes($data)
+	{
+		$id_status = $data['id_status'];
+		$foto = $data['foto'];
+		$cliente_foto = $data['cliente_foto'];
+		$identification = $data['identification'];
+		$nombre = $data['nombre'];
+		$apellido = $data['apellido'];
+		$email = $data['email'];
+		$telefono = $data['telefono'];
+		$telefono2 = $data['telefono2'];
+		$id_tratamiento = $data['id_tratamiento'];
+		$id_sexo = $data['id_sexo'];
+		$id_tipo_persona = $data['id_tipo_persona'];
+		$website = $data['website'];
+		$nombre_comercial = $data['nombre_comercial'];
+		$sector_industrial = $data['sector_industrial'];
+
+		try{
+			if (!empty($data)) {
+				$sql = "SELECT id_cliente
+							FROM clientes
+							ORDER BY id_cliente DESC LIMIT 1";
+				$params = [];
+				$cliente_actual = $this->ejecutarConsulta($sql, "", $params);
+
+				$new_id_cliente = (int) $cliente_actual['id_cliente'] + 1;
+
+				$cliente = [
+					['campo_nombre' => 'id_cliente', 'campo_marcador' => ':id_cliente', 'campo_valor' => $new_id_cliente],
+					['campo_nombre' => 'id_status', 'campo_marcador' => ':id_status', 'campo_valor' => $id_status],
+					['campo_nombre' => 'cliente_foto', 'campo_marcador' => ':cliente_foto', 'campo_valor' => $cliente_foto],
+					['campo_nombre' => 'identification', 'campo_marcador' => ':identification', 'campo_valor' => $identification],
+					['campo_nombre' => 'nombre', 'campo_marcador' => ':nombre', 'campo_valor' => $nombre],
+					['campo_nombre' => 'apellido', 'campo_marcador' => ':apellido', 'campo_valor' => $apellido],
+					['campo_nombre' => 'email', 'campo_marcador' => ':email', 'campo_valor' => $email],
+					['campo_nombre' => 'telefono', 'campo_marcador' => ':telefono', 'campo_valor' => $telefono],
+					['campo_nombre' => 'telefono2', 'campo_marcador' => ':telefono2', 'campo_valor' => $telefono2],
+					['campo_nombre' => 'id_tratamiento', 'campo_marcador' => ':id_tratamiento', 'campo_valor' => $id_tratamiento],
+					['campo_nombre' => 'id_sexo', 'campo_marcador' => ':id_sexo', 'campo_valor' => $id_sexo],
+					['campo_nombre' => 'id_tipo_persona', 'campo_marcador' => ':id_tipo_persona', 'campo_valor' => $id_tipo_persona],
+					['campo_nombre' => 'website', 'campo_marcador' => ':website', 'campo_valor' => $website],
+					['campo_nombre' => 'nombre_comercial', 'campo_marcador' => ':nombre_comercial', 'campo_valor' => $nombre_comercial],
+					['campo_nombre' => 'sector_industrial', 'campo_marcador' => ':sector_industrial', 'campo_valor' => $sector_industrial]
+				];
+				$id_cliente = $this->guardarDatos('clientes', $cliente);
+				if (!empty($foto)){
+					$this->foto($foto, $cliente_foto);
+				}
+			}
+
+			http_response_code(200);
+			echo json_encode(['success' => true, 'message' => 'Customer successfully added, under number ' . $id_cliente]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error loading new Costumer: ' . $e->getMessage()
+            ]);
+        }
+	}
+
+	public function foto($foto, $cliente_foto){
+		try{		
+			$uploadDir = APP_R_PROY . 'app/views/img/uploads/fotos/';
+			if (!file_exists($uploadDir)) {
+				mkdir($uploadDir, 0775, true);
+				chgrp($uploadDir, 'www-data');
+				chmod($uploadDir, 0775);
+			}
+
+			$extension = pathinfo($foto['name'], PATHINFO_EXTENSION);
+			$allowedExtensions = ['jpg', 'jpeg', 'png', 'gif'];
+
+			if (!in_array(strtolower($extension), $allowedExtensions)) {
+				$this->logWithBacktrace("Intento de cambio de foto fallido: extensión de archivo no permitida", true);
+				return false; // Extensión no permitida
+			}
+
+			$targetFile = $uploadDir . $cliente_foto;
+
+			if (move_uploaded_file($foto['tmp_name'], $targetFile)) {
+				chmod($targetFile, 0644); // Asegurarse de que el archivo sea legible
+				return true;
+			} else {
+				$this->logWithBacktrace("Intento de cambio de foto fallido: error al mover el archivo", true);
+				return false; // Error al mover el archivo
+			}
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error loading new Photo: ' . $e->getMessage()
             ]);
         }
 	}

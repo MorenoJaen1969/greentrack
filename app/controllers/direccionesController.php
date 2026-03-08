@@ -570,6 +570,43 @@ class direccionesController extends mainModel
 
 	}
 
+	public function nuevoRegistro($tabla, $datos, $codigo_zip)
+	{
+        try {
+			$sql = "SELECT id_direccion
+						FROM direcciones
+						ORDER BY id_direccion DESC LIMIT 1";
+			$params = [];
+			$direccion_actual = $this->ejecutarConsulta($sql, "", $params);
+
+			$new_id_direccion = (int) $direccion_actual['id_direccion'] + 1;
+			$datos[] = ['campo_nombre' => 'id_direccion', 'campo_marcador' => ':id_direccion', 'campo_valor' => $new_id_direccion];
+
+			$sql = "SELECT id_zip
+						FROM codigos_postales
+						WHERE codigo = :v_codigo";
+			$params = [':v_codigo' => $codigo_zip];
+			$id_zip = $this->ejecutarConsulta($sql, "", $params);
+			$datos[] = ['campo_nombre' => 'id_zip', 'campo_marcador' => ':id_zip', 'campo_valor' => $id_zip['id_zip']];
+
+			$id_direccion = $this->guardarDatos($tabla, $datos);
+            if ($id_direccion >= 0) {
+				if ($id_direccion == 0) {
+					$id_direccion = $new_id_direccion;
+				}
+				http_response_code(200);
+                echo json_encode(['success' => true, 'texto' => 'Address incorporated correctly # ' . $id_direccion]);
+            } else {
+				http_response_code(400);
+				echo json_encode(['success' => false, 'texto' => "The address could not be saved"]);
+            }
+
+		} catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'texto' => $e->getMessage()]);
+        }
+	}
+
 	public function guardarGeofence($tabla, $datos, $condicion, $id_direccion, $id_geofence, $validaEmpty)
 	{
 		try {
@@ -1168,4 +1205,16 @@ error_log("Valor de zip: ". $id_zip . " y " . $zip_usar);
 		return $datos;	
 	}
 
+	public function contar_direcciones($id_cliente)
+	{
+		$sql = "SELECT d.id_direccion
+			FROM direcciones AS d
+			WHERE d.id_cliente = :v_id_cliente
+			ORDER BY d.id_direccion";
+		$params = [
+			':v_id_cliente' => $id_cliente
+		];
+		$data = $this->ejecutarConsulta($sql, "", $params, "fetchAll");
+		return $data;
+	}
 }

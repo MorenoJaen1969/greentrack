@@ -1,6 +1,6 @@
 <?php
 // contratos2AJAX.PHP
-// === 1. Iniciar buffer y sesión (lo primero) ===
+// === 1. Iniciar buffer y sesión (lo primero) ===  
 ob_start();
 require_once "../views/inc/session_start.php";
 
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_contratos'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_contratos"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_contratos"']);
     exit();
 }
 
 // === 8. Cargar el controlador === 
 require_once  '../controllers/contratosController.php';
+
 use app\controllers\contratosController;
 
 $controller = new contratosController();
@@ -73,11 +74,64 @@ switch ($modulo) {
         $controller->guardarCambios($inputData);
         break;
 
+    case 'ceros':
+        $valor = $inputData['valor'];
+        $controller->completa0($valor);
+        break;
+
+    case 'registrar_contrato':
+        $data = $inputData;
+
+        $foto = $_FILES['foto'] ?? null; // El archivo en sí
+
+        $datos_guardar = [];
+
+        $id_status = $data['id_status'];
+        $contrato_foto = $data['contrato_foto'];
+        $id_cliente = $data['id_cliente'];
+        $id_direccion = $data['id_direccion'];
+        $nom_contrato = $data['nom_contrato'];
+        $tiempo_servicio = $data['tiempo_servicio'];
+        $retraso_invierno = $data['retraso_invierno'];
+        $id_area = $data['id_area'];
+        $num_semanas = $data['num_semanas'];
+        $costo = $data['costo'];
+        $id_dia_semana = $data['id_dia_semana'];
+        $secondary_day = $data['secondary_day'];
+        $id_ruta = $data['id_ruta'];
+        $fecha_ini = $data['fecha_ini'];
+        $fecha_fin = $data['fecha_fin'];
+        $id_frecuencia_servicio = $data['id_frecuencia_servicio'];
+        $id_frecuencia_pago = $data['id_frecuencia_pago'];
+
+        $datos_guardar = [
+            'id_status' => $id_status,
+            'contrato_foto' => $contrato_foto,
+            'id_cliente' => $id_cliente,
+            'id_direccion' => $id_direccion,
+            'nombre' => $nom_contrato,
+            'tiempo_servicio' => $tiempo_servicio,
+            'retraso_invierno' => $retraso_invierno,
+            'id_area' => $id_area,
+            'num_semanas' => $num_semanas,
+            'costo' => $costo,
+            'id_dia_semana' => $id_dia_semana,
+            'secondary_day' => $secondary_day,
+            'id_ruta' => $id_ruta,
+            'fecha_ini' => $fecha_ini,
+            'fecha_fin' => $fecha_fin,
+            'id_frecuencia_servicio' => $id_frecuencia_servicio,
+            'id_frecuencia_pago' => $id_frecuencia_pago,
+            'foto' => $foto
+        ];
+
+        $controller->ingresarContrato($datos_guardar);
+        break;
+
     default:
         http_response_code(400);
-        echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);
+        echo json_encode(['error' => 'Invalid module: ' . $modulo]);
         exit();
 }
 
 exit();
-?>

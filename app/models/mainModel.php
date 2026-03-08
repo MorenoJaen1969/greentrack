@@ -526,19 +526,24 @@ class mainModel
             $consulta->bindParam($clave["campo_marcador"], $clave["campo_valor"]);
         }
 
-        $consulta->execute();
-        $id_resulta = $sql->lastInsertId();     /* ULTIMO ID GENERADO */
+        try{
+            $consulta->execute();
+            $id_resulta = $sql->lastInsertId();     /* ULTIMO ID GENERADO */
 
-        $consulta->closeCursor();
-        $consulta = null;
+            $consulta->closeCursor();
+            $consulta = null;
 
-        if ($tabla !== 'gps_estado_dispositivos' && $tabla !== 'auditoria') {
-            $reg_audit = $this->registrarAuditoria($tabla, 'INSERT', null, $datos);
-        } else {
-            error_log("Resultado para auditoria: " . $id_resulta);
+            if ($tabla !== 'gps_estado_dispositivos' && $tabla !== 'auditoria') {
+                $reg_audit = $this->registrarAuditoria($tabla, 'INSERT', null, $datos);
+            } else {
+                error_log("Resultado para auditoria: " . $id_resulta);
+            }
+            $this->log("Registro incorporado a la tabla " . $tabla . " Ultimo ID: " . $id_resulta);
+
+            return $id_resulta;
+        } catch (Exception $e) {
+            return -1;
         }
-        $this->log("Registro incorporado a la tabla " . $tabla . " Ultimo ID: " . $id_resulta);
-        return $id_resulta;
     }
 
     /*----------  Funcion para ejecutar una consulta UPDATE preparada  ----------*/
@@ -1161,7 +1166,7 @@ $this->log("Palabras: ", json_encode($palabras));
 
     public function ceros($val_ini)
     {
-        $val_fin = str_pad($val_ini,  4, "0", STR_PAD_LEFT);
+        $val_fin = str_pad($val_ini,  6, "0", STR_PAD_LEFT);
         return $val_fin;
     }
 

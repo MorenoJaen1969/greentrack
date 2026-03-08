@@ -4,7 +4,7 @@
 ob_start();
 require_once "../views/inc/session_start.php";
 
-// === 2. Cargar configuración y autoload ===
+// === 2. Cargar configuración y autoload  ===
 require_once "../../config/app.php";
 require_once "../../autoload.php";
 
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // === 5. Validar método ===
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -39,7 +39,7 @@ if (stripos($contentType, 'application/json') !== false) {
     } else {
         error_log("JSON malformado o no decodificado: " . $rawInput);
         http_response_code(400);
-        echo json_encode(['error' => 'JSON inválido']);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit();
     }
 } else {
@@ -51,12 +51,13 @@ $modulo = $inputData['modulo_ciudades'] ?? '';
 
 if (!$modulo) {
     http_response_code(400);
-    echo json_encode(['error' => 'Falta el parámetro "modulo_ciudades"']);
+    echo json_encode(['error' => 'The parameter is missing. "modulo_ciudades"']);
     exit();
 }
 
 // === 8. Cargar el controlador ===
 require_once  '../controllers/ciudadesController.php';
+
 use app\controllers\ciudadesController;
 
 $controller = new ciudadesController();
@@ -68,27 +69,39 @@ switch ($modulo) {
         $id_ciudad = $inputData['id_ciudad'];
 
         $ciudades = $controller->consultar_ciudades($id_condado);
-        $cadena='';
+        $cadena = '';
 
         $cadena = '<option value="">Select a City</option>';
 
-        foreach ($ciudades as $curr){
-            $cadena = $cadena. '<option value="' . $curr['id_ciudad'] . '" ';
-            if($id_ciudad == $curr['id_ciudad']){ 
-                $cadena = $cadena. 'selected> ';
-            }else{
-                $cadena = $cadena. '> ';
+        foreach ($ciudades as $curr) {
+            $cadena = $cadena . '<option value="' . $curr['id_ciudad'] . '" ';
+            if ($id_ciudad == $curr['id_ciudad']) {
+                $cadena = $cadena . 'selected> ';
+            } else {
+                $cadena = $cadena . '> ';
             }
-            $cadena = $cadena. $curr['nombre'] . '</option>';
+            $cadena = $cadena . $curr['nombre'] . '</option>';
         }
         echo $cadena;
         break;
-    
+
+    case 'data_direcciones':
+        $id_condado = $inputData['id_condado'];
+        $ciudades = $controller->getCiudades($id_condado);
+
+        if (is_array($ciudades)) {
+            http_response_code(200);
+            echo json_encode(['success' => true, 'data' => $ciudades]);
+        } else {
+            http_response_code(400);
+            echo json_encode(['error' => 'Query error: ' . $ciudades]);
+        }
+        exit();
+
     default:
         http_response_code(400);
-        echo json_encode(['error' => 'Módulo no válido: ' . $modulo]);
+        echo json_encode(['error' => 'Invalid module: ' . $modulo]);
         exit();
 }
 
 exit();
-?>

@@ -324,4 +324,21 @@ class paisesController extends mainModel
         $data = $this->ejecutarConsulta($sql, "", $param, "fetchAll");
         return $data;
     }
+
+    public function getCountries() {
+        try {
+            $stmt = "SELECT id_pais, nombre, codigo_iso3 AS iso_code, centro_lat AS latitud_centro, 
+                    centro_lng AS longitud_centro, 5 AS zoom_default 
+                FROM paises 
+                WHERE activo = 1 
+                ORDER BY nombre ASC
+            ";
+            $params = [];
+            $data = $this->ejecutarConsulta($stmt, "", $params, "fetchAll");
+
+            return $data;
+        } catch (Exception $e) {
+            return $e->getMessage();
+        }
+    }    
 }

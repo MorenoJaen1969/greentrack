@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // 6. Validar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
+    echo json_encode(['error' => 'Method not permitted']);
     exit();
 }
 
@@ -75,7 +75,6 @@ try {
 
     http_response_code(200);
     echo json_encode(['status' => 'ok', 'message' => 'Coordenada guardada']);
-
 } catch (Exception $e) {
     error_log("Error en gps.php: " . $e->getMessage());
     http_response_code(500);
